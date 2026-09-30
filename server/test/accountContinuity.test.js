@@ -30,7 +30,7 @@ async function setup(t, answer = async (_req, res) => res.json({ reply: 'done' }
   t.after(async () => { await worker.stop(); await new Promise(resolve => server.close(resolve)); sql.close(); });
   return { request, db, worker, documents };
 }
-const settle = async (request, id) => { for (let n=0; n<100; n++) { const result = await request(`assistant/jobs/${id}`); if (['complete','failed'].includes(result.data.status)) return result.data; await new Promise(r => setTimeout(r, 5)); } throw Error('job did not settle'); };
+const settle = async (request, id, user = 'alice') => { for (let n=0; n<100; n++) { const result = await request(`assistant/jobs/${id}`, null, user); if (['complete','failed'].includes(result.data.status)) return result.data; await new Promise(r => setTimeout(r, 5)); } throw Error('job did not settle'); };
 test('provider continues after submission closes; retries generate only once and other accounts cannot read', async t => {
   let finish, calls=0;
   const env = await setup(t, async (_req, res) => { calls++; await new Promise(r => { finish=r; }); res.json({ reply:'persisted answer' }); });
@@ -79,4 +79,101 @@ test('new AI job completes into account history without any phone poll or local 
   }
   assert.deepEqual(cloud.records[0].value.messages.map(x=>x.id),['question-one','job-cloud-answer']);
   assert.equal(cloud.records[0].value.messages[1].reply,'done');
+});
+
+const conversation = { id:'conversation-full', locale:'en', userMessageId:'new-question', createdAt:'2026-09-28T00:00:00Z' };
+const seedHistory = (documents, messages) => documents.sync('alice', { collection:'assistant_en', cursor:0, changes:[{
+  id:conversation.id, operationId:'seed-history', deleted:false, version:null,
+  value:{ createdAt:conversation.createdAt, updatedAt:conversation.createdAt, messages },
+}] });
+
+test('history capacity preserves the completed result and lets another account finish', async t => {
+  for (const limit of ['messages', 'bytes']) await t.test(limit, async t => {
+    const reply = limit === 'bytes' ? 'answer'.repeat(400) : 'saved answer';
+    let calls = 0;
+    const { request, documents, db } = await setup(t, async (_req, res) => { calls++; res.json({ reply }); });
+    await seedHistory(documents, limit === 'messages'
+      ? Array.from({length:499}, (_, index) => ({ id:`old-${index}`, sender:'user', text:'saved' }))
+      : [{ id:'old-0', sender:'user', text:'x'.repeat(399000) }]);
+    const body = { id:'full-history', request:{ message:'one more question', locale:'en', conversation } };
+    assert.equal((await request('assistant/jobs', body)).status, 202);
+    assert.equal((await request('assistant/jobs', { id:'other-account', request:{ message:'another question' } }, 'bob')).status, 202);
+    const result = await settle(request, body.id);
+    assert.equal(result.status, 'complete');
+    assert.equal(result.result.reply, reply);
+    assert.equal(result.historyError, 'accountHistoryFull');
+    assert.equal((await settle(request, 'other-account', 'bob')).status, 'complete');
+    const stored = await db.get('SELECT * FROM assistant_jobs WHERE id = ?', [body.id]);
+    assert.equal(stored.error_code, 'accountHistoryFull');
+    assert.equal(stored.request_json, null);
+    assert.ok(stored.completed_at);
+    assert.deepEqual((await request('assistant/jobs', body)).data, result);
+    assert.equal(calls, 2);
+  });
+});
+
+test('startup fails interrupted jobs even when their history cannot accept an error message', async t => {
+  const { db, documents, worker } = await setup(t);
+  await worker.stop();
+  await seedHistory(documents, Array.from({length:500}, (_, index) => ({ id:`old-${index}`, sender:'user', text:'saved' })));
+  const input = { message:'question', locale:'en', conversation:{ ...conversation, userMessageId:'old-0' } };
+  await db.run("INSERT INTO assistant_jobs (id,user_id,status,request_json,created_at) VALUES ('interrupted-full','alice','running',?,?)", [JSON.stringify(input), Date.now()]);
+  let calls = 0;
+  const recovery = installAccountContinuity({ app:express(), database:db, documents, authenticate:async()=>null,
+    findUser:id=>db.get('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', [id]), answer:async()=>{ calls++; } });
+  try { await recovery.start(); } finally { await recovery.stop(); }
+  const stored = await db.get("SELECT * FROM assistant_jobs WHERE id = 'interrupted-full'");
+  assert.equal(stored.status, 'failed');
+  assert.equal(stored.error_code, 'assistantInterrupted');
+  assert.equal(stored.request_json, null);
+  assert.equal(calls, 0);
+});
+
+test('a transient result write failure retries saving without a second provider call', async t => {
+  let calls = 0, failed = false;
+  const { request, documents, db } = await setup(t, async (_req, res) => { calls++; res.json({ reply:'durable answer' }); });
+  const run = db.run;
+  db.run = async (text, values) => {
+    if (!failed && text.startsWith('UPDATE assistant_jobs SET status = ?')) {
+      failed = true;
+      throw Object.assign(new Error('temporary save failure'), { code:'ECONNRESET' });
+    }
+    return run(text, values);
+  };
+  await request('assistant/jobs', { id:'retry-save', request:{ message:'question', locale:'en', conversation } });
+  const result = await settle(request, 'retry-save');
+  assert.equal(result.status, 'complete');
+  assert.equal(result.result.reply, 'durable answer');
+  assert.equal(result.historyError, undefined);
+  assert.equal(failed, true);
+  assert.equal(calls, 1);
+  const history = await documents.sync('alice', { collection:'assistant_en', cursor:0, changes:[] });
+  assert.deepEqual(history.records[0].value.messages.map(message=>message.id), ['new-question', 'retry-save-answer']);
+});
+
+test('an uncertain claim is reconciled before the provider is called exactly once', async t => {
+  for (const applied of [false, true]) await t.test(applied ? 'UPDATE committed but response lost' : 'UPDATE not applied', async t => {
+    let calls = 0, failed = false;
+    const { request, db } = await setup(t, async (_req, res) => { calls++; res.json({ reply:'reconciled answer' }); });
+    const run = db.run;
+    db.run = async (text, values) => {
+      if (!failed && text.startsWith("UPDATE assistant_jobs SET status = 'running'")) {
+        failed = true;
+        if (applied) await run(text, values);
+        throw Object.assign(new Error('claim response lost'), { code:'ECONNRESET' });
+      }
+      return run(text, values);
+    };
+    const body = { id:'uncertain-claim', request:{ message:'question' } };
+    assert.equal((await request('assistant/jobs', body)).status, 202);
+    const result = await settle(request, body.id);
+    assert.equal(result.status, 'complete');
+    assert.equal(result.result.reply, 'reconciled answer');
+    assert.deepEqual((await request('assistant/jobs', body)).data, result);
+    assert.equal(failed, true);
+    assert.equal(calls, 1);
+    await request('assistant/jobs', { id:'next-account', request:{ message:'next question' } }, 'bob');
+    assert.equal((await settle(request, 'next-account', 'bob')).status, 'complete');
+    assert.equal(calls, 2);
+  });
 });

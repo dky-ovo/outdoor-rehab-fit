@@ -5,6 +5,7 @@ export function installAccountContinuity({ app, database: db, authenticate, find
   const parse = value => typeof value === 'string' ? JSON.parse(value) : value;
   const publicJob = row => ({ id: row.id, status: row.status,
     ...(row.status === 'complete' ? { result: parse(row.result_json) } : {}),
+    ...(row.status === 'complete' && row.error_code === 'accountHistoryFull' ? { historyError: row.error_code } : {}),
     ...(row.status === 'failed' ? { error: row.error_code } : {}) });
   const owner = async (req, res) => {
     res.set('Cache-Control', 'no-store');
@@ -12,27 +13,58 @@ export function installAccountContinuity({ app, database: db, authenticate, find
     if (!user) res.status(401).json({ error: 'unauthorized' });
     return user;
   };
-  let started = false, stopping = false, work = null, retry, requested = false, completing = null;
+  let started = false, stopping = false, work = null, retry, requested = false, completing = null, claiming = null;
+  async function recordResult(tx, row, input, message) {
+    try {
+      if (documents) await documents.recordJob(tx, row.user_id, row.id, input, message);
+      return null;
+    } catch (error) {
+      // Capacity cannot recover by retrying this answer. Retain the job result
+      // even when history is full; actual database failures still retry normally.
+      if (error?.code !== 'accountHistoryFull') throw error;
+      console.error('ASSISTANT_JOB_HISTORY_FULL');
+      return error.code;
+    }
+  }
   async function commitResult() {
     const { row, result, error } = completing;
     if (!(await findUser(row.user_id))) await db.run('DELETE FROM assistant_jobs WHERE user_id = ?', [row.user_id]);
     else await db.transaction(async tx => {
       if (!await tx.get('SELECT id FROM users WHERE id = ? AND deleted_at IS NULL FOR UPDATE', [row.user_id])) return;
-      if (documents) await documents.recordJob(tx, row.user_id, row.id, parse(row.request_json), error
+      const historyError = await recordResult(tx, row, parse(row.request_json), error
         ? { action: 'error', reply: parse(row.request_json).locale === 'en' ? 'This request could not be completed. Please send it again.' : '此查詢未能完成，請重新發送。' } : result);
       await tx.run('UPDATE assistant_jobs SET status = ?, result_json = ?, request_json = NULL, error_code = ?, completed_at = ? WHERE id = ?',
-        [error ? 'failed' : 'complete', result && !error ? JSON.stringify(result) : null, error, Date.now(), row.id]);
+        [error ? 'failed' : 'complete', result && !error ? JSON.stringify(result) : null, error || historyError, Date.now(), row.id]);
     });
     completing = null;
+  }
+  async function claimNext() {
+    while (!stopping) {
+      if (claiming) {
+        // This single production worker has not called the provider yet. A lost
+        // UPDATE response may already have committed; reconcile that exact job
+        // before claiming another one or issuing any provider request.
+        const current = await db.get('SELECT * FROM assistant_jobs WHERE id = ?', [claiming.id]);
+        if (!current || !['queued', 'running'].includes(current.status)) { claiming = null; continue; }
+        if (current.status === 'running') { claiming = null; return current; }
+        claiming = current;
+      } else {
+        claiming = await db.get("SELECT * FROM assistant_jobs WHERE status = 'queued' ORDER BY created_at, id LIMIT 1");
+        if (!claiming) return null;
+      }
+      const row = claiming;
+      const claim = await db.run("UPDATE assistant_jobs SET status = 'running' WHERE id = ? AND status = 'queued'", [row.id]);
+      claiming = null;
+      if (claim.affectedRows) return row;
+    }
+    return null;
   }
   async function drain() {
     while (!stopping) {
       // A transient RDS failure when saving an answer retries that save only.
       if (completing) await commitResult();
-      const row = await db.get("SELECT * FROM assistant_jobs WHERE status = 'queued' ORDER BY created_at, id LIMIT 1");
+      const row = await claimNext();
       if (!row) return;
-      const claim = await db.run("UPDATE assistant_jobs SET status = 'running' WHERE id = ? AND status = 'queued'", [row.id]);
-      if (!claim.affectedRows) continue;
       let result = null, error = null;
       try {
         const user = await findUser(row.user_id);
@@ -134,7 +166,7 @@ export function installAccountContinuity({ app, database: db, authenticate, find
         for (const row of interrupted) await db.transaction(async tx => {
           if (!await tx.get('SELECT id FROM users WHERE id = ? AND deleted_at IS NULL FOR UPDATE', [row.user_id])) return;
           const input = parse(row.request_json);
-          await documents.recordJob(tx, row.user_id, row.id, input, { action: 'error', reply: input.locale === 'en' ? 'The request was interrupted. Please send it again.' : '查詢已中斷，請重新發送。' });
+          await recordResult(tx, row, input, { action: 'error', reply: input.locale === 'en' ? 'The request was interrupted. Please send it again.' : '查詢已中斷，請重新發送。' });
         });
       }
       await db.run("UPDATE assistant_jobs SET status = 'failed', request_json = NULL, error_code = 'assistantInterrupted', completed_at = ? WHERE status = 'running'", [Date.now()]);

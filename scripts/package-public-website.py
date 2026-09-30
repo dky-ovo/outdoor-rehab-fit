@@ -10,9 +10,13 @@ ROOT=Path(__file__).resolve().parents[1]
 SITE=ROOT/'website'
 PACKAGE=ROOT/'deploy/public-website-20260928'
 OUT=PACKAGE/'outdoor-fit-public-website-20260928-v1.tar.gz'
+SEALED_OUTPUTS = [OUT, PACKAGE/'website-manifest.json', PACKAGE/(OUT.name+'.sha256')]
+# Check before running either helper: the manifest is part of the sealed release.
+if any(path.exists() or path.is_symlink() for path in SEALED_OUTPUTS):
+    raise SystemExit('PACKAGE_ALREADY_SEALED_USE_NEW_RELEASE')
 subprocess.run([sys.executable,str(ROOT/'scripts/verify-public-website.py')],check=True)
 subprocess.run([sys.executable,str(PACKAGE/'build_manifest.py'),'--website',str(SITE),'--output',str(PACKAGE/'website-manifest.json')],check=True)
-with tarfile.open(OUT,'w:gz') as archive:
+with OUT.open('xb') as output, tarfile.open(fileobj=output, mode='w:gz') as archive:
     for name in ['install.py','build_manifest.py','website-manifest.json','README.md']:
         archive.add(PACKAGE/name,arcname='public-website-20260928/'+name)
     for path in sorted(SITE.rglob('*')):

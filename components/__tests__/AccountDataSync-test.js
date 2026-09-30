@@ -6,7 +6,9 @@ import { synchronizeAssistantConversations } from '../../utils/assistantConversa
 import { synchronizeGoals } from '../../utils/goals';
 import { getAccountSyncStatus, retryAccountSync } from '../../utils/accountSyncStatus';
 import { notifyAccountData } from '../../utils/accountSyncEvents';
-let mockAuth, mockOwner, mockApply;
+import { getOwnLearningProgress } from '../../utils/api';
+import { getPendingLearningRecords, mergeRemoteLearning } from '../../utils/learning';
+let mockAuth, mockOwner, mockApply, mockLearningFlush;
 jest.mock('../../contexts/AuthContext',()=>({useAuth:()=>mockAuth}));
 jest.mock('../../contexts/LocaleContext',()=>({LocaleContext:require('react').createContext({applyAccountLanguage:value=>mockApply(value)})}));
 jest.mock('../../utils/userStorage',()=>({getOwnerKey:user=>user.owner,getCurrentOwnerKey:()=>mockOwner}));
@@ -16,12 +18,15 @@ jest.mock('../../utils/goals',()=>({synchronizeGoals:jest.fn(async()=>false)}));
 jest.mock('../../utils/usage',()=>({synchronizeUsage:jest.fn(async()=>false)}));
 jest.mock('../../utils/accountPreferences',()=>({synchronizePreferences:jest.fn(async()=>false),getAccountPreferences:jest.fn(async()=>({language:{locale:'en'}}))}));
 jest.mock('../../utils/learning',()=>({mergeRemoteLearning:jest.fn(),getPendingLearningRecords:jest.fn(async()=>[])}));
-jest.mock('../../utils/learningSync',()=>({createLearningSync:()=>({flush:async()=>{},dispose:()=>{}})}));
+jest.mock('../../utils/learningSync',()=>({createLearningSync:()=>({flush:()=>mockLearningFlush(),dispose:()=>{}})}));
 jest.mock('../../utils/sessions',()=>({getSessions:jest.fn(async()=>[])}));
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 let tree, stateChanged;
 beforeEach(()=>{
   jest.useFakeTimers();jest.clearAllMocks();mockOwner='phone:1';mockApply=jest.fn();
+  mockLearningFlush=jest.fn(async()=>{});
+  getOwnLearningProgress.mockResolvedValue({items:[],totalPages:1});
+  getPendingLearningRecords.mockResolvedValue([]);
   mockAuth={user:{id:'alice',owner:mockOwner,token:'token',assistantSessionId:'session'},isGuest:false,isLoading:false};
   AppState.currentState='active';jest.spyOn(AppState,'addEventListener').mockImplementation((_,callback)=>{stateChanged=callback;return{remove(){}};});
 });
@@ -44,4 +49,38 @@ test('edits schedule another pass but cloud view notifications do not echo; sign
   await act(async()=>{notifyAccountData(mockOwner,'goals',true);jest.advanceTimersByTime(1000);});expect(synchronizeGoals).toHaveBeenCalledTimes(1);
   await act(async()=>{notifyAccountData(mockOwner,'goals');jest.advanceTimersByTime(1000);});expect(synchronizeGoals).toHaveBeenCalledTimes(2);
   mockAuth={user:null,isLoading:false,isGuest:false};mockOwner=null;await act(async()=>tree.update(<AccountDataSync/>));expect(options.isCurrent()).toBe(false);
+});
+test('retained learning uploads do not block downloading every page and keep the account pending',async()=>{
+  getPendingLearningRecords.mockResolvedValue([{key:'removed-equipment'}]);
+  const first=[{equipmentId:'1'}],second=[{equipmentId:'2'}];
+  getOwnLearningProgress.mockResolvedValueOnce({items:first,totalPages:2}).mockResolvedValueOnce({items:second,totalPages:2});
+  await mount();
+  expect(getOwnLearningProgress.mock.calls).toEqual([['token',1],['token',2]]);
+  expect(mergeRemoteLearning.mock.calls.map(([owner,items])=>({owner,items}))).toEqual([{owner:mockOwner,items:first},{owner:mockOwner,items:second}]);
+  expect(getAccountSyncStatus(mockOwner).state).toBe('pending');
+});
+test('a failed learning upload still permits downloading and merging available progress',async()=>{
+  mockLearningFlush.mockRejectedValueOnce(Error('upload unavailable'));
+  const items=[{equipmentId:'remote-progress'}];
+  getOwnLearningProgress.mockResolvedValueOnce({items,totalPages:1});
+  await mount();
+  expect(mergeRemoteLearning).toHaveBeenCalledWith(mockOwner,items,expect.any(Function));
+  expect(getAccountSyncStatus(mockOwner).state).toBe('pending');
+  await act(async()=>retryAccountSync(mockOwner));
+  expect(getAccountSyncStatus(mockOwner).state).toBe('synced');
+});
+test('a learning download completing after an account switch cannot merge into either account',async()=>{
+  let finish;
+  getOwnLearningProgress.mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+  await mount();
+  const oldOwner=mockOwner;
+  mockOwner='phone:2';
+  mockAuth={user:{id:'bob',owner:mockOwner,token:'new-token',assistantSessionId:'new-session'},isGuest:false,isLoading:false};
+  await act(async()=>tree.update(<AccountDataSync/>));
+  const mergedBefore=mergeRemoteLearning.mock.calls.length;
+  await act(async()=>finish({items:[{equipmentId:'old-account-only'}],totalPages:2}));
+  expect(mergeRemoteLearning).toHaveBeenCalledTimes(mergedBefore);
+  expect(mergeRemoteLearning.mock.calls.every(([owner])=>owner!==oldOwner)).toBe(true);
+  expect(getOwnLearningProgress).not.toHaveBeenCalledWith('token',2);
+  expect(getAccountSyncStatus(mockOwner).state).toBe('synced');
 });

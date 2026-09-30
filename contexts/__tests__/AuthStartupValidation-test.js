@@ -56,6 +56,43 @@ test("local session and owner are ready while the single background validation i
   expect(getCurrentUser).toHaveBeenCalledTimes(3);
 });
 
+test("an older token-backed session recovers its missing account ID in the background", async () => {
+  const legacy = { ...session }; delete legacy.id;
+  AsyncStorage.__data.set(AUTH_STORAGE_KEY, JSON.stringify(legacy));
+  const checking = deferred(); getCurrentUser.mockReturnValueOnce(checking.promise);
+  await mount();
+  expect(auth.ready).toBe(true); expect(auth.user.id).toBeUndefined();
+  expect(auth.user.token).toBe(session.token);
+  await act(async () => checking.resolve({ user: session }));
+  expect(auth.user.id).toBe(session.id);
+  expect(auth.user.assistantSessionId).toBe(session.assistantSessionId);
+  expect(ensureUserFolder).toHaveBeenLastCalledWith(expect.objectContaining({ id: session.id, phone: session.phone }));
+  expect(JSON.parse(AsyncStorage.__data.get(AUTH_STORAGE_KEY)).id).toBe(session.id);
+});
+
+test("background validation never replaces an already known account ID", async () => {
+  getCurrentUser.mockResolvedValue({ user: { ...session, id: 'different-user', name: 'Wrong name' } });
+  await mount();
+  expect(auth.user.id).toBe(session.id); expect(auth.user.name).toBe(session.name);
+  expect(JSON.parse(AsyncStorage.__data.get(AUTH_STORAGE_KEY)).id).toBe(session.id);
+});
+
+test("a legacy account ID arriving after a new login cannot attach to that login", async () => {
+  const legacy = { ...session }; delete legacy.id;
+  AsyncStorage.__data.set(AUTH_STORAGE_KEY, JSON.stringify(legacy));
+  const checking = deferred(); getCurrentUser.mockReturnValueOnce(checking.promise);
+  await mount();
+  const next = { ...session, id: 'new-user', phone: '69876543' };
+  loginAccount.mockResolvedValueOnce({ user: next, token: 'new-token' });
+  getCurrentUser.mockResolvedValue({ user: next });
+  await act(async () => auth.login('next', 'password'));
+  const foldersBefore = ensureUserFolder.mock.calls.length;
+  await act(async () => checking.resolve({ user: session }));
+  expect(auth.user.id).toBe('new-user'); expect(auth.user.token).toBe('new-token');
+  expect(ensureUserFolder).toHaveBeenCalledTimes(foldersBefore);
+  expect(JSON.parse(AsyncStorage.__data.get(AUTH_STORAGE_KEY)).id).toBe('new-user');
+});
+
 test.each([
   { status: 0, code: "networkError" },
   { status: 500, code: "serverError" },

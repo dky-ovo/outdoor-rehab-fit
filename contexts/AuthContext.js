@@ -194,10 +194,18 @@ export function AuthProvider({ children }) {
 			try {
 				const remote = await getCurrentUser(user.token);
 				await queueSessionWrite(async () => {
-					if (!active || scope !== accountScopeRef.current || userRef.current !== captured || String(remote?.user?.id) !== String(captured?.id)) return;
-					const next = { ...captured };
+					if (!active || scope !== accountScopeRef.current || userRef.current !== captured) return;
+					const remoteId = remote?.user?.id;
+					if (typeof remoteId !== 'string' || !remoteId.trim()) return;
+					if (captured?.id && String(remoteId) !== String(captured.id)) return;
+					// Older sessions saved the verified token but omitted the user ID.
+					// Recover it from that token's /users/me response without making the
+					// local startup wait for the network or accepting a different login.
+					const next = { ...captured, id: remoteId };
 					for (const key of ['name', 'avatarUrl', 'profileRole']) if (remote.user[key] !== undefined) next[key] = remote.user[key];
 					if (JSON.stringify(next) === JSON.stringify(captured)) return;
+					if (!captured.id) await ensureUserFolder(next);
+					if (!active || scope !== accountScopeRef.current || userRef.current !== captured) return;
 					await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next));
 					if (active && scope === accountScopeRef.current && userRef.current === captured) { userRef.current = next; setUser(next); }
 				});

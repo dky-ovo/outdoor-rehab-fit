@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getCurrentOwnerKey, userDataKey } from './userStorage';
-import { updateJournal, journalBatch, reconcileJournal } from './accountSyncJournal';
+import { updateJournal, journalBatch, reconcileJournal, releaseRejectedJournalBatch } from './accountSyncJournal';
 import { notifyAccountData } from './accountSyncEvents';
 const queues = new Map();
 function serial(owner, work) {
@@ -22,11 +22,24 @@ export async function synchronizePreferences({ owner, token, send, isCurrent }) 
   const outgoing = await serial(owner, async () => {
     if (!isCurrent()) return null;
     const state = await read(owner); state.cloud = updateJournal(state.cloud, state.values);
+    const changes = journalBatch(state.cloud, state.values, { retainUnacknowledged: true });
     await AsyncStorage.setItem(key(owner), JSON.stringify(state));
-    return { collection: 'preferences', cursor: state.cloud.cursor, changes: journalBatch(state.cloud, state.values) };
+    return { collection: 'preferences', cursor: state.cloud.cursor, changes };
   });
   if (!outgoing || !isCurrent()) return;
-  const result = await send(token, outgoing);
+  let result;
+  try { result = await send(token, outgoing); }
+  catch (error) {
+    if (error?.status === 400 && error?.code === 'invalidAccountData') {
+      await serial(owner, async () => {
+        if (!isCurrent()) return;
+        const state = await read(owner); if (!isCurrent()) return;
+        state.cloud = releaseRejectedJournalBatch(state.cloud, outgoing.changes);
+        await AsyncStorage.setItem(key(owner), JSON.stringify(state));
+      });
+    }
+    throw error;
+  }
   let pending = false;
   await serial(owner, async () => {
     if (!isCurrent()) return;

@@ -2,7 +2,7 @@
 import { getCurrentOwnerKey, getUserJson, setUserJson } from "./userStorage";
 import { getWeekKey, toDateKey } from "./dates";
 import { getSessions } from "./sessions";
-import { updateJournal, journalBatch, reconcileJournal, newSyncOperation } from './accountSyncJournal';
+import { updateJournal, journalBatch, reconcileJournal, releaseRejectedJournalBatch, newSyncOperation } from './accountSyncJournal';
 import { notifyAccountData } from './accountSyncEvents';
 
 const LEAF = "goalSettings";
@@ -245,11 +245,23 @@ export async function synchronizeGoals({ owner, token, send, isCurrent }) {
 		if (!raw) state.cloudTargetKeys = [];
 		const documents = goalDocuments(state);
 		state.cloud = updateJournal(state.cloud, documents);
+		const changes = journalBatch(state.cloud, documents, { retainUnacknowledged: true });
 		await setUserJson(LEAF, state);
-		return { collection: 'goals', cursor: state.cloud.cursor, changes: journalBatch(state.cloud, documents) };
+		return { collection: 'goals', cursor: state.cloud.cursor, changes };
 	});
 	if (!outgoing || !valid()) return;
-	const result = await send(token, outgoing);
+	let result;
+	try { result = await send(token, outgoing); }
+	catch (error) {
+		if (error?.status === 400 && error?.code === 'invalidAccountData') {
+			await queuedGoals(async () => {
+				if (!valid()) return;
+				const state = await readGoalState(); if (!valid()) return;
+				await setUserJson(LEAF, { ...state, cloud: releaseRejectedJournalBatch(state.cloud, outgoing.changes) });
+			});
+		}
+		throw error;
+	}
 	let pending = false;
 	await queuedGoals(async () => {
 		if (!valid()) return;

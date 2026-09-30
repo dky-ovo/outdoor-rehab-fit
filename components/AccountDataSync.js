@@ -51,17 +51,22 @@ export default function AccountDataSync() {
       if (Date.now() - lastExtended >= 60000) {
         lastExtended = Date.now();
         work.push(getSessions(token, { strict: true }));
+        // A retained/failed upload must stay visible without blocking downloads
+        // of this account's other progress. Both jobs contribute to final status.
         work.push((async () => {
           await learning.flush();
           if (!current()) return;
           if ((await getPendingLearningRecords(owner)).length) throw new Error('LEARNING_UPLOAD_PENDING');
+        })());
+        work.push((async () => {
           for (let page = 1; page <= 100 && current(); page++) {
             const result = await getOwnLearningProgress(token, page);
+            if (!current()) return;
             if (!Array.isArray(result?.items) || !Number.isInteger(result.totalPages)) throw new Error('LEARNING_RESPONSE_INVALID');
             await mergeRemoteLearning(owner, result.items, current);
             if (page >= result.totalPages) return;
           }
-          throw new Error('LEARNING_PAGES_PENDING');
+          if (current()) throw new Error('LEARNING_PAGES_PENDING');
         })());
       }
       const results = await Promise.allSettled(work);
