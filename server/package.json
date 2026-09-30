@@ -11,7 +11,11 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@xmldom/xmldom": "0.9.12",
     "better-sqlite3": "12.4.1",
-    "express": "5.2.1"
+    "express": "5.2.1",
+    "mysql2": "3.24.4",
+    "openai": "^7.10.0",
+    "yauzl": "3.4.0"
   }
 }

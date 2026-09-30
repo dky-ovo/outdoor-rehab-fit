@@ -1,0 +1,178 @@
+#!/bin/bash
+set -Eeuo pipefail
+umask 077
+
+UPDATE_ZIP="${1:-/home/dukaiyu2004/outdoor-fit-privacy-policy-20260924-update.zip}"
+API_DIR="/home/dukaiyu2004/outdoor-fit-api"
+WEB_DIR="/var/www/outdoor-fit"
+BACKUP_ROOT="/home/dukaiyu2004/outdoor-fit-backups"
+DEPLOY_ROOT="/home/dukaiyu2004/.outdoor-fit-deploy"
+LOCK="/run/outdoor-fit-file-explorer-deploy.lock"
+RELEASE="privacy-policy-20260924"
+SERVICE="outdoor-fit-api"
+WORK_DIR="" BACKUP_DIR="" CHECKER="" NODE="" BASELINE=""
+TOUCHED=0 STOPPED=0
+
+healthy() {
+  local attempt
+  for attempt in $(seq 1 30); do
+    if systemctl is-active --quiet "$SERVICE" && curl --max-time 2 -fsS http://127.0.0.1:3000/api/health |
+      "$NODE" -e 'const v=JSON.parse(require("fs").readFileSync(0,"utf8"));if(v.ok!==true||v.service!=="outdoor-fit-api")process.exit(1)'; then return 0; fi
+    sleep 1
+  done
+  return 1
+}
+text_api_healthy() {
+  curl --max-time 5 -fsS http://127.0.0.1:3000/api/app-texts |
+    "$NODE" -e 'const v=JSON.parse(require("fs").readFileSync(0,"utf8"));if(v.version!==1||!v.overrides||typeof v.overrides!=="object"||Array.isArray(v.overrides))process.exit(1)'
+}
+
+recover() {
+  local status="${1:-1}" rollback_ok=1
+  trap - ERR INT TERM
+  set +e
+  if [ "$TOUCHED" -eq 1 ]; then
+    echo "Deployment failed; restoring only the text catalog and known Web files."
+    if systemctl stop "$SERVICE" && [ "$(systemctl show "$SERVICE" --property=MainPID --value)" = 0 ]; then
+      "$NODE" "$CHECKER" rollback "$API_DIR" "$WEB_DIR" "$WORK_DIR/package" "$BACKUP_DIR" || rollback_ok=0
+      if [ "$rollback_ok" -eq 1 ]; then systemctl start "$SERVICE" && healthy && text_api_healthy || rollback_ok=0; fi
+    else rollback_ok=0; fi
+  elif [ "$STOPPED" -eq 1 ]; then
+    systemctl start "$SERVICE" && healthy && text_api_healthy || rollback_ok=0
+  else echo "Stopped in preflight, before replacing files or stopping the API."; fi
+  [ "$rollback_ok" -eq 1 ] || echo "WARNING: automatic recovery stopped safely; review retained backup before retrying."
+  echo "Database, uploads, accounts, API keys, other source files, dependencies and Nginx were NOT restored or deleted."
+  echo "Diagnostics: ${WORK_DIR:-not created}; backup: ${BACKUP_DIR:-not created}."
+  exit "$status"
+}
+trap 'recover $?' ERR
+trap 'recover 130' INT
+trap 'recover 143' TERM
+
+[ "$(id -u)" -eq 0 ]
+for tool in python3 curl flock sha256sum systemctl readlink stat cmp mktemp; do command -v "$tool" >/dev/null; done
+[ -f "$UPDATE_ZIP" ] && [ ! -L "$UPDATE_ZIP" ]
+[ "$(readlink -f "$UPDATE_ZIP")" = "$UPDATE_ZIP" ]
+[ "$(stat -c %h "$UPDATE_ZIP")" = 1 ]
+[ "$(stat -c %s "$UPDATE_ZIP")" -le 536870912 ]
+for directory in "$API_DIR" "$WEB_DIR" "$BACKUP_ROOT" "$DEPLOY_ROOT"; do [ "$(readlink -m "$directory")" = "$directory" ]; done
+[ -d "$API_DIR/src" ] && [ ! -L "$API_DIR/src" ]
+[ -d "$WEB_DIR" ] && [ ! -L "$WEB_DIR" ]
+[ ! -L "$LOCK" ]
+if [ -e "$LOCK" ]; then [ -f "$LOCK" ] && [ "$(stat -c %h "$LOCK")" = 1 ]; fi
+exec 9>"$LOCK"
+flock -n 9 || { echo "Another deployment is running; nothing changed."; exit 1; }
+systemctl is-active --quiet "$SERVICE"
+mkdir -p "$DEPLOY_ROOT" "$BACKUP_ROOT"
+[ "$(readlink -f "$DEPLOY_ROOT")" = "$DEPLOY_ROOT" ]
+[ "$(readlink -f "$BACKUP_ROOT")" = "$BACKUP_ROOT" ]
+WORK_DIR="$(mktemp -d "$DEPLOY_ROOT/$RELEASE.XXXXXX")"
+mkdir "$WORK_DIR/package"
+
+# Check every ZIP member before extraction: one catalog plus static Web files.
+python3 - "$UPDATE_ZIP" "$WORK_DIR/package" <<'PY'
+import os, re, shutil, stat, sys, zipfile
+archive, destination = sys.argv[1:]
+expected = {'install-privacy-policy-20260924.sh', 'verify-privacy-policy-release.cjs', 'release-manifest.json', 'README.md', 'appTextCatalog.json'}
+with zipfile.ZipFile(archive) as z:
+    entries = z.infolist()
+    if len(entries) > 20000: raise RuntimeError('Too many archive entries')
+    seen, roots, total = set(), set(), 0
+    for entry in entries:
+        name = entry.orig_filename
+        if name != entry.filename: raise RuntimeError('Normalized ZIP member name rejected')
+        if name in seen: raise RuntimeError('Duplicate ZIP member')
+        seen.add(name)
+        segments = name.rstrip('/').split('/')
+        if not re.fullmatch(r'[A-Za-z0-9_@().+/-]+', name) or any(not p or p.startswith('.') for p in segments): raise RuntimeError('Unsafe ZIP path')
+        mode = stat.S_IFMT(entry.external_attr >> 16)
+        if entry.flag_bits & 1 or mode not in (0, stat.S_IFREG, stat.S_IFDIR): raise RuntimeError('Special or encrypted ZIP member')
+        if entry.is_dir():
+            if segments[0] != 'web' or mode not in (0, stat.S_IFDIR) or entry.file_size != 0: raise RuntimeError('Unexpected ZIP directory')
+            continue
+        if mode == stat.S_IFDIR: raise RuntimeError('ZIP mode/name mismatch')
+        if len(segments) == 1:
+            if name not in expected: raise RuntimeError('Unknown root member')
+            if entry.file_size < 1: raise RuntimeError('Empty root member')
+            roots.add(name); limit = 8 * 1024 * 1024
+        else:
+            if segments[0] != 'web': raise RuntimeError('Only the Web tree is allowed')
+            limit = 64 * 1024 * 1024
+        if entry.file_size < 0 or entry.file_size > limit: raise RuntimeError('ZIP size limit exceeded')
+        total += entry.file_size
+    file_names = {entry.filename for entry in entries if not entry.is_dir()}
+    for entry in entries:
+        parts = entry.filename.rstrip('/').split('/')
+        if any('/'.join(parts[:index]) in file_names for index in range(1, len(parts))) or (entry.is_dir() and entry.filename.rstrip('/') in file_names): raise RuntimeError('ZIP file/directory collision')
+    if roots != expected or 'web/index.html' not in seen or total > 512 * 1024 * 1024: raise RuntimeError('Incomplete or oversized release')
+    if shutil.disk_usage(destination).free < total + 100 * 1024 * 1024: raise RuntimeError('Insufficient staging disk space')
+    for entry in entries:
+        target = os.path.join(destination, *entry.filename.rstrip('/').split('/'))
+        if entry.is_dir(): os.makedirs(target, exist_ok=True); continue
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with z.open(entry) as source, open(target, 'xb') as output:
+            remaining = entry.file_size
+            while remaining:
+                chunk = source.read(min(65536, remaining))
+                if not chunk: raise RuntimeError('Truncated ZIP member')
+                output.write(chunk); remaining -= len(chunk)
+            if source.read(1): raise RuntimeError('ZIP size mismatch')
+PY
+cmp "$0" "$WORK_DIR/package/install-$RELEASE.sh"
+# Trusted checker/manifest/readme hashes are embedded here: no sidecar download.
+(cd "$WORK_DIR/package" && sha256sum -c - <<'EMBEDDED_CHECKSUMS'
+@@EMBEDDED_CHECKSUMS@@
+EMBEDDED_CHECKSUMS
+)
+CHECKER="$WORK_DIR/package/verify-privacy-policy-release.cjs"
+OLD_PID="$(systemctl show "$SERVICE" --property=MainPID --value)"
+[[ "$OLD_PID" =~ ^[1-9][0-9]*$ ]]
+NODE="$(readlink -f "/proc/$OLD_PID/exe")"
+[ -x "$NODE" ] && [ "$(basename "$NODE")" = node ]
+"$NODE" "$CHECKER" package "$WORK_DIR/package"
+"$NODE" "$CHECKER" runtime "$OLD_PID" "$API_DIR" > "$WORK_DIR/runtime-before.json"
+BASELINE="$("$NODE" "$CHECKER" backend "$API_DIR" "$WORK_DIR/package")"
+"$NODE" "$CHECKER" target "$WEB_DIR" "$WORK_DIR/package"
+healthy
+text_api_healthy
+
+python3 - "$API_DIR" "$WEB_DIR" "$WORK_DIR" "$BACKUP_ROOT" <<'PY'
+import json, os, shutil, sys
+api, web, work, backup = sys.argv[1:]
+with open(os.path.join(work, 'package', 'release-manifest.json'), encoding='utf-8') as stream: manifest = json.load(stream)
+incoming = sum(item['bytes'] for item in manifest['web'])
+old_web = sum(os.path.getsize(os.path.join(web, item['path'])) for item in manifest['web'] if os.path.isfile(os.path.join(web, item['path'])))
+old_catalog = os.path.getsize(os.path.join(api, 'src', 'appTextCatalog.json'))
+needs = {}
+for root, amount in [(api, manifest['catalog']['bytes']), (web, incoming), (backup, old_web + old_catalog + incoming + 100 * 1024 * 1024)]:
+    device = os.stat(root).st_dev
+    previous = needs.get(device, (root, 0))
+    needs[device] = (root, previous[1] + amount)
+for root, amount in needs.values():
+    if shutil.disk_usage(root).free < amount: raise RuntimeError('Insufficient disk space for safe Web replacement and backup')
+PY
+BACKUP_DIR="$(mktemp -d "$BACKUP_ROOT/$RELEASE-$(date +%Y%m%d-%H%M%S).XXXXXX")"
+[ "$("$NODE" "$CHECKER" backend "$API_DIR" "$WORK_DIR/package")" = "$BASELINE" ]
+"$NODE" "$CHECKER" runtime "$(systemctl show "$SERVICE" --property=MainPID --value)" "$API_DIR" > "$WORK_DIR/runtime-recheck.json"
+cmp "$WORK_DIR/runtime-before.json" "$WORK_DIR/runtime-recheck.json"
+"$NODE" "$CHECKER" target "$WEB_DIR" "$WORK_DIR/package"
+STOPPED=1
+systemctl stop "$SERVICE"
+[ "$(systemctl show "$SERVICE" --property=MainPID --value)" = 0 ]
+[ "$("$NODE" "$CHECKER" backend "$API_DIR" "$WORK_DIR/package")" = "$BASELINE" ]
+"$NODE" "$CHECKER" backup "$API_DIR" "$WEB_DIR" "$WORK_DIR/package" "$BACKUP_DIR"
+TOUCHED=1
+"$NODE" "$CHECKER" apply "$API_DIR" "$WEB_DIR" "$WORK_DIR/package" "$BACKUP_DIR"
+systemctl start "$SERVICE"
+healthy
+text_api_healthy
+NEW_PID="$(systemctl show "$SERVICE" --property=MainPID --value)"
+[ "$NEW_PID" != "$OLD_PID" ]
+"$NODE" "$CHECKER" runtime "$NEW_PID" "$API_DIR" > "$WORK_DIR/runtime-after.json"
+cmp "$WORK_DIR/runtime-before.json" "$WORK_DIR/runtime-after.json"
+"$NODE" "$CHECKER" installed "$API_DIR" "$WEB_DIR" "$WORK_DIR/package"
+trap - ERR INT TERM
+echo "Privacy policy catalog and Web update completed. Backup: $BACKUP_DIR"
+echo "Only src/appTextCatalog.json and Web files replaced; API restarted to load the new catalog."
+echo "Older Web assets retained. Database, uploads, accounts, keys, other source files, dependencies and Nginx preserved."
+echo "Staging retained: $WORK_DIR"

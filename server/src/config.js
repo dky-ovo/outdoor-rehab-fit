@@ -1,4 +1,5 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export function readConfig(env = process.env) {
   const port = Number(env.PORT || 3000);
@@ -12,8 +13,8 @@ export function readConfig(env = process.env) {
   }
 
   const smsMode = env.SMS_MODE || "mock";
-  if (!new Set(["mock", "twilio"]).has(smsMode)) {
-    throw new Error("SMS_MODE must be either mock or twilio");
+  if (!new Set(["mock", "twilio", "disabled"]).has(smsMode)) {
+    throw new Error("SMS_MODE must be mock, twilio, or disabled");
   }
 
   const twilio = {
@@ -26,11 +27,20 @@ export function readConfig(env = process.env) {
     throw new Error("Twilio Verify credentials are required when SMS_MODE=twilio");
   }
 
+	const databasePath = path.resolve(env.DATABASE_PATH || "./data/outdoor-fit.sqlite");
+	const testSmsCodeEnabled = String(env.TEST_SMS_CODE_ENABLED ?? "true").toLowerCase() !== "false";
+	const testSmsCode = String(env.TEST_SMS_CODE || "123456");
+	if (!/^\d{6}$/.test(testSmsCode)) throw new Error("TEST_SMS_CODE must contain exactly 6 digits");
   return {
     port,
     jwtSecret,
-    databasePath: path.resolve(env.DATABASE_PATH || "./data/outdoor-fit.sqlite"),
+		databasePath,
+		equipmentUploadDir: path.resolve(env.EQUIPMENT_UPLOAD_DIR || path.join(path.dirname(databasePath), "equipment-images")),
+		mediaUploadDir: path.resolve(env.MEDIA_UPLOAD_DIR || path.join(path.dirname(databasePath), "media-library")),
+		mediaSeedDir: path.resolve(env.MEDIA_SEED_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), "../media-seed")),
     smsMode,
+		testSmsCodeEnabled,
+		testSmsCode,
     twilio,
   };
 }

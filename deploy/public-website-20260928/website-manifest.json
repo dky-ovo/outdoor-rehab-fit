@@ -1,0 +1,261 @@
+{
+  "format": 1,
+  "files": {
+    "404/index.html": {
+      "sha256": "66e60ce494e93f533a82ebc620550ef36fa4eb2029a7cd4560389d348eb89fa8",
+      "bytes": 2953
+    },
+    "404.html": {
+      "sha256": "66e60ce494e93f533a82ebc620550ef36fa4eb2029a7cd4560389d348eb89fa8",
+      "bytes": 2953
+    },
+    "assets/allen-wing-kai-wong.webp": {
+      "sha256": "429d9889c8a3f81b1a0403531438e3c3c0e10385df65f773e7c1959390bb7a57",
+      "bytes": 19640
+    },
+    "assets/app-icon.webp": {
+      "sha256": "c1fafad357d06b26fa30e3148dc34e6894ac1d732e005f63a2a60d9f1ab07c1d",
+      "bytes": 11026
+    },
+    "assets/app-phone-screen.webp": {
+      "sha256": "353dbd48538d01e7a721c900a478295167925a881bdc470036aac75461c76205",
+      "bytes": 28458
+    },
+    "assets/arnold-yu-lok-wong.webp": {
+      "sha256": "5cb65a3563a8fe419dd4ad8b44e745a1e3fa01c00cf1abe80aa47dbdd4eaba21",
+      "bytes": 29022
+    },
+    "assets/chung-chi-keung.webp": {
+      "sha256": "71b48725e559cb5a5da80c82c2ca6eda596ee956478a5051fe85e79f52771b0f",
+      "bytes": 22982
+    },
+    "assets/cindy-oi-wan-chan.webp": {
+      "sha256": "f4363b890a61629fc4d2a926cebcd55ab2abaf017ea27a4967a55df814426720",
+      "bytes": 29742
+    },
+    "assets/daniel-fong.webp": {
+      "sha256": "6ffe79e14f3db0c0a9bc2560008b0c82b741fe3d1fc38c7e48a0c9ee4885a582",
+      "bytes": 18214
+    },
+    "assets/exercise-back-strength.webp": {
+      "sha256": "fbde8b7434a3727570b828d5c9650dc45ca1d79f7fc1b24ccdbabd916d703abe",
+      "bytes": 169426
+    },
+    "assets/exercise-full-body-stretch.webp": {
+      "sha256": "c63a08db6a50bdfd53242a1b254c743bf08e77fc8611d137b18afb9636438669",
+      "bytes": 105900
+    },
+    "assets/exercise-leg-stretch.webp": {
+      "sha256": "6f9346faafedee44e8538f0cc8c1d8532124e70eeb8a9fd1565b1290fa59b4be",
+      "bytes": 319674
+    },
+    "assets/fadi-al-zoubi.webp": {
+      "sha256": "449b88fc1b15a70a7f0d6075c8238cd0222889497e6f961a80b413d962d95de9",
+      "bytes": 7132
+    },
+    "assets/fonts/wix-madefor-0cde73c41e.woff2": {
+      "sha256": "609099db8d7e3248ce298c39d66cbcc78b3fd5b6be6e0a6dff8150b1da1eca07",
+      "bytes": 7440
+    },
+    "assets/fonts/wix-madefor-0fc4145cef.woff2": {
+      "sha256": "27663f3a6ddb941a7ea773b9cd818fe390895c298cf9aadd33bf37393a50bf5d",
+      "bytes": 16464
+    },
+    "assets/fonts/wix-madefor-10acfd9305.woff2": {
+      "sha256": "b3f8acf28258f5b4a1df955f343ed3ae414f8a8649e4d1195887fe8c9a7b867e",
+      "bytes": 11996
+    },
+    "assets/fonts/wix-madefor-348e1f1bbb.woff2": {
+      "sha256": "83786d52c7889a45aadaaad65b8fc7025bb309acc19a215f353d7d8d1528d6df",
+      "bytes": 7280
+    },
+    "assets/fonts/wix-madefor-39a4aa732a.woff2": {
+      "sha256": "19c85b5fa5d24fb5d8885658a00922039605c5a874635b8080a00a64297d9486",
+      "bytes": 3300
+    },
+    "assets/fonts/wix-madefor-53e90c8234.woff2": {
+      "sha256": "f1f75b44758ad115f87b5ec1aebbaadf37cc7453abe9d39339ec3e443b3525ec",
+      "bytes": 3132
+    },
+    "assets/fonts/wix-madefor-8d81339b38.woff2": {
+      "sha256": "0ea036d10444e99e67689b358d7e03903b82ab34af60bc619c96b12a33b3bbc3",
+      "bytes": 7620
+    },
+    "assets/fonts/wix-madefor-95e2d412ff.woff2": {
+      "sha256": "fa897fa28f6a160effb47099bf44c9ac032adba8f2100f61df768fcf01f4147a",
+      "bytes": 11364
+    },
+    "assets/fonts/wix-madefor-96b223a892.woff2": {
+      "sha256": "a69180a3f26bf6bc7eebfad62f024602ec92f575decf5005670d69ac35b1828c",
+      "bytes": 11980
+    },
+    "assets/fonts/wix-madefor-ad9be8ead6.woff2": {
+      "sha256": "107c9381b556d1201075ea0a4215cdc9d8eac3cd3dc0922b71811fbdfa855999",
+      "bytes": 4476
+    },
+    "assets/fonts/wix-madefor-b74bcf5197.woff2": {
+      "sha256": "34c9d48261f9e10a150d240bc0c81c3dfb4838795e59d6b66e34eb78471605ed",
+      "bytes": 13816
+    },
+    "assets/fonts/wix-madefor-bc53bd3d45.woff2": {
+      "sha256": "26a0f8bfa561ba22f8e3860b01b3fc6732226b8c8467e333b287a9cbc0815c03",
+      "bytes": 7620
+    },
+    "assets/fonts/wix-madefor-cc6b0f9885.woff2": {
+      "sha256": "19bf2f2f1eaa10b2a047a8a1e624a1e12008ab5e3c50ad199ac968f8324f5f4d",
+      "bytes": 20168
+    },
+    "assets/fonts/wix-madefor-dca70c2e38.woff2": {
+      "sha256": "f30176ed1a6d4781ddde84f790f67dd757c13109247b01ed5b592e35af6639e7",
+      "bytes": 8068
+    },
+    "assets/fonts/wix-madefor-de6129d563.woff2": {
+      "sha256": "a4e4d2d7f125b354f25fac4aa92e269b21187cc662bed2747f9ae4f72d5e6ea9",
+      "bytes": 11368
+    },
+    "assets/fonts/wix-madefor-df8d14109c.woff2": {
+      "sha256": "a63e4d4c0091ab499605de6f45597f1e952ee238709594c2d91bcc8b810d4d9b",
+      "bytes": 10876
+    },
+    "assets/fonts/wix-madefor-e0a5d1ccc5.woff2": {
+      "sha256": "8f165b3bbe350b563c3d867dac95b662f8a03709106d4403cfa233987d5ddd98",
+      "bytes": 1232
+    },
+    "assets/fonts/wix-madefor-e777ca58d8.woff2": {
+      "sha256": "b7aed7eef5005041966bc7811e5be46a647536cb68e36a14dc1ccd5e3fa2660e",
+      "bytes": 1984
+    },
+    "assets/fonts/wix-madefor-ed7aa40cd1.woff2": {
+      "sha256": "910481ea54d71c83e72ccb179e116ee47063ce6a92022444e9dd1cd2d66dca03",
+      "bytes": 12464
+    },
+    "assets/fonts/wix-madefor-f003a84d73.woff2": {
+      "sha256": "9f11fd6699d23e978dd7e6d6e0b7daa5b5015b87cd4a3d3b6672efd774b1b4e9",
+      "bytes": 17764
+    },
+    "assets/fonts/wixmadefordisplay-OFL.txt": {
+      "sha256": "6ea47aed4703a072a5011bf429f998c718ff7c3ae57598f7e78c2d3fa1e25c33",
+      "bytes": 4386
+    },
+    "assets/fonts/wixmadefortext-OFL.txt": {
+      "sha256": "6ea47aed4703a072a5011bf429f998c718ff7c3ae57598f7e78c2d3fa1e25c33",
+      "bytes": 4386
+    },
+    "assets/fonts.css": {
+      "sha256": "591e91c138eb8730d3b3f1b1eaa7d2f8e3455042d8b74bb68a60c958e4981132",
+      "bytes": 8825
+    },
+    "assets/health-bureau-logo.webp": {
+      "sha256": "ee526d4444a0b16aeb99e1e40549aa31c9dd043024909717b1c28d5550434091",
+      "bytes": 42648
+    },
+    "assets/hero-tai-chi-wheel.webp": {
+      "sha256": "1956e47d537fcef4bd20429c436026969fbcac358cb33f2cc27be6c123f8f5c9",
+      "bytes": 45486
+    },
+    "assets/hero-upper-body-stretch.webp": {
+      "sha256": "7847551a1bf9b71726e824bc628b713fedcb100d43d56e458ccb08f9ae94c3d6",
+      "bytes": 29236
+    },
+    "assets/hkcc-logo.webp": {
+      "sha256": "77244cef8af729152d8635faed62d538b91f0f0508000c25f9061c7daa27cd5d",
+      "bytes": 20696
+    },
+    "assets/hkpfa-logo.webp": {
+      "sha256": "d816f79c9ef62fade40096c689adb453205d0e8323241ceb337bebd206a5028e",
+      "bytes": 51614
+    },
+    "assets/hmrf-logo.webp": {
+      "sha256": "e2a406603946a987a0bd92ab099636d5e659d1a362a0880c9c92cb09c09dba71",
+      "bytes": 96548
+    },
+    "assets/janet-lok-chun-lee.webp": {
+      "sha256": "5d3c63453fa755576bccb38dc6a31e14a41d4698e0a2acbf8557eeb93d14e0a9",
+      "bytes": 36014
+    },
+    "assets/kenneth-fong.webp": {
+      "sha256": "795d9b8d6d2ce0585a3ee8ff08ecf7549ce0ef416f4d17a631187d7c09681e76",
+      "bytes": 11248
+    },
+    "assets/man-man-peng.webp": {
+      "sha256": "778187739dfb6a4694269fbfe230125ae1c7ec77dd231d8ed2219e7cc9c75e7e",
+      "bytes": 23132
+    },
+    "assets/northwestern-feinberg-logo.webp": {
+      "sha256": "719c73ca42601fd86aca90a3ceb0ac9cd09949cb923f4c5c0f67ef403eef5f82",
+      "bytes": 19962
+    },
+    "assets/outdoor-fit-app-icon.webp": {
+      "sha256": "c1fafad357d06b26fa30e3148dc34e6894ac1d732e005f63a2a60d9f1ab07c1d",
+      "bytes": 11026
+    },
+    "assets/polyu-logo.webp": {
+      "sha256": "50fbc1efab40c2dec9e239c7f30542bb2753ba81a3e30f04a022653455db3a79",
+      "bytes": 34076
+    },
+    "assets/research-1.webp": {
+      "sha256": "bbdd611a7d08b5aad6eb8ac2be2900bb571ec1df5c7105a9d8c3be829d02edc3",
+      "bytes": 194492
+    },
+    "assets/research-2.webp": {
+      "sha256": "a51bff4302845586a0edab4bbe67e23d934ed8ea577ab9aed34633ad859d6a07",
+      "bytes": 166792
+    },
+    "assets/rick-yiu-cho-kwan.webp": {
+      "sha256": "9531aebf37b865ac32f1aa9896ebd38e785a2083a94022b8953fb02a3c987c96",
+      "bytes": 32848
+    },
+    "assets/tung-wah-logo.webp": {
+      "sha256": "f561dc9b2ed65c7aeb5cda455497fc6f2cb4aab7250e2688f59bd1e2ae162a67",
+      "bytes": 18940
+    },
+    "assets/wong-wing-sum.webp": {
+      "sha256": "4d1662f48159f3b2db52db4a8de856c0cc2af7866e19dbcf71b025d27e93f557",
+      "bytes": 19028
+    },
+    "assets/xiao-feng-wu.webp": {
+      "sha256": "c2d8b271fa890aa0a00e8acb335b075a7342a3dae1fc045c627239914018ab01",
+      "bytes": 29858
+    },
+    "assets/xintao-liu.webp": {
+      "sha256": "bdea27d39401b6ed550a6ffbd57c6ff08822ab87463b2ff7ea2aab9af87ee24f",
+      "bytes": 17374
+    },
+    "index.html": {
+      "sha256": "864de7e4e48faefd7fc3da9c8bfe6ba132bcae854e0f51c081c3071c89c30cd1",
+      "bytes": 26268
+    },
+    "reference.css": {
+      "sha256": "d74f8e2943f5a024c6e85dea7ce0c4bba5f1c2ae2cb7d04db2849b0e4055b381",
+      "bytes": 37373
+    },
+    "resources/index.html": {
+      "sha256": "c70e6652e0959bcc7e55559fade1f2e44e9873c182b0dfb6d9dad17de8db70b9",
+      "bytes": 5018
+    },
+    "resources/research-1/index.html": {
+      "sha256": "2d6fb7a77172caaa8507d1ff2b98101fcfb48471658f0e5d741d4d72ec01e5a5",
+      "bytes": 6444
+    },
+    "resources/research-2/index.html": {
+      "sha256": "951ac7b3fd82de7c92269704035dafd06e08f0ad71c619795843adddbd976745",
+      "bytes": 5372
+    },
+    "robots.txt": {
+      "sha256": "6692acc3779958e13aa5ffb10a373ce521edb2fe9ac6d947839bb64fd707bd73",
+      "bytes": 69
+    },
+    "site.css": {
+      "sha256": "aa887615fdfddfd3487228f8def21817d47914bb088652ff4feb14f4913cbf57",
+      "bytes": 9817
+    },
+    "site.js": {
+      "sha256": "22278c85441298d2df511de391b31c68377088eaa2a3451439e9bed0b1241224",
+      "bytes": 3462
+    },
+    "sitemap.xml": {
+      "sha256": "d665d721cca4104a5d5f9ce218b8991c4747bd59e0ec1bc79c60f8d58cec375c",
+      "bytes": 337
+    }
+  }
+}

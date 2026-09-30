@@ -1,0 +1,18 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.offlineassistantvoice'
+version = '1.1.0'
+
+android {
+  namespace 'expo.modules.offlineassistantvoice'
+  defaultConfig { versionCode 2; versionName '1.1.0' }
+  // The original downloaded speech-input resources remain on the developer's
+  // disk, but reply playback neither depends on nor packages those resources.
+  sourceSets.main.assets.setSrcDirs([])
+  sourceSets.main.jniLibs.setSrcDirs([])
+}
+
+// Android TextToSpeech uses the platform API; no bundled native runtime is needed.

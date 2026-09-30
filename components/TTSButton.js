@@ -1,11 +1,18 @@
 // App Upgrade #11: Text to Speech — Chinese content is read in Cantonese (粵語)
-import React, { useEffect, useState } from "react";
-import { TouchableOpacity, Text, StyleSheet, Platform } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, AppState, PanResponder, Platform, StyleSheet, TouchableOpacity, useWindowDimensions } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
+import { speechChunks } from "../utils/ttsLearning";
 import * as Speech from "expo-speech";
 import { Ionicons } from "@expo/vector-icons";
 import { RFValue } from "react-native-responsive-fontsize";
 import { trackTtsPlay } from "../utils/usage";
 import { ensurePlaybackAudioMode } from "../utils/audioMode";
+import { showAlert } from "../utils/alert";
+
+const BALL_SIZE = 60;
+const EDGE_GAP = 14;
+let activeSpeechRun = null;
 
 /** iOS / Android Cantonese voice name hints */
 const CANTONESE_NAME_HINTS = [
@@ -86,79 +93,208 @@ async function resolveEnglishOptions() {
 	return { language: "en-US" };
 }
 
-const TTSButton = ({ text, locale, i18n, onPlay }) => {
+const TTSButton = ({ text, locale, i18n, onPlay, onSpokenRange, inline = false }) => {
+	const focused = useIsFocused();
+	const runRef = useRef(null);
 	const [speaking, setSpeaking] = useState(false);
+	const { width, height } = useWindowDimensions();
+	const position = useRef(new Animated.ValueXY({ x: EDGE_GAP, y: EDGE_GAP })).current;
+	const currentPosition = useRef({ x: EDGE_GAP, y: EDGE_GAP });
+	const positioned = useRef(false);
 
 	useEffect(() => {
 		ensurePlaybackAudioMode();
-		return () => {
-			Speech.stop();
+		const stop = () => {
+			const run = runRef.current;
+			if (run) run.active = false;
+			if (run && activeSpeechRun === run) { activeSpeechRun = null; Speech.stop(); }
+			setSpeaking(false);
 		};
-	}, []);
+		if (!focused) stop();
+		const subscription = AppState.addEventListener("change", (state) => { if (state !== "active") stop(); });
+		const visibility = () => { if (document.hidden) stop(); };
+		if (typeof document !== "undefined") document.addEventListener("visibilitychange", visibility);
+		return () => {
+			subscription.remove();
+			if (typeof document !== "undefined") document.removeEventListener("visibilitychange", visibility);
+			const run = runRef.current;
+			if (run) run.active = false;
+			if (run && activeSpeechRun === run) { activeSpeechRun = null; Speech.stop(); }
+		};
+	}, [focused, text, locale]);
 
-	const handlePress = async () => {
+	useEffect(() => {
+		const maxX = Math.max(EDGE_GAP, width - BALL_SIZE - EDGE_GAP);
+		const maxY = Math.max(EDGE_GAP, height - BALL_SIZE - 120);
+		const next = positioned.current
+			? { x: Math.min(currentPosition.current.x, maxX), y: Math.min(currentPosition.current.y, maxY) }
+			: { x: maxX, y: 96 };
+		positioned.current = true;
+		currentPosition.current = next;
+		position.setValue(next);
+	}, [height, position, width]);
+
+	const startOrStopSpeech = async () => {
 		if (speaking) {
+			if (runRef.current) runRef.current.active = false;
+			if (activeSpeechRun === runRef.current) activeSpeechRun = null;
 			await Speech.stop();
 			setSpeaking(false);
 			return;
 		}
-
 		const content = (text || "").trim();
-		if (!content) return;
-
+		if (!content || !focused) return;
+		if (activeSpeechRun) { activeSpeechRun.active = false; activeSpeechRun.stopUI(); }
+		const run = { active: true, stopUI: () => setSpeaking(false) };
+		runRef.current = run; activeSpeechRun = run;
+		const valid = () => run.active && activeSpeechRun === run && AppState.currentState !== "background" && AppState.currentState !== "inactive" && !(typeof document !== "undefined" && document.hidden);
+		const finish = () => { if (!run.active || activeSpeechRun !== run) return; run.active = false; activeSpeechRun = null; setSpeaking(false); };
 		try {
+			await Speech.stop();
 			await ensurePlaybackAudioMode();
+			if (!valid()) return;
 			setSpeaking(true);
-			trackTtsPlay();
-			if (onPlay) onPlay();
-
 			const options = await resolveSpeechOptions(locale);
-			Speech.speak(content, {
-				...options,
-				// Slightly slower helps Cantonese clarity
-				rate: Platform.OS === "ios" ? 0.88 : 0.92,
-				pitch: 1.0,
-				onStart: () => setSpeaking(true),
-				onDone: () => setSpeaking(false),
-				onStopped: () => setSpeaking(false),
-				onError: (err) => {
-					console.warn("Speech error", err);
-					setSpeaking(false);
-				},
-			});
+			if (!valid()) return;
+			const chunks = speechChunks(content);
+			let started = false;
+			const speakChunk = (index) => {
+				if (!valid()) return;
+				const chunk = chunks[index];
+				Speech.speak(chunk.text, {
+					...options,
+					rate: Platform.OS === "ios" ? 0.72 : 0.76,
+					pitch: 1.0,
+					onStart: () => { if (!valid()) return; setSpeaking(true); if (!started) { started = true; trackTtsPlay(); onPlay?.(); } },
+					onBoundary: (event) => {
+						// The boundary word is ABOUT TO be spoken, so credit only the preceding text.
+						if (valid() && started && Number.isFinite(event?.charIndex) && event.charIndex > 0) onSpokenRange?.(chunk.start, Math.min(chunk.end, chunk.start + event.charIndex));
+					},
+					onDone: () => {
+						if (!valid() || !started) return;
+						onSpokenRange?.(chunk.start, chunk.end);
+						if (index + 1 < chunks.length) speakChunk(index + 1); else finish();
+					},
+					onStopped: finish,
+					onError: (error) => { console.warn("Speech error", error); finish(); },
+				});
+			};
+			speakChunk(0);
 		} catch (error) {
 			console.warn("TTS failed", error);
-			setSpeaking(false);
+			finish();
 		}
 	};
 
+	const handlePress = () => {
+		if (speaking) {
+			startOrStopSpeech();
+			return;
+		}
+		const content = (text || "").trim();
+		if (!content) return;
+		showAlert(i18n.t("readConfirmTitle"), i18n.t("readConfirmMessage"), [
+			{ text: i18n.t("cancel"), style: "cancel" },
+			{ text: i18n.t("confirm"), onPress: startOrStopSpeech },
+		]);
+	};
+
+	const accessibilityLabel = speaking ? i18n.t("stopReading") : i18n.t("readAloud");
+	if (inline) {
+		return (
+			<TouchableOpacity
+				accessible
+				accessibilityRole="button"
+				accessibilityLabel={accessibilityLabel}
+				activeOpacity={0.75}
+				onPress={startOrStopSpeech}
+				style={[styles.inlineButton, speaking && styles.buttonActive]}
+			>
+				<Ionicons name={speaking ? "stop" : "volume-high"} size={RFValue(21)} color="#fff" />
+			</TouchableOpacity>
+		);
+	}
+
+	const panResponder = PanResponder.create({
+		onStartShouldSetPanResponder: () => true,
+		onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) > 2,
+		onPanResponderGrant: () => {
+			position.stopAnimation((value) => {
+				currentPosition.current = value;
+			});
+		},
+		onPanResponderMove: (_, gesture) => {
+			const maxX = Math.max(EDGE_GAP, width - BALL_SIZE - EDGE_GAP);
+			const maxY = Math.max(EDGE_GAP, height - BALL_SIZE - 120);
+			position.setValue({
+				x: Math.max(EDGE_GAP, Math.min(maxX, currentPosition.current.x + gesture.dx)),
+				y: Math.max(EDGE_GAP, Math.min(maxY, currentPosition.current.y + gesture.dy)),
+			});
+		},
+		onPanResponderRelease: (_, gesture) => {
+			position.stopAnimation((value) => {
+				currentPosition.current = value;
+			});
+			if (Math.abs(gesture.dx) < 5 && Math.abs(gesture.dy) < 5) handlePress();
+		},
+		onPanResponderTerminate: () => {
+			position.stopAnimation((value) => {
+				currentPosition.current = value;
+			});
+		},
+	});
+
 	return (
-		<TouchableOpacity style={[styles.button, speaking && styles.buttonActive]} onPress={handlePress}>
-			<Ionicons name={speaking ? "stop-circle" : "volume-high"} size={RFValue(20)} color="#fff" />
-			<Text style={styles.text}>{speaking ? i18n.t("stopReading") : i18n.t("readAloud")}</Text>
-		</TouchableOpacity>
+		<Animated.View
+			{...panResponder.panHandlers}
+			accessible
+			accessibilityRole="button"
+			accessibilityLabel={accessibilityLabel}
+			onAccessibilityTap={handlePress}
+			style={[styles.button, speaking && styles.buttonActive, { transform: position.getTranslateTransform() }]}
+		>
+			<Ionicons name={speaking ? "stop" : "volume-high"} size={RFValue(27)} color="#fff" />
+		</Animated.View>
 	);
 };
 
 const styles = StyleSheet.create({
 	button: {
-		flexDirection: "row",
+		position: "absolute",
+		top: 0,
+		left: 0,
+		width: BALL_SIZE,
+		height: BALL_SIZE,
 		alignItems: "center",
 		justifyContent: "center",
 		backgroundColor: "#2E8B57",
-		borderRadius: 25,
-		paddingVertical: 12,
-		paddingHorizontal: 20,
-		gap: 8,
+		borderRadius: BALL_SIZE / 2,
+		borderWidth: 3,
+		borderColor: "#fff",
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: 3 },
+		shadowOpacity: 0.3,
+		shadowRadius: 6,
+		elevation: 10,
+		zIndex: 1000,
 	},
 	buttonActive: {
 		backgroundColor: "#B00020",
 	},
-	text: {
-		color: "#fff",
-		fontSize: RFValue(14),
-		fontWeight: "bold",
-		marginLeft: 6,
+	inlineButton: {
+		width: 46,
+		height: 46,
+		borderRadius: 23,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: "#2E8B57",
+		borderWidth: 2,
+		borderColor: "#fff",
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.2,
+		shadowRadius: 3,
+		elevation: 4,
 	},
 });
 

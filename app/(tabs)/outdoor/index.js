@@ -1,16 +1,31 @@
-import React, { useContext } from "react";
-import { router } from "expo-router";
+import { appText } from "../../../utils/appText";
+import React, { useCallback, useContext, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { StyleSheet, View, Text, TouchableOpacity, Image, Dimensions, ScrollView } from "react-native";
+import { StyleSheet, View, Text, TouchableOpacity, Image, ScrollView, Platform } from "react-native";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import CustomBackButton from "../../../components/CustomBackButton";
 import { LocaleContext } from "../../../contexts/LocaleContext";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from "react-native-responsive-screen";
 import { RFValue } from "react-native-responsive-fontsize";
+import { useAndroidBackTarget } from "../../../hooks/useAndroidBackTarget";
+import { showAlert } from "../../../utils/alert";
+import { getEquipmentCategories } from "../../../utils/api";
+import { equipmentCategoryLabel, mergeEquipmentCategories } from "../../../utils/equipmentCatalog";
+import useFacilityScrollInsets from "../../../hooks/useFacilityScrollInsets";
 
 export default function Outdoor() {
-	const { i18n } = useContext(LocaleContext);
+	const scrollInsets = useFacilityScrollInsets(hp("15%"));
+	useAndroidBackTarget("/(tabs)");
+	const { i18n, locale } = useContext(LocaleContext);
+	const [categories, setCategories] = useState(() => mergeEquipmentCategories());
+	useFocusEffect(useCallback(() => {
+		let active = true;
+		getEquipmentCategories().then((result) => { if (active) setCategories(mergeEquipmentCategories(result.categories)); }).catch(() => {});
+		return () => { active = false; };
+	}, []));
 
-	const buttons = [
+	const builtInButtons = [
 		{ icon: require("@/assets/icons/outdoor/list.png"), text: i18n.t("all"), category: "all" },
 		{ icon: require("@/assets/icons/outdoor/muscle.png"), text: i18n.t("muscle"), category: "muscle" },
 		{ icon: require("@/assets/icons/outdoor/flexibility.png"), text: i18n.t("mobility"), category: "mobility" },
@@ -21,25 +36,37 @@ export default function Outdoor() {
 		{ icon: require("@/assets/icons/outdoor/relax.png"), text: i18n.t("relaxation"), category: "relaxation" },
 		{ icon: require("@/assets/icons/outdoor/upper.png"), text: i18n.t("upper"), category: "upper" },
 		{ icon: require("@/assets/icons/outdoor/lower.png"), text: i18n.t("lower"), category: "lower" },
+		{ iconName: "shape-plus-outline", category: "alternative" },
+		{ iconName: "human-cane", text: appText(locale, "inline.facilityGuide.specialPopulation", {"zh":"特殊人群","en":"Special Population"}), category: "special_population", locked: true },
+		{ iconName: "human-handsup", text: appText(locale, "inline.facilityGuide.chronicStrokeSurvivor", {"zh":"中風人士","en":"Chronic Stroke Survivor"}), category: "warmup", locked: true },
 	];
+	const buttons = [builtInButtons[0], ...categories.filter((category) => category.showInGuide).map((category) => ({
+		...(builtInButtons.find((button) => button.category === category.id) || { iconName: "shape-outline" }),
+		text: equipmentCategoryLabel(category, locale), category: category.id, locked: category.isLocked,
+	}))];
 
 	return (
-		<SafeAreaView style={styles.container}>
-			<CustomBackButton text={i18n.t("back")} />
-			<ScrollView contentContainerStyle={styles.scrollViewContent}>
+		<SafeAreaView edges={Platform.OS === "ios" ? ["top", "left", "right"] : undefined} style={styles.container}>
+			<CustomBackButton text={i18n.t("back")} onPress={() => router.replace("/(tabs)")} />
+			<ScrollView testID="facility-category-scroll" {...scrollInsets} style={{ flex: 1 }} contentContainerStyle={[styles.scrollViewContent, scrollInsets.contentContainerStyle]}>
 				<View style={styles.buttonsContainer}>
 					{buttons.map((button, index) => (
-						<View key={index} style={styles.buttonWrapper}>
+						<View key={button.category} style={styles.buttonWrapper}>
 							<TouchableOpacity
-								onPress={() =>
+								onPress={() => {
+									if (button.locked) {
+										showAlert("", appText(locale, "inline.facilityGuide.thisContentIsBeingPreparedAndWillBe", {"zh":"內容正在準備中，稍後開放。","en":"This content is being prepared and will be available later."}));
+										return;
+									}
 									router.push({
 										pathname: "/outdoor/list",
 										params: { categoryName: button.text, categoryId: button.category },
-									})
-								}
-								style={styles.button}
+									});
+								}}
+								style={[styles.button, button.locked && styles.lockedButton]}
 							>
-								<Image source={button.icon} style={styles.icon} />
+								{button.icon ? <Image source={button.icon} style={[styles.icon, button.locked && styles.lockedIcon]} /> : <MaterialCommunityIcons name={button.iconName} size={RFValue(46)} color={button.locked ? "#999" : "#555"} />}
+								{button.locked && <View style={styles.lockBadge}><Ionicons name="lock-closed" size={RFValue(15)} color="#fff" /></View>}
 							</TouchableOpacity>
 							<Text style={styles.buttonText}>{button.text}</Text>
 						</View>
@@ -58,7 +85,6 @@ const styles = StyleSheet.create({
 	scrollViewContent: {
 		flexGrow: 1,
 		alignItems: "center",
-		paddingBottom: hp("15%"),
 	},
 	buttonsContainer: {
 		flexDirection: "row",
@@ -97,5 +123,21 @@ const styles = StyleSheet.create({
 		textAlign: "center",
 		marginTop: 5,
 		fontWeight: "bold",
+	},
+	lockedButton: {
+		backgroundColor: "#E6E6E6",
+		borderColor: "#B7B7B7",
+	},
+	lockedIcon: { opacity: 0.5 },
+	lockBadge: {
+		position: "absolute",
+		top: 9,
+		right: 9,
+		width: 28,
+		height: 28,
+		borderRadius: 14,
+		backgroundColor: "#777",
+		alignItems: "center",
+		justifyContent: "center",
 	},
 });

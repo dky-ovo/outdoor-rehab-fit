@@ -1,0 +1,9 @@
+{
+  "platforms": ["android", "apple"],
+  "apple": {
+    "modules": ["SessionTimerNotificationModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.sessiontimernotification.SessionTimerNotificationModule"]
+  }
+}

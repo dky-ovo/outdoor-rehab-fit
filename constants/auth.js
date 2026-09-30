@@ -11,6 +11,8 @@ export const AUTH_ROLES = {
 export const USER_PROFILE_ROLES = {
 	PARTICIPANT: "participant",
 	STAFF: "staff",
+	VOLUNTEER: "volunteer",
+	// Older builds stored this value. The server normalizes it to "volunteer".
 	CAREGIVER: "caregiver",
 };
 

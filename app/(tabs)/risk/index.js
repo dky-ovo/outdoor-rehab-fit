@@ -5,8 +5,10 @@ import { AntDesign } from "@expo/vector-icons"; // Make sure to install this pac
 import { LocaleContext } from "../../../contexts/LocaleContext";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from "react-native-responsive-screen";
 import { RFValue } from "react-native-responsive-fontsize";
+import { useAndroidBackTarget } from "../../../hooks/useAndroidBackTarget";
 
 const Index = () => {
+	useAndroidBackTarget("/(tabs)/other");
 	const { i18n } = useContext(LocaleContext);
 	return (
 		<View style={styles.container}>
@@ -20,7 +22,7 @@ const Index = () => {
 					router.navigate(`/risk/safety`);
 				}}
 			>
-				<AntDesign name="Safety" size={80} color="white" />
+					<AntDesign name="safety" size={80} color="white" />
 				<Text style={styles.buttonText}>{i18n.t("sprm")}</Text>
 			</TouchableOpacity>
 		</View>

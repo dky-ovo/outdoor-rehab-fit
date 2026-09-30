@@ -1,0 +1,190 @@
+#!/bin/bash
+set -Eeuo pipefail
+umask 077
+
+UPDATE_ZIP="${1:-/home/dukaiyu2004/outdoor-fit-admin-text-registration-research-20260923-update.zip}"
+API_DIR="/home/dukaiyu2004/outdoor-fit-api"
+WEB_DIR="/var/www/outdoor-fit"
+BACKUP_ROOT="/home/dukaiyu2004/outdoor-fit-backups"
+DEPLOY_ROOT="/home/dukaiyu2004/.outdoor-fit-deploy"
+SERVICE="outdoor-fit-api"
+LOCK="/run/outdoor-fit-file-explorer-deploy.lock"
+RELEASE="admin-text-registration-research-20260923"
+FILES=(app.js database.js registrationCodes.js appTexts.js appTextCatalog.json researchContentLabels.js)
+WORK_DIR="" BACKUP_DIR="" CHECKER="" NODE="" BASELINE=""
+TOUCHED=0 STOPPED=0
+
+healthy() {
+  local attempt
+  for attempt in $(seq 1 30); do
+    if systemctl is-active --quiet "$SERVICE" && curl --max-time 2 -fsS http://127.0.0.1:3000/api/health |
+      "$NODE" -e 'const v=JSON.parse(require("fs").readFileSync(0,"utf8"));if(v.ok!==true||v.service!=="outdoor-fit-api")process.exit(1)'; then return 0; fi
+    sleep 1
+  done
+  return 1
+}
+recover() {
+  local status="${1:-1}" rollback_ok=1
+  trap - ERR INT TERM
+  set +e
+  if [ "$TOUCHED" -eq 1 ]; then
+    echo "Deployment failed; restoring only known API source and Web files."
+    if systemctl stop "$SERVICE" && [ "$(systemctl show "$SERVICE" --property=MainPID --value)" = 0 ]; then
+      "$NODE" "$CHECKER" rollback "$API_DIR" "$WEB_DIR" "$WORK_DIR/package" "$BACKUP_DIR" || rollback_ok=0
+      if [ "$rollback_ok" -eq 1 ]; then systemctl start "$SERVICE" && healthy || rollback_ok=0; fi
+    else rollback_ok=0; fi
+  elif [ "$STOPPED" -eq 1 ]; then
+    systemctl start "$SERVICE" && healthy || rollback_ok=0
+  else echo "Stopped in preflight, before replacing files or stopping the API."; fi
+  [ "$rollback_ok" -eq 1 ] || echo "WARNING: automatic recovery stopped safely; review the retained backup before retrying."
+  echo "Database, uploads, accounts, API keys, dependencies and Nginx were NOT rolled back or deleted."
+  echo "Diagnostics: ${WORK_DIR:-not created}; backup: ${BACKUP_DIR:-not created}."
+  exit "$status"
+}
+trap 'recover $?' ERR
+trap 'recover 130' INT
+trap 'recover 143' TERM
+same_baseline() { [ "$("$NODE" "$CHECKER" baseline "$API_DIR" "$WORK_DIR/package")" = "$BASELINE" ]; }
+
+[ "$(id -u)" -eq 0 ]
+for tool in python3 curl flock sha256sum systemctl readlink stat cmp mktemp install; do command -v "$tool" >/dev/null; done
+[ -f "$UPDATE_ZIP" ] && [ ! -L "$UPDATE_ZIP" ] && [ "$(stat -c %h "$UPDATE_ZIP")" = 1 ]
+[ "$(readlink -f "$UPDATE_ZIP")" = "$UPDATE_ZIP" ]
+[ "$(stat -c %s "$UPDATE_ZIP")" -le 536870912 ]
+for directory in "$API_DIR" "$WEB_DIR" "$BACKUP_ROOT" "$DEPLOY_ROOT"; do [ "$(readlink -m "$directory")" = "$directory" ]; done
+[ -d "$API_DIR/src" ] && [ ! -L "$API_DIR/src" ]
+[ -d "$WEB_DIR" ] && [ ! -L "$WEB_DIR" ]
+[ -d "$API_DIR/node_modules" ] && [ ! -L "$API_DIR/node_modules" ]
+[ ! -L "$LOCK" ]
+if [ -e "$LOCK" ]; then [ -f "$LOCK" ] && [ "$(stat -c %h "$LOCK")" = 1 ]; fi
+exec 9>"$LOCK"
+flock -n 9 || { echo "Another deployment is running; nothing changed."; exit 1; }
+systemctl is-active --quiet "$SERVICE"
+mkdir -p "$DEPLOY_ROOT" "$BACKUP_ROOT"
+[ "$(readlink -f "$DEPLOY_ROOT")" = "$DEPLOY_ROOT" ]
+[ "$(readlink -f "$BACKUP_ROOT")" = "$BACKUP_ROOT" ]
+WORK_DIR="$(mktemp -d "$DEPLOY_ROOT/$RELEASE.XXXXXX")"
+mkdir "$WORK_DIR/package" "$WORK_DIR/api" "$WORK_DIR/smoke"
+
+# Exact root files + Web-only tree. Validate the entire archive before writing.
+python3 - "$UPDATE_ZIP" "$WORK_DIR/package" <<'PY'
+import os, re, shutil, stat, sys, zipfile
+archive, destination = sys.argv[1:]
+expected = {'app.js', 'database.js', 'registrationCodes.js', 'appTexts.js', 'appTextCatalog.json', 'researchContentLabels.js', 'install-admin-text-registration-research-20260923.sh', 'verify-admin-text-registration-research-release.cjs', 'verify-contact-feedback-release.cjs', 'verify-ai-chatbox-guide-backend-patch.cjs', 'verify-participant-facility-learning-release.cjs', 'release-manifest.json', 'README.md'}
+with zipfile.ZipFile(archive) as z:
+    entries = z.infolist()
+    if len(entries) > 20000: raise RuntimeError('Too many archive entries')
+    seen, roots, total = set(), set(), 0
+    for entry in entries:
+        name = entry.orig_filename
+        if name != entry.filename: raise RuntimeError('Normalized ZIP member name rejected')
+        if name in seen: raise RuntimeError('Duplicate ZIP member')
+        seen.add(name)
+        segments = name.rstrip('/').split('/')
+        if not re.fullmatch(r'[A-Za-z0-9_@().+/-]+', name) or any(not p or p.startswith('.') for p in segments): raise RuntimeError('Unsafe ZIP path')
+        mode = stat.S_IFMT(entry.external_attr >> 16)
+        if entry.flag_bits & 1 or mode not in (0, stat.S_IFREG, stat.S_IFDIR): raise RuntimeError('Special or encrypted ZIP member')
+        if entry.is_dir():
+            if segments[0] != 'web' or mode not in (0, stat.S_IFDIR) or entry.file_size != 0: raise RuntimeError('Unexpected ZIP directory')
+            continue
+        if mode == stat.S_IFDIR: raise RuntimeError('ZIP mode/name mismatch')
+        if len(segments) == 1:
+            if name not in expected: raise RuntimeError('Unknown root member')
+            if entry.file_size < 1: raise RuntimeError('Empty root member')
+            roots.add(name); limit = 8 * 1024 * 1024
+        else:
+            if segments[0] != 'web': raise RuntimeError('Only the Web tree is allowed')
+            limit = 64 * 1024 * 1024
+        if entry.file_size < 0 or entry.file_size > limit: raise RuntimeError('ZIP size limit exceeded')
+        total += entry.file_size
+    file_names = {entry.filename for entry in entries if not entry.is_dir()}
+    for entry in entries:
+        parts = entry.filename.rstrip('/').split('/')
+        if any('/'.join(parts[:index]) in file_names for index in range(1, len(parts))) or (entry.is_dir() and entry.filename.rstrip('/') in file_names): raise RuntimeError('ZIP file/directory collision')
+    if roots != expected or 'web/index.html' not in seen or total > 512 * 1024 * 1024: raise RuntimeError('Incomplete or oversized release')
+    if shutil.disk_usage(destination).free < total + 100 * 1024 * 1024: raise RuntimeError('Insufficient staging disk space')
+    for entry in entries:
+        target = os.path.join(destination, *entry.filename.rstrip('/').split('/'))
+        if entry.is_dir(): os.makedirs(target, exist_ok=True); continue
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with z.open(entry) as source, open(target, 'xb') as output:
+            remaining = entry.file_size
+            while remaining:
+                chunk = source.read(min(65536, remaining))
+                if not chunk: raise RuntimeError('Truncated ZIP member')
+                output.write(chunk); remaining -= len(chunk)
+            if source.read(1): raise RuntimeError('ZIP size mismatch')
+PY
+cmp "$0" "$WORK_DIR/package/install-$RELEASE.sh"
+# Trusted payload/checker/manifest hashes embedded here; no external sidecar.
+(cd "$WORK_DIR/package" && sha256sum -c - <<'EMBEDDED_CHECKSUMS'
+@@EMBEDDED_CHECKSUMS@@
+EMBEDDED_CHECKSUMS
+)
+CHECKER="$WORK_DIR/package/verify-admin-text-registration-research-release.cjs"
+OLD_PID="$(systemctl show "$SERVICE" --property=MainPID --value)"
+[[ "$OLD_PID" =~ ^[1-9][0-9]*$ ]]
+NODE="$(readlink -f "/proc/$OLD_PID/exe")"
+[ -x "$NODE" ] && [ "$(basename "$NODE")" = node ]
+"$NODE" "$CHECKER" package "$WORK_DIR/package"
+"$NODE" "$CHECKER" runtime "$OLD_PID" > "$WORK_DIR/runtime-before.json"
+BASELINE="$("$NODE" "$CHECKER" baseline "$API_DIR" "$WORK_DIR/package")"
+printf '%s\n' "$BASELINE"
+"$NODE" "$CHECKER" web-target "$WEB_DIR" "$WORK_DIR/package"
+
+python3 - "$API_DIR" "$WEB_DIR" "$WORK_DIR" "$BACKUP_ROOT" <<'PY'
+import json, os, shutil, sys
+api, web, work, backup = sys.argv[1:]
+with open(os.path.join(work, 'package', 'release-manifest.json'), encoding='utf-8') as stream: manifest = json.load(stream)
+incoming = sum(v['bytes'] for v in manifest['web'])
+old_web = sum(os.path.getsize(os.path.join(web, v['path'])) for v in manifest['web'] if os.path.isfile(os.path.join(web, v['path'])))
+source = sum(os.path.getsize(os.path.join(api, 'src', name)) for name in os.listdir(os.path.join(api, 'src')))
+with open(os.path.join(work, 'runtime-before.json'), encoding='utf-8') as stream: runtime = json.load(stream)
+database = runtime['dbPath']
+# Include WAL growth and SQLite backup overhead; no database files are copied.
+db_bytes = sum(os.path.getsize(database + suffix) for suffix in ('', '-wal', '-shm') if os.path.isfile(database + suffix))
+needs = {}
+for root, amount in [(web, incoming), (work, source + 50 * 1024 * 1024), (backup, old_web + source + 2 * db_bytes + 100 * 1024 * 1024)]:
+    device = os.stat(root).st_dev
+    previous = needs.get(device, (root, 0))
+    needs[device] = (root, previous[1] + amount)
+for root, amount in needs.values():
+    if shutil.disk_usage(root).free < amount: raise RuntimeError('Insufficient disk space for source/Web replacement and consistent SQLite backup')
+PY
+# Isolated import/schema checks reuse installed dependencies, never npm or index.js.
+cp -a -- "$API_DIR/src" "$API_DIR/package.json" "$WORK_DIR/api/"
+ln -s "$API_DIR/node_modules" "$WORK_DIR/api/node_modules"
+for name in "${FILES[@]}"; do
+  install -m 0644 "$WORK_DIR/package/$name" "$WORK_DIR/api/src/$name"
+  if [[ "$name" = *.json ]]; then
+    "$NODE" -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$WORK_DIR/api/src/$name"
+  else "$NODE" --check "$WORK_DIR/api/src/$name"; fi
+done
+"$NODE" "$CHECKER" smoke "$WORK_DIR/api" "$WORK_DIR/smoke"
+same_baseline
+"$NODE" "$CHECKER" runtime "$(systemctl show "$SERVICE" --property=MainPID --value)" > "$WORK_DIR/runtime-recheck.json"
+cmp "$WORK_DIR/runtime-before.json" "$WORK_DIR/runtime-recheck.json"
+"$NODE" "$CHECKER" web-target "$WEB_DIR" "$WORK_DIR/package"
+BACKUP_DIR="$(mktemp -d "$BACKUP_ROOT/$RELEASE-$(date +%Y%m%d-%H%M%S).XXXXXX")"
+STOPPED=1
+systemctl stop "$SERVICE"
+[ "$(systemctl show "$SERVICE" --property=MainPID --value)" = 0 ]
+same_baseline
+"$NODE" "$CHECKER" backup "$API_DIR" "$WEB_DIR" "$WORK_DIR/package" "$BACKUP_DIR"
+"$NODE" "$CHECKER" snapshot "$API_DIR" "$BACKUP_DIR" "$WORK_DIR/runtime-before.json"
+TOUCHED=1
+"$NODE" "$CHECKER" apply "$API_DIR" "$WEB_DIR" "$WORK_DIR/package" "$BACKUP_DIR"
+systemctl start "$SERVICE"
+healthy
+NEW_PID="$(systemctl show "$SERVICE" --property=MainPID --value)"
+[ "$NEW_PID" != "$OLD_PID" ]
+"$NODE" "$CHECKER" runtime "$NEW_PID" > "$WORK_DIR/runtime-after.json"
+cmp "$WORK_DIR/runtime-before.json" "$WORK_DIR/runtime-after.json"
+"$NODE" "$CHECKER" baseline "$API_DIR" "$WORK_DIR/package"
+"$NODE" "$CHECKER" web-installed "$WEB_DIR" "$WORK_DIR/package"
+trap - ERR INT TERM
+echo "Admin text, short invitation and research-label API/Web update completed. Backup: $BACKUP_DIR"
+echo "Older Web assets retained. Existing user data, uploads, API keys, dependencies and Nginx preserved; only the text-override schema is added."
+echo "Consistent SQLite snapshot: $BACKUP_DIR/database/database.sqlite (manual recovery only)."
+echo "Staging retained: $WORK_DIR"
+

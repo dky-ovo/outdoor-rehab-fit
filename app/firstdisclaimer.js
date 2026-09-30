@@ -1,21 +1,31 @@
-import React, { useContext } from "react";
+import React, { useCallback, useContext, useRef } from "react";
 import { StyleSheet, View, ScrollView, Text, TouchableOpacity, SafeAreaView } from "react-native";
 import { LocaleContext } from "../contexts/LocaleContext";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { showAlert } from "../utils/alert";
 
 const FirstDisclaimer = () => {
 	const { i18n } = useContext(LocaleContext);
+	const activeRef = useRef(false);
+	const savingRef = useRef(false);
+	useFocusEffect(useCallback(() => {
+		activeRef.current = true; savingRef.current = false;
+		return () => { activeRef.current = false; };
+	}, []));
 	// Note: the "already agreed -> skip to login" check now lives in app/index.js,
 	// so the disclaimer is always shown when the user taps Start on first launch.
 
 	const handleAgree = async () => {
+		if (savingRef.current) return;
+		savingRef.current = true;
 		try {
 			await AsyncStorage.setItem("userAgreed", "true");
-			router.replace("/firstquestionnaire");
+			if (activeRef.current) router.replace("/firstquestionnaire");
 		} catch (error) {
+			savingRef.current = false;
 			console.error("Error saving agreement status", error);
+			if (activeRef.current) showAlert(i18n.t("warning"), i18n.t("serverError"));
 		}
 	};
 

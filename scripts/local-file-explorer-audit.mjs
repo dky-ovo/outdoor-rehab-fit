@@ -1,0 +1,32 @@
+// Isolated browser QA: synthetic accounts and an in-memory database only.
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import express from '../server/node_modules/express/index.js';
+import { createApp } from '../server/src/app.js';
+import { createDatabase } from '../server/src/database.js';
+import { hashPassword } from '../server/src/security.js';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const auditDir = process.env.OUTDOOR_FILE_EXPLORER_QA_DIR
+  ? fs.realpathSync(process.env.OUTDOOR_FILE_EXPLORER_QA_DIR)
+  : fs.mkdtempSync(path.join(root, 'workspace-artifacts', 'file-explorer-browser-'));
+if (path.dirname(auditDir) !== path.join(root, 'workspace-artifacts') || !/^file-explorer-browser-[a-zA-Z0-9]+$/.test(path.basename(auditDir))) throw new Error('Unexpected isolated QA directory');
+const database = createDatabase(':memory:');
+const password = await hashPassword('Local-explorer-test-2026');
+const now = new Date().toISOString();
+database.prepare('INSERT INTO users(id,name,phone,profile_role,password_salt,password_hash,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)')
+  .run('local-explorer-admin','本地文件管理测试员','+85269990000','staff',password.salt,password.hash,now,now);
+database.prepare("INSERT INTO admin_accounts(user_id,system_role,permissions_json,is_active,created_at,updated_at) VALUES('local-explorer-admin','super_admin','[]',1,?,?)").run(now,now);
+const app = createApp({
+  database, jwtSecret:'local-file-explorer-test-secret-not-used-in-production', smsMode:'mock',
+  equipmentUploadDir:path.join(auditDir,'equipment-images'), mediaUploadDir:path.join(auditDir,'media-library'),
+  mediaSeedDir:path.join(root,'workspace-artifacts/education-video-seed-20260910'),
+});
+const webRoot = path.join(root,'workspace-artifacts/exports/file-explorer-video-20260910');
+app.use(express.static(webRoot));
+app.get(/.*/,(_request,response)=>response.sendFile(path.join(webRoot,'index.html')));
+const server=app.listen(4187,'127.0.0.1');
+await new Promise(resolve=>server.once('listening',resolve));
+console.log(JSON.stringify({url:'http://127.0.0.1:4187/admin',phone:'69990000',password:'Local-explorer-test-2026',storage:auditDir,seed:app.locals.educationVideoImport}));
+for(const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>{server.closeAllConnections();server.close(()=>{database.close();process.exit(0);});});

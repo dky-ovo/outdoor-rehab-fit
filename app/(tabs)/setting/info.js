@@ -1,47 +1,57 @@
 import React, { useContext } from "react";
-import { Platform, StyleSheet, ScrollView, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LocaleContext } from "../../../contexts/LocaleContext";
 import { RFValue } from "react-native-responsive-fontsize";
-
-const TAB_BAR_HEIGHT = 100;
+import { LocaleContext } from "../../../contexts/LocaleContext";
+import { ourTeam } from "../../../constants/OurTeam";
+import { applyAppTextOverrides } from "../../../utils/appText";
+import { useAndroidBackTarget } from "../../../hooks/useAndroidBackTarget";
 
 export default function Info() {
-	const { i18n } = useContext(LocaleContext);
-	const insets = useSafeAreaInsets();
-	const bottomPad =
-		Platform.OS === "ios" ? TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) : TAB_BAR_HEIGHT + Math.max(insets.bottom, 16);
+  useAndroidBackTarget("/(tabs)/setting");
+  const { i18n, locale } = useContext(LocaleContext);
+  const insets = useSafeAreaInsets();
+  const language = String(locale || i18n.locale).startsWith("en") ? "en" : "zh";
+  // Do not let a cached, old copy.team override replace the new roster.
+  const content = applyAppTextOverrides("teamInfo", ourTeam[language], language);
 
-	return (
-		<ScrollView
-			style={styles.scroll}
-			contentContainerStyle={[styles.container, { paddingBottom: bottomPad }]}
-			showsVerticalScrollIndicator
-		>
-			<View style={styles.articleContainer}>
-				<Text style={styles.articleText}>{i18n.t("intro")}</Text>
-			</View>
-		</ScrollView>
-	);
+  return (
+    <ScrollView
+      testID="about-team-scroll"
+      style={styles.screen}
+      contentContainerStyle={[styles.page, { paddingBottom: 110 + insets.bottom }]}
+      showsVerticalScrollIndicator
+    >
+      <View style={styles.article}>
+        <Text selectable accessibilityRole="header" style={styles.title}>{content.title}</Text>
+        {content.sections.map((section, sectionIndex) => (
+          <View key={sectionIndex} style={styles.section} testID={`team-section-${sectionIndex}`}>
+            <Text selectable accessibilityRole="header" style={styles.heading}>{section.title}</Text>
+            {section.members.map((member, memberIndex) => (
+              <View key={memberIndex} style={styles.member} testID={`team-member-${sectionIndex}-${memberIndex}`}>
+                {member.role ? <Text selectable style={styles.role}>{member.role}</Text> : null}
+                {member.responsibility ? <Text selectable style={styles.detail}>{member.responsibility}</Text> : null}
+                <Text selectable style={styles.name}>{member.name}</Text>
+                {member.position ? <Text selectable style={styles.detail}>{member.position}</Text> : null}
+                {member.affiliation ? <Text selectable style={styles.detail}>{member.affiliation}</Text> : null}
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  );
 }
 
 const styles = StyleSheet.create({
-	scroll: {
-		flex: 1,
-		backgroundColor: "#ffffff",
-	},
-	container: {
-		flexGrow: 1,
-		padding: 20,
-	},
-	articleContainer: {
-		width: "100%",
-	},
-	articleText: {
-		fontSize: RFValue(16),
-		lineHeight: RFValue(26),
-		fontWeight: "600",
-		color: "#333333",
-		textAlign: "left",
-	},
+  screen: { flex: 1, backgroundColor: "#fff" },
+  page: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 24 },
+  article: { width: "100%", maxWidth: 860, alignSelf: "center" },
+  title: { fontSize: RFValue(23), lineHeight: RFValue(33), fontWeight: "800", color: "#292929" },
+  section: { marginTop: 28 },
+  heading: { fontSize: RFValue(19), lineHeight: RFValue(29), fontWeight: "700", color: "#840B1C" },
+  member: { marginTop: 22 },
+  role: { fontSize: RFValue(17), lineHeight: RFValue(27), fontWeight: "700", color: "#333", marginBottom: 6 },
+  name: { fontSize: RFValue(17), lineHeight: RFValue(27), fontWeight: "700", color: "#292929", marginTop: 4 },
+  detail: { fontSize: RFValue(16), lineHeight: RFValue(26), color: "#444", marginTop: 4 },
 });

@@ -1,50 +1,526 @@
-import React, { useCallback, useContext, useRef, useState } from "react";
-import { FlatList, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { useFocusEffect } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as ImagePicker from "expo-image-picker";
-import { Ionicons } from "@expo/vector-icons";
+import { beginAssistantJob, pendingAssistantJobs, subscribeAssistantJobs } from "../../../utils/assistantJobs";
+import { subscribeAccountData } from '../../../utils/accountSyncEvents';
+import { appText } from "../../../utils/appText";
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { requireOptionalNativeModule } from "expo-modules-core";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import { RFValue } from "react-native-responsive-fontsize";
 import { AuthContext } from "../../../contexts/AuthContext";
 import { LocaleContext } from "../../../contexts/LocaleContext";
-import CountrySelector from "../../../components/CountrySelector";
-import { addChatGroupMember, createChatConversation, createChatGroup, dissolveChatGroup, getChatConversationDetails, getChatConversations, getConversationMessages, leaveChatGroup, renameChatGroup, searchChatParticipant, sendConversationMessage, toggleConversationReaction } from "../../../utils/api";
+import { getCachedEquipmentCatalog, loadCachedEquipmentCatalog, getEquipmentCatalog, subscribeEquipmentCatalog, sendAssistantMessage } from "../../../utils/api";
+import { mergeEquipmentCatalog } from "../../../utils/equipmentCatalog";
+import EquipmentImage from "../../../components/EquipmentImage";
+import { assistantMessagesForDisplay, localEquipmentAnswer, localEquipmentAnswerForItem, localEquipmentRecommendations, resolveEquipmentRecommendations } from "../../../utils/assistantEquipmentSearch";
+import { symptomConcern, symptomGuideAnswer } from "../../../utils/assistantSymptomEvidence";
+import { assistantReplyPresentation } from "../../../utils/assistantReplyPresentation";
+import { useHeaderHeight } from "@react-navigation/elements";
+import { useIsFocused } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useKeyboardInset } from "../../../hooks/useKeyboardInset";
+import { useAndroidBackTarget } from "../../../hooks/useAndroidBackTarget";
+import { useChatScroll } from "../../../hooks/useChatScroll";
+import { openExternalMap } from "../../../utils/openExternalMap";
+import AssistantReplyDetails from "../../../components/AssistantReplyDetails";
+import { useAssistantReplySpeech } from "../../../hooks/useAssistantReplySpeech";
+import AssistantReplySpeechControls, { AssistantReplyReadButton } from "../../../components/AssistantReplySpeechControls";
+import AssistantConversationHistory from "../../../components/AssistantConversationHistory";
+import { createAssistantSessionId, listAssistantConversations, loadAssistantConversations, storeAssistantConversation, startNewAssistantConversation, deleteAssistantConversation, clearAssistantConversationHistory } from "../../../utils/assistantConversations";
 
-const REACTIONS = ["👍", "❤️", "💪", "👏", "😄", "🎉"];
+function initialMessage(i18n) { return { id: "welcome", sender: "ai", text: i18n.t("aiChatWelcome") }; }
 
-export default function Chat() {
-	const { user } = useContext(AuthContext); const { i18n, locale } = useContext(LocaleContext); const insets = useSafeAreaInsets(); const listRef = useRef(null);
-	const [conversations, setConversations] = useState([]); const [selected, setSelected] = useState(null); const [messages, setMessages] = useState([]); const [text, setText] = useState("");
-	const [countryCode, setCountryCode] = useState("+852"); const [phone, setPhone] = useState(""); const [found, setFound] = useState(null); const [reactionTarget, setReactionTarget] = useState(null); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-	const [groupTitle, setGroupTitle] = useState("");
-	const [details, setDetails] = useState(null); const [settingsVisible, setSettingsVisible] = useState(false); const [renameTitle, setRenameTitle] = useState("");
+function RecommendationImage({ equipment }) {
+	return <EquipmentImage source={equipment.icon} imageKey={String(equipment.id)} style={styles.equipmentImage} />;
+}
 
-	const loadConversations = useCallback(async () => { if (!user?.token) return; try { setConversations((await getChatConversations(user.token)).conversations); setError(""); } catch { setError("聊天列表同步失败，请检查网络。"); } }, [user?.token]);
-	const loadMessages = useCallback(async (conversation = selected) => { if (!user?.token || !conversation?.id) return; try { const result = await getConversationMessages(user.token, conversation.id); setMessages(result.messages.map((m) => ({ ...m, sender: m.isMine ? "me" : "other" }))); setError(""); } catch { setError("消息同步失败，请稍后重试。"); } }, [user?.token, selected]);
-	useFocusEffect(useCallback(() => { if (!user?.token) { setError("请先登录账号后使用聊天。"); return undefined; } if (selected) loadMessages(selected); else loadConversations(); const timer = setInterval(() => selected ? loadMessages(selected) : loadConversations(), 5000); return () => clearInterval(timer); }, [user?.token, selected, loadConversations, loadMessages]));
-	const openConversation = async (conversation) => { setSelected(conversation); setMessages([]); await loadMessages(conversation); };
-	const search = async () => { if (!phone.trim() || busy) return; setBusy(true); setFound(null); try { const result = await searchChatParticipant(user.token, phone.trim(), countryCode); setFound(result.participant); setError(result.participant ? "" : "未找到此参与者，请确认完整电话号码及国家区号。"); } catch { setError("电话号码格式不正确，或搜索失败。"); } finally { setBusy(false); } };
-	const addParticipant = async () => { if (!found || busy) return; setBusy(true); try { const result = await createChatConversation(user.token, found.id); const target = { ...result.conversation, otherUserName: found.name, otherUserPhone: found.phone, type: "direct" }; setPhone(""); setFound(null); await loadConversations(); await openConversation(target); } catch { setError("添加参与者失败，请稍后重试。"); } finally { setBusy(false); } };
-	const createGroup = async () => { if (!found || !groupTitle.trim() || busy) return; setBusy(true); try { const result = await createChatGroup(user.token, groupTitle.trim(), [found.id]); setPhone(""); setFound(null); setGroupTitle(""); await loadConversations(); await openConversation(result.conversation); } catch { setError("建立群组失败，请检查群组名称。"); } finally { setBusy(false); } };
-	const addToGroup = async (group) => { if (!found || busy) return; setBusy(true); try { await addChatGroupMember(user.token, group.id, found.id); setFound(null); setPhone(""); await loadConversations(); setError(`已加入群组“${group.title}”`); } catch { setError("加入群组失败，只有群组建立者可以添加成员。"); } finally { setBusy(false); } };
-	const send = async (data) => { if (!selected || busy) return; setBusy(true); try { await sendConversationMessage(user.token, selected.id, data); await loadMessages(selected); setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80); } catch { setError("消息发送失败，请稍后重试。"); } finally { setBusy(false); } };
-	const sendText = async () => { const value = text.trim(); if (!value) return; setText(""); await send({ type: "text", text: value }); };
-	const sendPhoto = async () => { const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.35, base64: true }); const asset = result.assets?.[0]; if (result.canceled || !asset?.base64) return; const mime = ["image/jpeg", "image/png", "image/webp"].includes(asset.mimeType) ? asset.mimeType : "image/jpeg"; await send({ type: "image", imageData: `data:${mime};base64,${asset.base64}` }); };
-	const react = async (emoji) => { await toggleConversationReaction(user.token, selected.id, reactionTarget, emoji); setReactionTarget(null); await loadMessages(selected); };
-	const openSettings = async () => { try { const result = await getChatConversationDetails(user.token, selected.id); setDetails(result); setRenameTitle(result.conversation.title || ""); setSettingsVisible(true); } catch { setError("无法读取聊天资料。"); } };
-	const saveGroupName = async () => { if (!renameTitle.trim()) return; await renameChatGroup(user.token, selected.id, renameTitle.trim()); setSelected((value) => ({ ...value, title: renameTitle.trim() })); setSettingsVisible(false); await loadConversations(); };
-	const exitOrDissolve = async () => { if (Platform.OS === "web" && !window.confirm(details?.conversation.myRole === "owner" ? "确定解散该群组吗？" : "确定退出该群组吗？")) return; if (details?.conversation.myRole === "owner") await dissolveChatGroup(user.token, selected.id); else await leaveChatGroup(user.token, selected.id); setSettingsVisible(false); setSelected(null); setMessages([]); await loadConversations(); };
+function restoreAssistantMessage(item) {
+	const retiredImage = item.retiredImage === true || item.imageUri || item.imageData
+		|| /^u-img-|^a-img-|^a-confirm-/.test(item.id) || ["equipment_image", "image_confirmation"].includes(item.action);
+	if (!retiredImage) return item;
+	// Retiring photo input does not erase the user's earlier questions or replies.
+	// Retain only their text as read-only history; discard attachment references,
+	// recognition actions and cards, and never reuse this old flow as AI context.
+	return { id: item.id, sender: item.sender,
+		...(typeof item.text === "string" ? { text: item.text } : {}),
+		...(typeof item.reply === "string" ? { reply: item.reply } : {}),
+		retiredImage: true, action: "retired_image", recommendations: [] };
+}
 
-	if (!selected) return <View style={styles.page}>
-		{user?.profileRole === "staff" && <View style={styles.searchCard}><Text style={styles.heading}>新聊天或群组</Text><Text style={styles.hint}>按完整电话号码搜索参与者；可私聊、建立群组或加入已有群组</Text><View style={styles.searchRow}><CountrySelector i18n={i18n} value={countryCode} onChange={setCountryCode} /><TextInput style={styles.phoneInput} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="手机号码" /><TouchableOpacity style={styles.searchBtn} onPress={search}><Text style={styles.btnText}>{busy ? "…" : "搜索"}</Text></TouchableOpacity></View>{found && <View style={{ marginTop: 10 }}><View style={styles.result}><View style={{ flex: 1 }}><Text style={styles.person}>{found.name}</Text><Text style={styles.meta}>{found.phone}</Text></View><TouchableOpacity style={styles.addBtn} onPress={addParticipant}><Text style={styles.btnText}>私聊</Text></TouchableOpacity></View><View style={styles.searchRow}><TextInput style={styles.phoneInput} value={groupTitle} onChangeText={setGroupTitle} placeholder="新群组名称" /><TouchableOpacity style={styles.addBtn} onPress={createGroup}><Text style={styles.btnText}>建立群组</Text></TouchableOpacity></View>{conversations.filter((item) => item.type === "group").map((group) => <TouchableOpacity key={group.id} style={styles.groupChoice} onPress={() => addToGroup(group)}><Text style={styles.person}>＋ 加入 {group.title}</Text><Text style={styles.meta}>{group.memberCount || 0} 名成员</Text></TouchableOpacity>)}</View>}</View>}
-		<Text style={styles.listHeading}>聊天</Text>{!!error && <Text style={styles.error}>{error}</Text>}<FlatList data={conversations} keyExtractor={(item) => item.id} contentContainerStyle={styles.conversationList} ListEmptyComponent={<Text style={styles.empty}>暂时没有聊天记录</Text>} renderItem={({ item }) => <TouchableOpacity style={styles.conversation} onPress={() => openConversation(item)}><View style={styles.avatar}><Ionicons name={item.type === "group" ? "people" : "person"} size={22} color="#840B1C" /></View><View style={{ flex: 1 }}><Text style={styles.person}>{item.type === "group" ? item.title : item.otherUserName || item.title}</Text><Text style={styles.meta} numberOfLines={1}>{item.lastMessage || "开始聊天"}</Text></View>{item.unreadCount > 0 && <Text style={styles.badge}>{item.unreadCount}</Text>}</TouchableOpacity>} />
-	</View>;
+function checkedAssistantResponse(result) {
+	if (!result || typeof result !== "object" || Array.isArray(result) ||
+		![result.text, result.reply].some(value => typeof value === "string" && value.trim())) {
+		const error = new Error("deepSeekInvalidResponse");
+		error.code = "deepSeekInvalidResponse";
+		error.status = 502;
+		throw error;
+	}
+	// A legacy API can send blank `text` alongside a useful `reply`. Don't let
+	// whitespace or a non-string field hide the real answer during rendering.
+	return { ...result, text: typeof result.text === "string" && result.text.trim() ? result.text : undefined,
+		reply: typeof result.reply === "string" && result.reply.trim() ? result.reply : undefined };
+}
 
-	return <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === "ios" ? "padding" : undefined}><View style={styles.chatHeader}><TouchableOpacity onPress={() => { setSelected(null); setMessages([]); }}><Ionicons name="chevron-back" size={27} color="#840B1C" /></TouchableOpacity><View style={{ flex: 1 }}><Text style={styles.person}>{selected.type === "group" ? selected.title : selected.otherUserName || selected.title}</Text>{selected.otherUserPhone && <Text style={styles.meta}>{selected.otherUserPhone}</Text>}</View><TouchableOpacity onPress={openSettings} style={styles.iconBtn}><Ionicons name="ellipsis-horizontal" size={27} color="#333" /></TouchableOpacity></View>
-		<FlatList ref={listRef} data={messages} keyExtractor={(item) => item.id} contentContainerStyle={styles.messages} onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })} renderItem={({ item }) => <TouchableOpacity onLongPress={() => setReactionTarget(item.id)} style={[styles.msgRow, item.sender === "me" && styles.mine]}><View style={[styles.bubble, item.sender === "me" ? styles.bubbleMine : styles.bubbleOther]}>{item.sender !== "me" && <Text style={styles.sender}>{item.senderName}</Text>}{item.type === "image" ? <Image source={{ uri: item.imageUri }} style={styles.image} /> : <Text style={[styles.msgText, item.sender === "me" && { color: "#fff" }]}>{item.text}</Text>}<Text style={[styles.time, item.sender === "me" && { color: "#f0d0d0" }]}>{new Date(item.timestamp).toLocaleTimeString(locale === "zh" ? "zh-HK" : "en-US", { hour: "2-digit", minute: "2-digit" })}</Text>{item.reactions && <Text style={styles.reactions}>{Object.entries(item.reactions).map(([e,c]) => `${e} ${c}`).join("  ")}</Text>}</View></TouchableOpacity>} />
-		{!!error && <Text style={styles.error}>{error}</Text>}<View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 10) }]}><TouchableOpacity onPress={sendPhoto} style={styles.iconBtn}><Ionicons name="image" size={24} color="#840B1C" /></TouchableOpacity><TextInput style={styles.input} value={text} onChangeText={setText} multiline placeholder="输入消息…" /><TouchableOpacity style={styles.sendBtn} onPress={sendText} disabled={!text.trim() || busy}><Ionicons name="send" size={18} color="#fff" /></TouchableOpacity></View>
-		<Modal visible={!!reactionTarget} transparent animationType="fade" onRequestClose={() => setReactionTarget(null)}><TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setReactionTarget(null)}><View style={styles.picker}>{REACTIONS.map((emoji) => <TouchableOpacity key={emoji} onPress={() => react(emoji)}><Text style={styles.emoji}>{emoji}</Text></TouchableOpacity>)}</View></TouchableOpacity></Modal>
-		<Modal visible={settingsVisible} transparent animationType="slide" onRequestClose={() => setSettingsVisible(false)}><View style={styles.overlay}><View style={styles.settingsCard}><View style={styles.settingsHeader}><Text style={styles.heading}>聊天信息</Text><TouchableOpacity onPress={() => setSettingsVisible(false)}><Text style={styles.close}>×</Text></TouchableOpacity></View>{details?.conversation.type === "group" && details.conversation.canManage && <><Text style={styles.hint}>群组名称</Text><View style={styles.searchRow}><TextInput style={styles.phoneInput} value={renameTitle} onChangeText={setRenameTitle} /><TouchableOpacity style={styles.addBtn} onPress={saveGroupName}><Text style={styles.btnText}>保存群名</Text></TouchableOpacity></View></>}<Text style={[styles.heading,{fontSize:16,marginTop:14}]}>成员（{details?.members?.length || 0}）</Text>{details?.members?.map((member) => <View key={member.id} style={styles.memberRow}><Ionicons name="person-circle" size={30} color="#840B1C" /><View><Text style={styles.person}>{member.name}{member.memberRole === "owner" ? "（群主）" : ""}</Text>{member.phone ? <Text style={styles.meta}>{member.phone}</Text> : null}</View></View>)}{details?.conversation.type === "group" && <TouchableOpacity style={styles.dangerBtn} onPress={exitOrDissolve}><Text style={styles.dangerText}>{details?.conversation.myRole === "owner" ? "解散群组" : "退出群组"}</Text></TouchableOpacity>}</View></View></Modal>
+export default function AiChatbox() {
+	useAndroidBackTarget("/(tabs)");
+	const headerHeight = useHeaderHeight(); const insets = useSafeAreaInsets(); const keyboard = useKeyboardInset();
+	const { user, isGuest, isUser, isLoading } = useContext(AuthContext); const { i18n, locale } = useContext(LocaleContext);
+	const requestGeneration = useRef(0); const sending = useRef(false);
+	const mounted = useRef(true); const startingConversation = useRef(false);
+	useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+	const messageSequence = useRef(0);
+	const nextMessageId = prefix => `${prefix}-${Date.now()}-${++messageSequence.current}`;
+	const isFocused = useIsFocused(); const focusedRef = useRef(isFocused); focusedRef.current = isFocused;
+	const historyReady = useRef(false);
+	const historyIdentity = user?.id || user?.phone || user?.email || (isGuest ? "guest-local" : "anonymous");
+	// AuthProvider persists a fresh non-secret ID for every new login. A legacy
+	// context without that field gets a memory-only scope, never a token key.
+	const authSessionId = useMemo(() => user?.assistantSessionId || createAssistantSessionId(), [historyIdentity, user?.assistantSessionId, user?.loginAt]);
+	const conversationScope = useMemo(() => ({ owner: String(historyIdentity), locale, authSessionId }), [historyIdentity, locale, authSessionId]);
+	const scopeKey = JSON.stringify(conversationScope);
+	const currentScope = useRef(scopeKey); currentScope.current = scopeKey;
+	const [conversationId, setConversationId] = useState(null);
+	const currentConversation = useRef(conversationId); currentConversation.current = conversationId;
+	// A full archive can initially leave a usable in-memory chat. After deleting
+	// history, attach its storage ID without resetting that chat/draft/request.
+	const persistedConversation = useRef(null);
+	const [loadedScope, setLoadedScope] = useState(null);
+	const [conversationHistory, setConversationHistory] = useState([]);
+	const [historyVisible, setHistoryVisible] = useState(false);
+	const [historyStarting, setHistoryStarting] = useState(false);
+	const [historyError, setHistoryError] = useState(null);
+	const [historyReadError, setHistoryReadError] = useState(null);
+	const [historyLoading, setHistoryLoading] = useState(false);
+	const [historyDeleting, setHistoryDeleting] = useState(false);
+	const [historyDeleteError, setHistoryDeleteError] = useState(null);
+	const [historySaveRevision, setHistorySaveRevision] = useState(0);
+	const historyMutation = useRef(null);
+	const historyRevision = useRef(0);
+	const historyKey = `${scopeKey}:${conversationId || "loading"}`;
+	const conversationLoaded = loadedScope === scopeKey;
+	useEffect(() => { requestGeneration.current += 1; sending.current = false; setBusy(false); setText(""); return () => { requestGeneration.current += 1; }; }, [historyKey, user?.token]);
+	const [messages, setMessages] = useState([initialMessage(i18n)]); const [text, setText] = useState(""); const [busy, setBusy] = useState(false);
+	const visibleMessages = useRef(messages); visibleMessages.current = messages;
+	const submittedSpeech = useRef(new Map());
+	const speechEnabled = isFocused && !isLoading && isUser && !!user?.token && !historyVisible && conversationLoaded;
+	const speechScope = `${historyKey}:${user?.token || ""}`;
+	const changeDraft = value => setText(value);
+	// Replies can be read aloud, but this screen never starts recording. Legacy
+	// voiceRequest route parameters are intentionally ignored after input retirement.
+	const replySpeech = useAssistantReplySpeech({ locale, enabled: speechEnabled });
+	const speechRef = useRef(replySpeech); speechRef.current = replySpeech;
+	const pendingReplySpeech = useRef(null);
+	const stopReplySpeech = useCallback(() => {
+		pendingReplySpeech.current = null;
+		void speechRef.current.stop();
+	}, []);
+	useEffect(() => {
+		stopReplySpeech();
+		return stopReplySpeech;
+	}, [speechScope, isFocused, stopReplySpeech]);
+	const [selectedReply, setSelectedReply] = useState(null);
+	useEffect(() => { setSelectedReply(null); }, [historyKey, user?.token, isFocused]);
+	const [catalog, setCatalog] = useState(() => {
+		const cached = getCachedEquipmentCatalog();
+		return mergeEquipmentCatalog(i18n.t("equipmentList", { returnObjects: true }) || [], cached?.items || [], locale, { imageCatalogReady: Boolean(cached) });
+	});
+	const displayMessages = useMemo(() => {
+		const activeMessages = assistantMessagesForDisplay(messages.filter(item => !item.retiredImage), catalog, locale);
+		const currentById = new Map(activeMessages.map(item => [item.id, item]));
+		return messages.map(item => item.retiredImage ? item : currentById.get(item.id) || item);
+	}, [messages, catalog, locale]);
+	const messagePresentations = useMemo(() => {
+		let replyIndex = 0;
+		return new Map(displayMessages.map((item) => {
+			const equipmentCards = item.confirmationAnswered === "no" ? [] : resolveEquipmentRecommendations(item.recommendations, catalog, locale);
+			const presentation = item.retiredImage
+				? { fullText: item.text || item.reply || "", previewText: item.text || item.reply || "", canExpand: false }
+				: assistantReplyPresentation(item, equipmentCards, locale, replyIndex);
+			if (presentation.introVariant != null) replyIndex += 1;
+			return [item.id, { equipmentCards, presentation }];
+		}));
+	}, [displayMessages, catalog, locale]);
+	useEffect(() => {
+		const pending = pendingReplySpeech.current;
+		if (!pending) return;
+		const visibleText = messagePresentations.get(pending.id)?.presentation.previewText;
+		if (typeof visibleText !== "string") return;
+		// Only replies delivered during this visit are eligible. Restored history,
+		// returning from a guide, and catalog/presentation updates never enqueue speech.
+		pendingReplySpeech.current = null;
+		if (pending.scope !== speechScope || !speechEnabled || !focusedRef.current || !replySpeech.autoRead || !visibleText.trim()) return;
+		void speechRef.current.read(pending.id, visibleText);
+	}, [messagePresentations, speechScope, speechEnabled, replySpeech.autoRead]);
+	const readReply = (messageId, visibleText) => {
+		if (!speechEnabled || typeof visibleText !== "string" || !visibleText.trim()) return;
+		pendingReplySpeech.current = null;
+		void speechRef.current.read(messageId, visibleText);
+	};
+	// Reverse only the visual list. Persistence and AI context stay chronological.
+	const listMessages = useMemo(() => [...displayMessages].reverse(), [displayMessages]);
+	const messageIds = useMemo(() => listMessages.map(item => item.id), [listMessages]);
+	const chatScroll = useChatScroll({ isActive: isFocused && !isLoading && isUser && !!user?.token, historyKey, messageIds });
+	// The detail reader is outside the inverted list. Opening it never changes
+	// a message height, scroll anchor, stored reply or model conversation context.
+	const selectedPresentation = selectedReply && isFocused && selectedReply.historyKey === historyKey && selectedReply.token === user?.token
+		? messagePresentations.get(selectedReply.messageId)?.presentation : null;
+	const replyDetail = selectedPresentation ? { messageId: selectedReply.messageId, text: selectedPresentation.fullText } : null;
+	const appendMessage = (message) => {
+		chatScroll.beforeLatestInsert();
+		if (message.sender === "ai" && !["error", "auth_error"].includes(message.action) && speechEnabled && focusedRef.current) {
+			pendingReplySpeech.current = { id: message.id, scope: speechScope };
+		}
+		setMessages((current) => [...current, message]);
+	};
+	useEffect(() => {
+		let active = true;
+		historyReady.current = false;
+		setLoadedScope(null); setConversationId(null); setConversationHistory([]); setHistoryVisible(false); setHistoryError(null); setHistoryStarting(false);
+		persistedConversation.current = null;
+		setHistoryReadError(null); setHistoryLoading(false); startingConversation.current = false;
+		historyMutation.current = null; historyRevision.current += 1; setHistoryDeleting(false); setHistoryDeleteError(null);
+		setMessages([initialMessage(i18n)]);
+		if (isLoading || !isUser || !user?.token) return () => { active = false; };
+		const base = i18n.t("equipmentList", { returnObjects: true }) || [];
+		const cached = getCachedEquipmentCatalog();
+		setCatalog(mergeEquipmentCatalog(base, cached?.items || [], locale, { imageCatalogReady: Boolean(cached) }));
+		let receivedFreshCatalog = false;
+		const unsubscribe = subscribeEquipmentCatalog?.(result => {
+			if (active && Array.isArray(result?.items)) { receivedFreshCatalog = true; setCatalog(mergeEquipmentCatalog(base, result.items, locale)); }
+		});
+		void loadCachedEquipmentCatalog().then(result => {
+			if (active && !receivedFreshCatalog && Array.isArray(result?.items)) setCatalog(mergeEquipmentCatalog(base, result.items, locale));
+		}).catch(() => {});
+		getEquipmentCatalog().then((result) => {
+			if (active && Array.isArray(result?.items)) { receivedFreshCatalog = true; setCatalog(mergeEquipmentCatalog(base, result.items, locale)); }
+		}).catch(() => {});
+		loadAssistantConversations(conversationScope).then((stored) => {
+			if (!active) return;
+			historyReady.current = true;
+			persistedConversation.current = stored.conversationId;
+			setConversationId(stored.conversationId);
+			setMessages([initialMessage(i18n), ...stored.messages.map(restoreAssistantMessage)]);
+			setConversationHistory(stored.history); setLoadedScope(scopeKey);
+		}).catch(error => {
+			if (!active) return;
+			// Never replace unreadable storage with an empty archive. A temporary
+			// in-memory chat remains usable, with an explicit save warning.
+			setConversationId(createAssistantSessionId()); setLoadedScope(scopeKey);
+			setHistoryError(error?.code || "assistantHistoryUnavailable");
+		});
+		return () => { active = false; unsubscribe?.(); };
+	}, [scopeKey, i18n, isLoading, isUser, locale]);
+	useEffect(() => {
+		if (!historyReady.current || !conversationLoaded || !conversationId || historyDeleting) return;
+		const revision = historyRevision.current;
+		const serializable = messages.filter(item => item.id !== "welcome");
+		storeAssistantConversation({ ...conversationScope, conversationId: persistedConversation.current || conversationId, messages: serializable }).then(stored => {
+			if (mounted.current && currentScope.current === scopeKey && currentConversation.current === conversationId && historyRevision.current === revision) {
+				setConversationHistory(stored.history); setHistoryError(null);
+			}
+		}).catch(error => {
+			if (!mounted.current || currentScope.current !== scopeKey || currentConversation.current !== conversationId || historyRevision.current !== revision) return;
+			historyReady.current = false; setHistoryError(error?.code || "assistantHistoryUnavailable");
+		});
+	}, [scopeKey, conversationId, conversationLoaded, messages, historyDeleting, historySaveRevision]);
+	useEffect(() => {
+        if (!conversationLoaded || !conversationId || !user?.token) return;
+        let active = true;
+        const refresh = async () => {
+            const tasks = await pendingAssistantJobs(conversationScope.owner);
+            if (!active || currentScope.current !== scopeKey || currentConversation.current !== conversationId) return;
+            const pending = tasks.some(item => item.conversationId === conversationId && item.scope.locale === locale);
+            sending.current = pending; setBusy(pending);
+            const stored = await loadAssistantConversations(conversationScope);
+            if (!active || currentScope.current !== scopeKey || currentConversation.current !== conversationId) return;
+            if (stored.conversationId !== conversationId) {
+                if (!historyReady.current || !persistedConversation.current) return;
+                // Another device deleted this history. Use the fresh local
+                // composer without recreating the deleted conversation.
+                persistedConversation.current = stored.conversationId;
+                setConversationId(stored.conversationId); setMessages([initialMessage(i18n), ...stored.messages.map(restoreAssistantMessage)]);
+                setConversationHistory(stored.history); sending.current = false; setBusy(false);
+                return;
+            }
+            if (!historyMutation.current && !startingConversation.current) {
+                const newest = stored.messages.at(-1);
+                if (newest?.sender === 'ai' && !visibleMessages.current.some(x => x.id === newest.id)) {
+                    chatScroll.beforeLatestInsert();
+                    if (newest.action === 'error') {
+                        const question = [...stored.messages].reverse().find(x => x.sender === 'user')?.text;
+                        if (question) setText(current => current.trim() ? current : question);
+                    } else if (focusedRef.current && speechEnabled && submittedSpeech.current.get([...stored.messages].reverse().find(x => x.sender === 'user')?.id) === user?.token) pendingReplySpeech.current = { id: newest.id, scope: speechScope };
+                }
+                setMessages([initialMessage(i18n), ...stored.messages.map(restoreAssistantMessage)]);
+                setConversationHistory(stored.history);
+            }
+        };
+        const unsubscribe = subscribeAssistantJobs(owner => { if (owner === conversationScope.owner) void refresh().catch(() => {}); });
+        const unsubscribeCloud = subscribeAccountData(event => { if (event.remote && event.kind === 'assistant' && event.owner === conversationScope.owner) void refresh().catch(() => {}); });
+        void refresh().catch(() => {});
+        return () => { active = false; unsubscribe(); unsubscribeCloud(); };
+    }, [scopeKey, conversationId, conversationLoaded, user?.token]);
+	const persistedId = persistedConversation.current || conversationId;
+	const historyForReading = useMemo(() => conversationHistory.filter(item => item.id !== persistedId).map(conversation => {
+		const restored = conversation.messages.map(restoreAssistantMessage);
+		// Legacy records lack evidence metadata. Keep their original text for
+		// review; do not generate a fresh recommendation from a historical query.
+		if (conversation.legacy) return { ...conversation, messages: restored.map(item => ({ id: item.id, sender: item.sender, text: item.text || item.reply || "" })) };
+		const checked = assistantMessagesForDisplay(restored.filter(item => !item.retiredImage), catalog, locale);
+		const byId = new Map(checked.map(item => [item.id, item]));
+		return { ...conversation, messages: restored.map(original => {
+			const item = byId.get(original.id) || original;
+			const cards = resolveEquipmentRecommendations(item.recommendations, catalog, locale);
+			return { id: item.id, sender: item.sender, text: original.retiredImage ? original.text || original.reply : assistantReplyPresentation(item, cards, locale).fullText };
+		}) };
+	}), [conversationHistory, persistedId, catalog, locale]);
+	const startNewChat = async () => {
+		if (!conversationLoaded || startingConversation.current || historyMutation.current || !historyReady.current || !isUser || !user?.token) return;
+		const capturedScope = scopeKey;
+		startingConversation.current = true;
+		requestGeneration.current += 1; sending.current = false; setBusy(false); stopReplySpeech(); setSelectedReply(null); setHistoryStarting(true);
+		try {
+			// Flush the current visible conversation before archiving, including
+			// a question whose network request was just cancelled by New chat.
+			await storeAssistantConversation({ ...conversationScope, conversationId: persistedConversation.current || conversationId, messages: messages.filter(item => item.id !== "welcome") });
+			if (!mounted.current || currentScope.current !== capturedScope) return;
+			const stored = await startNewAssistantConversation(conversationScope);
+			if (!mounted.current || currentScope.current !== capturedScope) return;
+			historyReady.current = true; persistedConversation.current = stored.conversationId; setHistoryError(null); setText(""); setConversationId(stored.conversationId);
+			setMessages([initialMessage(i18n)]); setConversationHistory(stored.history); setHistoryVisible(false);
+		} catch (error) {
+			if (mounted.current && currentScope.current === capturedScope) setHistoryError(error?.code || "assistantHistoryUnavailable");
+		} finally { if (mounted.current && currentScope.current === capturedScope) { startingConversation.current = false; setHistoryStarting(false); } }
+	};
+	const openHistory = async () => {
+		Keyboard.dismiss(); stopReplySpeech(); setSelectedReply(null); setHistoryVisible(true); setHistoryLoading(true); setHistoryReadError(null); setHistoryDeleteError(null);
+		const capturedScope = scopeKey;
+		const revision = historyRevision.current;
+		try {
+			const result = await listAssistantConversations(conversationScope);
+			if (mounted.current && currentScope.current === capturedScope && historyRevision.current === revision) setConversationHistory(result.history);
+		} catch (error) {
+			if (mounted.current && currentScope.current === capturedScope && historyRevision.current === revision) setHistoryReadError(error?.code || "assistantHistoryUnavailable");
+		} finally { if (mounted.current && currentScope.current === capturedScope) setHistoryLoading(false); }
+	};
+	const removeHistory = async (id = null) => {
+		if (!mounted.current || currentScope.current !== scopeKey || !conversationLoaded || historyMutation.current || startingConversation.current ||
+			historyLoading || historyReadError || isLoading || !isUser || !user?.token || !historyForReading.length) return false;
+		if (id !== null && !historyForReading.some(item => item.id === id)) return false;
+		const operation = { scope: scopeKey };
+		historyMutation.current = operation; historyRevision.current += 1;
+		setHistoryDeleting(true); setHistoryDeleteError(null);
+		try {
+			const result = id === null ? await clearAssistantConversationHistory(conversationScope)
+				: await deleteAssistantConversation({ ...conversationScope, conversationId: id });
+			if (!mounted.current || currentScope.current !== operation.scope || historyMutation.current !== operation) return false;
+			setConversationHistory(result.history);
+			if (!persistedConversation.current) {
+				try {
+					let recovered = await loadAssistantConversations(conversationScope);
+					if (!mounted.current || currentScope.current !== operation.scope || historyMutation.current !== operation) return true;
+					// A transient initial read error may have hidden an existing,
+					// non-empty active chat. Archive it instead of overwriting its
+					// messages with this visit's temporary chat or AI context.
+					if (recovered.messages.length) recovered = await startNewAssistantConversation(conversationScope);
+					if (!mounted.current || currentScope.current !== operation.scope || historyMutation.current !== operation) return true;
+					persistedConversation.current = recovered.conversationId;
+					setConversationHistory(recovered.history);
+				} catch (error) {
+					if (mounted.current && currentScope.current === operation.scope && historyMutation.current === operation)
+						setHistoryError(error?.code || "assistantHistoryUnavailable");
+					return true; // Deletion succeeded; only the current save still needs recovery.
+				}
+			}
+			// Freeing archive space can recover a failed save. The persistence
+			// effect retries the latest visible messages when deletion finishes;
+			// it never replaces the active messages with an archived snapshot.
+			historyReady.current = true;
+			setHistorySaveRevision(value => value + 1);
+			return true;
+		} catch (error) {
+			if (mounted.current && currentScope.current === operation.scope && historyMutation.current === operation)
+				setHistoryDeleteError(error?.code || "assistantHistoryDeleteFailed");
+			return false;
+		} finally {
+			if (mounted.current && currentScope.current === operation.scope && historyMutation.current === operation) {
+				historyMutation.current = null; setHistoryDeleting(false);
+			}
+		}
+	};
+	const obtainDeviceLocation = async () => {
+		if (Platform.OS === "web") return new Promise((resolve) => {
+			if (!globalThis.navigator?.geolocation) return resolve({});
+			globalThis.navigator.geolocation.getCurrentPosition(
+				(position) => resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+				() => resolve({}),
+				{ timeout: 6000, maximumAge: 300000 },
+			);
+		});
+
+		// Build 14 does not contain ExpoLocation. Checking the optional native
+		// module before evaluating expo-location keeps that OTA runtime safe; a
+		// subsequent native build automatically enables foreground positioning.
+		if (!requireOptionalNativeModule("ExpoLocation")) return {};
+		try {
+			const Location = await import("expo-location");
+			let permission = await Location.getForegroundPermissionsAsync();
+			if (!permission.granted && permission.canAskAgain) permission = await Location.requestForegroundPermissionsAsync();
+			if (!permission.granted) return {};
+			const position = await Promise.race([
+				Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+				new Promise((resolve) => setTimeout(() => resolve(null), 7000)),
+			]);
+			const latitude = Number(position?.coords?.latitude); const longitude = Number(position?.coords?.longitude);
+			return Number.isFinite(latitude) && Number.isFinite(longitude) ? { latitude, longitude } : {};
+		} catch {
+			return {};
+		}
+	};
+	const send = async () => {
+		const query = text.trim(); if (!query || sending.current || isLoading || !isUser || !user?.token || !conversationLoaded || historyStarting || historyVisible) return;
+		stopReplySpeech();
+		chatScroll.scrollToLatest();
+		sending.current = true; const generation = requestGeneration.current;
+		const stillCurrent = () => mounted.current && generation === requestGeneration.current && currentScope.current === scopeKey && currentConversation.current === conversationId;
+		const history = displayMessages.filter((item) => item.id !== "welcome" && item.action !== "error" && !item.retiredImage).slice(-8).map((item) => ({ role: item.sender === "user" ? "user" : "assistant", content: item.text || item.reply }));
+		const userMessageId = nextMessageId("job-question");
+		submittedSpeech.current.set(userMessageId, user.token);
+		appendMessage({ id: userMessageId, sender: "user", text: query }); changeDraft("");
+		setBusy(true);
+		let fallbackRecommendations = [];
+		try {
+			// Local lookups can also fail on unexpected data. Keep them inside the
+			// same recovery path so the send lock is always released.
+			// Non-urgent symptom recommendations must reach the DeepSeek-backed
+			// server. Only urgent safety notices and direct APP instruction lookups
+			// can bypass the model; never present a local recommendation as AI work.
+			const concern = symptomConcern(query, history);
+			const localAnswer = concern?.urgent ? symptomGuideAnswer(query, catalog, locale, history)
+				: !concern ? localEquipmentAnswer(query, catalog, locale) : null;
+			if (localAnswer) {
+				appendMessage({ ...checkedAssistantResponse(localAnswer), id: nextMessageId("a-local"), sender: "ai" });
+				return;
+			}
+			fallbackRecommendations = localEquipmentRecommendations(query, catalog, locale, history);
+			const position = /(附近|最近|周邊|周边|位置|地點|地点|公園|公园|\b(?:nearby|nearest|where|location|park)\b)/i.test(query) ? await obtainDeviceLocation() : {};
+			if (!stillCurrent()) return;
+            // A full/corrupt local archive already displays a save warning.
+            // Keep its temporary conversation usable without pretending a task
+            // that cannot be persisted will survive closing the application.
+            if (!historyReady.current) {
+                const result = checkedAssistantResponse(await sendAssistantMessage({ message: query, history, locale, ...position }, user.token));
+                if (stillCurrent()) appendMessage({ ...result, id: nextMessageId('a'), sender: 'ai' });
+                return;
+            }
+            await beginAssistantJob({ scope: conversationScope, conversationId: persistedConversation.current || conversationId,
+                userMessageId, token: user.token, request: { message: query, history, locale, ...position } });
+
+		} catch (error) {
+			if (!stillCurrent()) return;
+			const networkFailure = error?.code === "networkError" || (!error?.code && !error?.status);
+			if (networkFailure && fallbackRecommendations.length) {
+				appendMessage({
+					id: nextMessageId("a"), sender: "ai", action: "equipment", source: "app_recommendation", knowledgeSource: "facility_guide",
+					reply: appText(locale, "inline.assistant.iSelectedTheseReferenceItemsFromTheIn", {"zh":"我先根據APP內的設施分類，為您篩選以下參考器材。請先閱讀設施教學，並按自身情況慢慢進行。","en":"I selected these reference items from the in-app Facility Guide categories. Please read the guide and start gently."}),
+					recommendations: fallbackRecommendations,
+				});
+			} else {
+				const failure = assistantFailure(error);
+				appendMessage({ id: nextMessageId("a"), sender: "ai", reply: failure.reply, action: failure.action, recommendations: [] });
+				// The question also remains in the conversation. Restore it for
+				// retry only when this would not overwrite a newer typed draft.
+				setText(current => current.trim() ? current : query);
+			}
+		}
+		finally { if (stillCurrent()) {
+            const tasks = await pendingAssistantJobs(conversationScope.owner).catch(() => []);
+            if (stillCurrent()) { const pending = tasks.some(item => item.conversationId === conversationId && item.scope.locale === locale); sending.current = pending; setBusy(pending); }
+        } }
+	};
+	const openEquipment = (item) => router.push({ pathname: "/outdoor/detail", params: { id: String(item.id), name: item.name, from: "ai" } });
+	const openMap = async (facility) => {
+		if (!facility) return router.push("/location");
+		const name = locale === "zh" ? facility.nameZh || facility.nameEn : facility.nameEn || facility.nameZh;
+		try { await openExternalMap({ ...facility, label: name }); } catch { router.push("/location"); }
+	};
+	const assistantFailure = (error) => {
+		if (error?.code === "assistantTimeout") return { reply: appText(locale, "inline.assistant.theReplyTimedOutYourQuestionIsStill", {"zh":"回覆等候逾時，您的問題仍保留在對話中，請稍後重新發送。","en":"The reply timed out. Your question is still in this conversation. Please try sending it again."}), action: "error" };
+		if (error?.code === "deepSeekInvalidResponse") return { reply: appText(locale, "inline.assistant.noCompleteReplyWasReceivedYourQuestionIs", {"zh":"未收到完整回覆，您的問題仍保留在對話中，請重新發送。","en":"No complete reply was received. Your question is still in this conversation. Please try sending it again."}), action: "error" };
+		if (error?.status === 401 || error?.code === "unauthorized") return { reply: i18n.t("assistantSessionExpired"), action: "auth_error" };
+		if (error?.code === "deepSeekNotConfigured") return { reply: i18n.t("deepSeekNotConfigured"), action: "error" };
+		if (error?.status === 429 || error?.code === "assistantRateLimited") return { reply: i18n.t("assistantRateLimited"), action: "error" };
+		return { reply: i18n.t("deepSeekUnavailable"), action: "error" };
+	};
+	const renderMessage = ({ item }) => {
+		const { equipmentCards, presentation } = messagePresentations.get(item.id);
+		const openReply = () => {
+			Keyboard.dismiss();
+			setSelectedReply({ messageId: item.id, historyKey, token: user?.token });
+		};
+		const expandLabel = appText(locale, "inline.assistant.viewDetails", {"zh":"查看詳細說明","en":"View details"});
+		const canOpenEquipment = !item.confirmationRequired || item.confirmationAnswered === "yes";
+		const hasMeasuredDistance = item.facility?.distanceKm != null && String(item.facility.distanceKm).trim() !== "" && Number.isFinite(Number(item.facility.distanceKm));
+		return (
+			<View testID={`assistant-message-row-${item.id}`} style={[styles.row, item.sender === "user" && styles.userRow]}>
+				{item.sender === "ai" && <View style={styles.botIcon}><MaterialCommunityIcons name="robot-happy-outline" size={23} color="#840B1C" /></View>}
+				<View style={[styles.bubble, item.sender === "user" ? styles.userBubble : styles.aiBubble]}>
+					<Text testID={`assistant-reply-${item.id}`} style={[styles.message, item.sender === "user" && styles.userText]}>{presentation.previewText}</Text>
+					{item.sender === "ai" && item.id !== "welcome" && !item.retiredImage && !["error", "auth_error"].includes(item.action) && <AssistantReplyReadButton locale={locale} messageId={item.id} text={presentation.previewText} speech={replySpeech} disabled={busy} onRead={readReply} />}
+					{presentation.canExpand && <TouchableOpacity testID={`assistant-expand-${item.id}`} onPress={openReply} accessibilityRole="button" accessibilityLabel={expandLabel} accessibilityHint={appText(locale, "inline.assistant.opensTheFullExplanationInASeparateReader", {"zh":"開啟獨立頁面閱讀完整說明","en":"Opens the full explanation in a separate reader"})} style={replyStyles.toggle}>
+						<Text style={replyStyles.toggleText}>{expandLabel}</Text><Ionicons name="chevron-forward" size={21} color="#840B1C" />
+					</TouchableOpacity>}
+					{equipmentCards.map((equipment) => {
+						// Explanations and precautions belong to the article above.
+						const content = <>{equipment.icon ? <RecommendationImage key={equipment.id} equipment={equipment} /> : <View style={styles.equipmentImagePlaceholder}><MaterialCommunityIcons name="weight-lifter" size={25} color="#840B1C" /></View>}<View style={{ flex: 1 }}>
+							<Text style={styles.equipmentName}>{equipment.name}</Text>
+							{canOpenEquipment && <Text style={styles.linkText}>{i18n.t("openFacilityGuide")} ›</Text>}
+						</View></>;
+						return canOpenEquipment
+							? <TouchableOpacity testID={`assistant-equipment-${item.id}-${equipment.id}`} key={equipment.id} style={styles.equipmentCard} onPress={() => openEquipment(equipment)}>{content}</TouchableOpacity>
+							: <View testID={`assistant-equipment-${item.id}-${equipment.id}`} key={equipment.id} style={styles.equipmentCard}>{content}</View>;
+					})}
+					{item.action === "facility" && <TouchableOpacity style={styles.actionButton} onPress={() => openMap(item.facility)}><Ionicons name={item.facility ? "navigate" : "location"} size={19} color="#fff" /><Text style={styles.actionText}>{item.facility ? i18n.t(hasMeasuredDistance ? "openNearestInMaps" : "openThisInMaps") : i18n.t("openFacilityLocations")}</Text></TouchableOpacity>}
+					{item.action === "auth_error" && <TouchableOpacity style={styles.actionButton} onPress={() => router.push({ pathname: "/login", params: { from: "settings" } })}><Ionicons name="log-in-outline" size={19} color="#fff" /><Text style={styles.actionText}>{i18n.t("login")}</Text></TouchableOpacity>}
+				</View>
+			</View>
+		);
+	};
+	if (isLoading) return <View style={styles.restricted}><ActivityIndicator size="large" color="#840B1C" /></View>;
+	if (!isUser || !user?.token) return <View style={styles.restricted}><Ionicons name="lock-closed" size={54} color="#840B1C" /><Text style={styles.restrictedTitle}>{isGuest ? (appText(locale, "inline.assistant.aiAssistantIsUnavailableInGuestMode", {"zh":"訪客模式暫不可使用 AI 助手","en":"AI Assistant is unavailable in Guest mode"})) : i18n.t("guestBlockedTitle")}</Text><Text style={styles.restrictedText}>{appText(locale, "inline.assistant.signInWithAParticipantOrProfessionalAccount", {"zh":"登入研究參與者或專業人員帳戶後即可使用。","en":"Sign in with a participant or professional account to continue."})}</Text><TouchableOpacity style={styles.restrictedButton} onPress={() => router.push({ pathname: "/login", params: { from: "settings" } })}><Text style={styles.restrictedButtonText}>{i18n.t("login")}</Text></TouchableOpacity></View>;
+	return <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight : 0}>
+		<AssistantReplyDetails detail={replyDetail} locale={locale} onClose={() => setSelectedReply(null)} />
+		<AssistantConversationHistory visible={historyVisible && conversationLoaded} locale={locale} conversations={historyForReading} loading={historyLoading} error={historyReadError}
+			deleting={historyDeleting} deleteError={historyDeleteError} onDelete={id => removeHistory(id)} onClearAll={() => removeHistory()} onClose={() => setHistoryVisible(false)} />
+		<View style={conversationStyles.toolbar}>
+			<TouchableOpacity testID="assistant-new-conversation" accessibilityRole="button" accessibilityLabel={appText(locale, "inline.assistant.newChat", {"zh":"新對話","en":"New chat"})} disabled={!conversationLoaded || historyStarting || historyDeleting || !historyReady.current} style={conversationStyles.button} onPress={startNewChat}>
+				<Ionicons name="add-circle-outline" size={22} color="#840B1C" /><Text style={conversationStyles.buttonText}>{appText(locale, "inline.assistant.newChat", {"zh":"新對話","en":"New chat"})}</Text>
+			</TouchableOpacity>
+			<TouchableOpacity testID="assistant-conversation-history" accessibilityRole="button" accessibilityLabel={appText(locale, "inline.assistant.chatHistory", {"zh":"歷史對話","en":"Chat history"})} disabled={!conversationLoaded || historyStarting} style={conversationStyles.button} onPress={openHistory}>
+				<Ionicons name="time-outline" size={22} color="#840B1C" /><Text style={conversationStyles.buttonText}>{appText(locale, "inline.assistant.chatHistory", {"zh":"歷史對話","en":"Chat history"})}</Text>
+			</TouchableOpacity>
+		</View>
+		{historyError && <Text testID="assistant-history-save-error" accessibilityLiveRegion="polite" style={conversationStyles.error}>{appText(locale, "inline.assistant.chatHistoryCouldNotBeSavedExistingHistory", {"zh":"暫時未能儲存對話，原有歷史未被覆蓋。如需保留這段對話，請先不要關閉此頁。","en":"Chat history could not be saved. Existing history has not been replaced. Please keep this page open if you need this conversation."})}</Text>}
+		<View style={styles.notice}><MaterialCommunityIcons name="shield-check" size={20} color="#840B1C" /><Text style={styles.noticeText}>{i18n.t("aiMedicalNotice")}</Text></View>
+		{conversationLoaded ? <FlatList ref={chatScroll.listRef} testID="assistant-message-list" style={{ flex: 1 }} inverted onScroll={chatScroll.onScroll} onScrollBeginDrag={chatScroll.onScrollBeginDrag} onContentSizeChange={chatScroll.onContentSizeChange} onLayout={chatScroll.onLayout} onWheel={chatScroll.onWheel} onTouchMove={chatScroll.onTouchMove} scrollEventThrottle={32} maintainVisibleContentPosition={chatScroll.maintainVisibleContentPosition} keyboardDismissMode="on-drag" data={listMessages} keyExtractor={(item) => item.id} contentContainerStyle={[styles.list, { paddingTop: 24, paddingBottom: 15 }]} keyboardShouldPersistTaps="handled" renderItem={renderMessage} ListHeaderComponent={busy ? <View style={styles.thinking}><ActivityIndicator color="#840B1C" /><Text style={styles.thinkingText}>{i18n.t("aiChatThinking")}</Text></View> : null} /> : <View style={{ flex: 1, justifyContent: "center" }}><ActivityIndicator color="#840B1C" /></View>}
+		<AssistantReplySpeechControls locale={locale} speech={replySpeech} />
+		<View style={[styles.inputBar, { paddingBottom: keyboard.visible ? 10 + keyboard.inset : Math.max(10, insets.bottom) }]}>
+			<TextInput testID="assistant-message-input" editable={conversationLoaded && !historyStarting} style={styles.input} value={text} onChangeText={changeDraft} maxLength={600} multiline scrollEnabled placeholder={i18n.t("aiChatPlaceholder")} textAlignVertical="center" />
+			<TouchableOpacity testID="assistant-send" accessibilityRole="button" accessibilityLabel={appText(locale, "inline.assistant.sendMessage", {"zh":"發送問題","en":"Send message"})} style={[styles.send, (!text.trim() || busy || !conversationLoaded || historyStarting) && styles.disabled]} onPress={send} disabled={!text.trim() || busy || !conversationLoaded || historyStarting}><Ionicons name="send" size={21} color="#fff" /></TouchableOpacity>
+		</View>
 	</KeyboardAvoidingView>;
 }
 
-const styles = StyleSheet.create({ page:{flex:1,backgroundColor:"#F5F1EA"},searchCard:{margin:16,padding:16,backgroundColor:"#fff",borderRadius:14},heading:{fontSize:19,fontWeight:"800",color:"#222"},hint:{fontSize:12,color:"#777",marginTop:4,marginBottom:12},searchRow:{flexDirection:"row",gap:8,marginTop:8},phoneInput:{flex:1,minWidth:80,borderWidth:1,borderColor:"#ddd",borderRadius:10,paddingHorizontal:12,backgroundColor:"#fff",minHeight:46},searchBtn:{backgroundColor:"#840B1C",borderRadius:9,paddingHorizontal:16,justifyContent:"center"},btnText:{color:"#fff",fontWeight:"700"},result:{flexDirection:"row",alignItems:"center",backgroundColor:"#F8F2F3",padding:12,borderRadius:10},addBtn:{backgroundColor:"#840B1C",borderRadius:8,padding:10,justifyContent:"center"},groupChoice:{backgroundColor:"#F4F5F7",padding:10,borderRadius:9,marginTop:7},listHeading:{fontSize:22,fontWeight:"800",marginHorizontal:18,marginBottom:8},conversationList:{paddingHorizontal:16,paddingBottom:30},conversation:{flexDirection:"row",alignItems:"center",backgroundColor:"#fff",borderRadius:12,padding:14,marginBottom:9},avatar:{width:44,height:44,borderRadius:22,backgroundColor:"#F4E9EB",alignItems:"center",justifyContent:"center",marginRight:12},person:{fontSize:15,fontWeight:"700",color:"#222"},meta:{fontSize:12,color:"#777",marginTop:3},badge:{backgroundColor:"#840B1C",color:"#fff",minWidth:23,textAlign:"center",padding:4,borderRadius:12,fontWeight:"700"},empty:{textAlign:"center",color:"#888",padding:30},error:{backgroundColor:"#FDECEC",color:"#9F1D2D",padding:9,textAlign:"center"},chatHeader:{height:64,backgroundColor:"#fff",flexDirection:"row",alignItems:"center",gap:10,paddingHorizontal:12,borderBottomWidth:1,borderBottomColor:"#eee"},messages:{padding:16},msgRow:{flexDirection:"row",marginBottom:10},mine:{justifyContent:"flex-end"},bubble:{maxWidth:"80%",padding:11,borderRadius:15},bubbleMine:{backgroundColor:"#840B1C",borderBottomRightRadius:3},bubbleOther:{backgroundColor:"#fff",borderBottomLeftRadius:3},sender:{fontSize:11,fontWeight:"700",color:"#666",marginBottom:4},msgText:{fontSize:15,color:"#333",lineHeight:21},time:{fontSize:9,color:"#999",alignSelf:"flex-end",marginTop:5},reactions:{fontSize:12,marginTop:5},image:{width:210,height:210,borderRadius:9},inputBar:{flexDirection:"row",alignItems:"flex-end",backgroundColor:"#fff",paddingTop:9,paddingHorizontal:9,borderTopWidth:1,borderTopColor:"#eee"},iconBtn:{padding:10},input:{flex:1,maxHeight:100,minHeight:42,borderWidth:1,borderColor:"#ddd",borderRadius:21,paddingHorizontal:13,paddingVertical:9,backgroundColor:"#fafafa"},sendBtn:{width:43,height:43,borderRadius:22,backgroundColor:"#840B1C",alignItems:"center",justifyContent:"center",marginLeft:8},overlay:{flex:1,backgroundColor:"rgba(0,0,0,.3)",alignItems:"center",justifyContent:"center",padding:18},picker:{flexDirection:"row",backgroundColor:"#fff",padding:12,borderRadius:30},emoji:{fontSize:25,padding:7},settingsCard:{width:"100%",maxWidth:480,maxHeight:"85%",backgroundColor:"#fff",borderRadius:16,padding:18},settingsHeader:{flexDirection:"row",justifyContent:"space-between",alignItems:"center"},close:{fontSize:30,color:"#666"},memberRow:{flexDirection:"row",alignItems:"center",gap:9,paddingVertical:9,borderBottomWidth:1,borderBottomColor:"#eee"},dangerBtn:{marginTop:20,borderWidth:1,borderColor:"#C62828",borderRadius:9,padding:12,alignItems:"center"},dangerText:{color:"#C62828",fontWeight:"800"} });
+const replyStyles = StyleSheet.create({
+	toggle: { minHeight: 52, marginTop: 12, paddingVertical: 12, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 10, backgroundColor: "#F7E9EC", borderWidth: 1, borderColor: "#E8D5D9" },
+	toggleText: { flexShrink: 1, fontSize: Math.max(18, RFValue(13)), lineHeight: Math.max(26, RFValue(19)), fontWeight: "700", color: "#840B1C" },
+});
+
+const conversationStyles = StyleSheet.create({
+	toolbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#fff", paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: "#EEE8E9" },
+	button: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 6, paddingVertical: 8 },
+	buttonText: { fontSize: Math.max(16, RFValue(11)), color: "#840B1C", fontWeight: "600" },
+	error: { fontSize: 14, lineHeight: 21, color: "#8E361D", paddingHorizontal: 16, paddingVertical: 9, backgroundColor: "#FFF5E6" },
+});
+
+const styles=StyleSheet.create({page:{flex:1,backgroundColor:"#F5F1EA"},notice:{flexDirection:"row",alignItems:"flex-start",gap:8,backgroundColor:"#FFF5E6",borderBottomWidth:1,borderBottomColor:"#F3D4A4",paddingHorizontal:15,paddingVertical:11},noticeText:{flex:1,fontSize:RFValue(10),lineHeight:RFValue(15),color:"#6A4A1B"},list:{padding:15,paddingBottom:24},row:{flexDirection:"row",alignItems:"flex-start",marginBottom:13,maxWidth:"93%"},userRow:{alignSelf:"flex-end",justifyContent:"flex-end"},botIcon:{width:38,height:38,borderRadius:19,alignItems:"center",justifyContent:"center",backgroundColor:"#fff",marginRight:8,borderWidth:1,borderColor:"#E8D9DC"},bubble:{borderRadius:16,padding:13},aiBubble:{flex:1,backgroundColor:"#fff",borderTopLeftRadius:4},userBubble:{flexShrink:1,backgroundColor:"#840B1C",borderTopRightRadius:4},localSource:{alignSelf:"flex-start",flexDirection:"row",alignItems:"center",gap:5,borderRadius:11,backgroundColor:"#F7E9EC",paddingHorizontal:8,paddingVertical:4,marginBottom:8},localSourceText:{fontSize:RFValue(9),fontWeight:"800",color:"#840B1C"},message:{fontSize:RFValue(13),lineHeight:RFValue(20),color:"#292929"},userText:{color:"#fff"},equipmentCard:{flexDirection:"row",alignItems:"center",gap:10,marginTop:11,borderWidth:1,borderColor:"#E4DADC",borderRadius:12,padding:9,backgroundColor:"#FCFAFA"},equipmentImage:{width:66,height:58,borderRadius:8,resizeMode:"cover"},equipmentImagePlaceholder:{width:66,height:58,borderRadius:8,alignItems:"center",justifyContent:"center",backgroundColor:"#F5EDEF"},equipmentName:{fontSize:RFValue(12),fontWeight:"800",color:"#222"},reason:{fontSize:RFValue(11),lineHeight:RFValue(17),color:"#555",marginTop:5},linkText:{fontSize:RFValue(10),fontWeight:"700",color:"#840B1C",marginTop:5},actionButton:{minHeight:45,marginTop:12,borderRadius:10,backgroundColor:"#840B1C",flexDirection:"row",gap:7,alignItems:"center",justifyContent:"center",paddingHorizontal:12},actionText:{fontSize:RFValue(11),fontWeight:"800",color:"#fff"},thinking:{flexDirection:"row",gap:9,alignItems:"center",padding:12},thinkingText:{fontSize:RFValue(11),color:"#666"},inputBar:{flexDirection:"row",alignItems:"flex-end",gap:9,padding:10,backgroundColor:"#fff",borderTopWidth:1,borderTopColor:"#E5E5E5"},input:{flex:1,minHeight:48,maxHeight:128,borderWidth:1,borderColor:"#D8D8D8",borderRadius:23,paddingHorizontal:16,paddingVertical:11,fontSize:RFValue(13),backgroundColor:"#FAFAFA"},send:{width:48,height:48,borderRadius:24,alignItems:"center",justifyContent:"center",backgroundColor:"#840B1C"},disabled:{opacity:.45},restricted:{flex:1,alignItems:"center",justifyContent:"center",padding:30,backgroundColor:"#fff"},restrictedTitle:{fontSize:RFValue(18),fontWeight:"900",color:"#840B1C",textAlign:"center",marginTop:16},restrictedText:{fontSize:RFValue(13),lineHeight:RFValue(20),color:"#666",textAlign:"center",marginTop:8},restrictedButton:{minHeight:48,borderRadius:24,backgroundColor:"#840B1C",paddingHorizontal:26,alignItems:"center",justifyContent:"center",marginTop:20},restrictedButtonText:{color:"#fff",fontWeight:"800"}});

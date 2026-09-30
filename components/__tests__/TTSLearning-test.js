@@ -1,0 +1,51 @@
+import React from "react";
+import renderer, { act } from "react-test-renderer";
+import { AppState, TouchableOpacity } from "react-native";
+import * as Speech from "expo-speech";
+import TTSButton from "../TTSButton";
+import { trackTtsPlay } from "../../utils/usage";
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+let mockFocused = true;
+jest.mock("@react-navigation/native", () => ({ useIsFocused: () => mockFocused }));
+jest.mock("expo-speech", () => ({ stop: jest.fn().mockResolvedValue(), speak: jest.fn(), getAvailableVoicesAsync: jest.fn().mockResolvedValue([]) }));
+jest.mock("../../utils/usage", () => ({ trackTtsPlay: jest.fn() }));
+jest.mock("../../utils/audioMode", () => ({ ensurePlaybackAudioMode: jest.fn().mockResolvedValue() }));
+jest.mock("../../utils/alert", () => ({ showAlert: jest.fn() }));
+jest.mock("@expo/vector-icons", () => ({ Ionicons: "Ionicons" }));
+jest.mock("react-native-responsive-fontsize", () => ({ RFValue: (value) => value }));
+const i18n = { t: (key) => key };
+let tree; let listeners;
+beforeEach(() => { jest.clearAllMocks(); mockFocused = true; listeners = new Set(); jest.spyOn(AppState, "addEventListener").mockImplementation((_, callback) => { listeners.add(callback); return { remove: () => listeners.delete(callback) }; }); });
+afterEach(async () => { if (tree) await act(async () => tree.unmount()); tree = null; jest.restoreAllMocks(); });
+const mount = async (props = {}) => act(async () => { tree = renderer.create(<TTSButton text={"一".repeat(160)} locale="zh" i18n={i18n} inline {...props} />); });
+const press = async () => act(async () => tree.root.findByType(TouchableOpacity).props.onPress());
+test("a tap is not listened evidence; only spoken preceding characters and completed chunks count", async () => {
+	const range = jest.fn(); await mount({ onSpokenRange: range }); await press();
+	expect(range).not.toHaveBeenCalled(); expect(trackTtsPlay).not.toHaveBeenCalled();
+	const first = Speech.speak.mock.calls[0][1];
+	await act(async () => { first.onStart(); first.onBoundary({ charIndex: 30, charLength: 40 }); });
+	expect(range).toHaveBeenLastCalledWith(0, 30); expect(trackTtsPlay).toHaveBeenCalledTimes(1);
+	await act(async () => first.onDone()); expect(range).toHaveBeenLastCalledWith(0, 120);
+	const second = Speech.speak.mock.calls[1][1];
+	await act(async () => { second.onStart(); second.onDone(); });
+	expect(range).toHaveBeenLastCalledWith(120, 160); expect(trackTtsPlay).toHaveBeenCalledTimes(1);
+});
+test("a short start then stop does not invent completion, and delayed callbacks are ignored", async () => {
+	const range = jest.fn(); await mount({ onSpokenRange: range }); await press();
+	const first = Speech.speak.mock.calls[0][1]; await act(async () => first.onStart()); await press();
+	await act(async () => { first.onBoundary({ charIndex: 120 }); first.onDone(); }); expect(range).not.toHaveBeenCalled();
+});
+test("background cancels pending utterance evidence and prevents delayed onDone credit", async () => {
+	const range = jest.fn(); await mount({ onSpokenRange: range }); await press();
+	const first = Speech.speak.mock.calls[0][1]; await act(async () => first.onStart());
+	await act(async () => { listeners.forEach((listener) => listener("background")); first.onDone(); });
+	expect(range).not.toHaveBeenCalled(); expect(Speech.speak).toHaveBeenCalledTimes(1);
+});
+test("starting another section cancels stale callbacks without marking reading", async () => {
+	const a = jest.fn(); const b = jest.fn();
+	await act(async () => { tree = renderer.create(<><TTSButton text="First section" locale="en" i18n={i18n} inline onSpokenRange={a} /><TTSButton text="Second section" locale="en" i18n={i18n} inline onSpokenRange={b} /></>); });
+	await act(async () => tree.root.findAllByType(TouchableOpacity)[0].props.onPress()); const old = Speech.speak.mock.calls[0][1];
+	await act(async () => old.onStart()); await act(async () => tree.root.findAllByType(TouchableOpacity)[1].props.onPress());
+	await act(async () => { old.onDone(); const current = Speech.speak.mock.calls[1][1]; current.onStart(); current.onDone(); });
+	expect(a).not.toHaveBeenCalled(); expect(b).toHaveBeenCalledWith(0, 14);
+});

@@ -1,0 +1,11 @@
+# Reference policy for a repository-root build context.
+# Dockerfile.dockerignore is the automatically selected, identical policy.
+**
+!server/
+!server/package.json
+!server/package-lock.json
+!server/src/
+!server/src/*.js
+!server/src/appTextCatalog.json
+!server/src/equipmentGuideEvidence.json
+!server/src/tcmV24Content.json

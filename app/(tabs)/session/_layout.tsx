@@ -1,22 +1,20 @@
 import React, { useContext } from "react";
-import { Stack, router } from "expo-router";
-import { TouchableOpacity } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { RFValue } from "react-native-responsive-fontsize";
+import { Stack } from "expo-router";
 import { LocaleContext } from "../../../contexts/LocaleContext";
 
-const renderBackButton = () => (
-	<TouchableOpacity onPress={() => router.navigate("/(tabs)")}>
-		<Ionicons name="chevron-back" size={RFValue(18)} color={"#000"} />
-	</TouchableOpacity>
-);
+export const unstable_settings = {
+	initialRouteName: "index",
+};
 
 export default function SessionLayout() {
 	const { i18n } = useContext(LocaleContext) as any;
 	return (
-		<Stack>
-			<Stack.Screen name="index" options={{ headerShown: true, title: i18n.t("sessionRecord"), headerLeft: renderBackButton }} />
-			<Stack.Screen name="summary" options={{ headerShown: true, title: i18n.t("sessionSummary"), headerBackVisible: false, gestureEnabled: false }} />
+		<Stack screenOptions={{ contentStyle: { backgroundColor: "#FFFFFF" } }}>
+			<Stack.Screen name="index" options={{ headerShown: true, title: i18n.t("sessionRecord"), headerLeft: () => null, animation: "none" }} />
+			<Stack.Screen name="countdown" options={{ headerShown: true, title: i18n.t("countdownTimer"), headerLeft: () => null, animation: "none" }} />
+			<Stack.Screen name="countup" options={{ headerShown: true, title: i18n.t("countupTimer"), headerLeft: () => null, animation: "none" }} />
+			<Stack.Screen name="manual" options={{ headerShown: true, title: i18n.t("manualSessionRecord"), headerLeft: () => null, animation: "none" }} />
+			<Stack.Screen name="summary" options={{ headerShown: true, title: i18n.t("sessionSummary"), headerLeft: () => null, headerBackVisible: false, gestureEnabled: false, animation: "none" }} />
 		</Stack>
 	);
 }

@@ -3,10 +3,12 @@ import { Platform, StyleSheet, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LocaleContext } from "../../../contexts/LocaleContext";
 import { RFValue } from "react-native-responsive-fontsize";
+import { useAndroidBackTarget } from "../../../hooks/useAndroidBackTarget";
 
 const TAB_BAR_HEIGHT = 100;
 
 export default function About() {
+	useAndroidBackTarget("/(tabs)/setting");
 	const { i18n } = useContext(LocaleContext);
 	const insets = useSafeAreaInsets();
 	const bottomPad =
@@ -14,12 +16,13 @@ export default function About() {
 
 	return (
 		<ScrollView
+			testID="about-app-scroll"
 			style={styles.scroll}
 			contentContainerStyle={[styles.container, { paddingBottom: bottomPad }]}
 			showsVerticalScrollIndicator
 		>
 			<View style={styles.articleContainer}>
-				<Text style={styles.articleText}>{i18n.t("team")}</Text>
+				<Text selectable style={styles.articleText}>{i18n.t("intro")}</Text>
 			</View>
 		</ScrollView>
 	);

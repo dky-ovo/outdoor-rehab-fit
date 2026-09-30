@@ -1,16 +1,32 @@
-import React, { useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { AppState, View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import Slider from "@react-native-community/slider";
 import { MaterialIcons } from "@expo/vector-icons";
 import * as Speech from "expo-speech";
 import { ensurePlaybackAudioMode } from "../utils/audioMode";
 
-const AudioPlayer = ({ audioFile, onPlayStart }) => {
+const AudioPlayer = ({ audioFile, onPlayStart, onPlaybackSample }) => {
 	const player = useAudioPlayer(audioFile);
 	const status = useAudioPlayerStatus(player);
+	const focused = useIsFocused();
+	const wasPlaying = useRef(false);
+	const seeking = useRef(false);
 
 	const isPlaying = status.playing;
+	useEffect(() => {
+		if (!focused || AppState.currentState === "background" || AppState.currentState === "inactive" || seeking.current) { wasPlaying.current = false; onPlaybackSample?.("inactive"); return; }
+		const state = status.playing && !status.isBuffering ? (wasPlaying.current ? "progress" : "playing") : status.didJustFinish ? "ended" : "paused";
+		onPlaybackSample?.(state, { positionMs: status.currentTime * 1000, durationMs: status.duration * 1000 });
+		wasPlaying.current = Boolean(status.playing && !status.isBuffering);
+	}, [status.currentTime, status.duration, status.playing, status.isBuffering, status.didJustFinish, focused, onPlaybackSample]);
+	useEffect(() => {
+		const pause = () => { wasPlaying.current = false; onPlaybackSample?.("inactive"); player.pause(); };
+		if (!focused) pause();
+		const listener = AppState.addEventListener("change", (state) => { if (state !== "active") pause(); });
+		return () => { listener.remove(); wasPlaying.current = false; onPlaybackSample?.("inactive"); };
+	}, [focused, player, onPlaybackSample]);
 
 	useEffect(() => {
 		ensurePlaybackAudioMode();
@@ -42,12 +58,14 @@ const AudioPlayer = ({ audioFile, onPlayStart }) => {
 	}
 
 	function stopSound() {
+		wasPlaying.current = false; onPlaybackSample?.("seeking");
 		player.pause();
 		player.seekTo(0);
 	}
 
-	const seekSound = (value) => {
-		player.seekTo(value);
+	const seekSound = async (value) => {
+		wasPlaying.current = false; onPlaybackSample?.("seeking");
+		try { await player.seekTo(value); } finally { seeking.current = false; }
 	};
 
 	const formatTime = (seconds) => {
@@ -80,6 +98,7 @@ const AudioPlayer = ({ audioFile, onPlayStart }) => {
 				minimumValue={0}
 				maximumValue={status.duration || 0}
 				value={status.currentTime || 0}
+				onSlidingStart={() => { seeking.current = true; wasPlaying.current = false; onPlaybackSample?.("seeking"); }}
 				onSlidingComplete={seekSound}
 			/>
 			<View style={styles.timeContainer}>

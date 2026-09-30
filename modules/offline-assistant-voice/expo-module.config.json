@@ -1,0 +1,5 @@
+{
+  "platforms": ["android", "apple"],
+  "apple": { "modules": ["OfflineAssistantVoiceModule"] },
+  "android": { "modules": ["expo.modules.offlineassistantvoice.OfflineAssistantVoiceModule"] }
+}

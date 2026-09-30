@@ -1,0 +1,8 @@
+**
+!server/
+!server/src/
+!server/src/**
+!deploy/
+!deploy/aliyun-fixes/
+!deploy/aliyun-fixes/Dockerfile
+!deploy/aliyun-fixes/Dockerfile.dockerignore

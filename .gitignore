@@ -6,6 +6,7 @@ node_modules/
 # Expo
 .expo/
 dist/
+dist-*/
 web-build/
 expo-env.d.ts
 
@@ -47,6 +48,7 @@ server/data/
 # local tooling and generated artifacts
 .dsh-uploads/
 .dsh-vision-router/
+workspace-artifacts/
 tmp/
 output/
 figma-poster/
@@ -56,8 +58,25 @@ deploy/**/*.zip
 deploy/**/*.tar.gz
 deploy/**/*-web-*/
 deploy/**/*-combined-*/
+*.apk
+*.aab
+*.ipa
+
+# Local Python bytecode and Expo configuration backups
+__pycache__/
+*.py[cod]
+app.*.backup.json
+app.json.*-backup
+
+# Internal source documents retained locally
+/docs/PDF_OCR_全文.md
+/docs/需求交接文档-完整版.md
 
 # generated office documents
 docs/*.docx
 
 app-example
+
+# Retired recognition resources retained locally, excluded from Git and new EAS builds.
+modules/offline-assistant-voice/vendor/
+modules/offline-assistant-voice/assets/

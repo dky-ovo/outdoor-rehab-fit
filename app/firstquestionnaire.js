@@ -1,11 +1,24 @@
-import React, { useContext } from "react";
-import { StyleSheet, View, ScrollView, Text, TouchableOpacity, SafeAreaView, Alert } from "react-native";
+import React, { useCallback, useContext, useRef } from "react";
+import { StyleSheet, View, ScrollView, Text, TouchableOpacity, SafeAreaView } from "react-native";
 import { LocaleContext } from "../contexts/LocaleContext";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { showAlert } from "../utils/alert";
 
 const FirstQuestionnaire = () => {
 	const { i18n } = useContext(LocaleContext);
+	const activeRef = useRef(false);
+	const answeringRef = useRef(false);
+	useFocusEffect(useCallback(() => {
+		activeRef.current = true; answeringRef.current = false;
+		return () => { activeRef.current = false; };
+	}, []));
+	const answer = (hasPositiveAnswer) => {
+		if (answeringRef.current) return;
+		answeringRef.current = true;
+		showAlert(hasPositiveAnswer ? i18n.t("warning") : "", i18n.t(hasPositiveAnswer ? "questionnaireYes" : "questionnaireNo"), [
+			{ text: "OK", onPress: () => { if (activeRef.current) router.replace("/firstsafety"); } },
+		]);
+	};
 	return (
 		<SafeAreaView style={styles.container}>
 			<Text style={styles.title}>{i18n.t("parq")}</Text>
@@ -15,19 +28,13 @@ const FirstQuestionnaire = () => {
 			<View style={styles.buttonContainer}>
 				<TouchableOpacity
 					style={styles.button}
-					onPress={() => {
-						showAlert("", i18n.t("questionnaireNo"), [{ text: "OK", onPress: () => router.replace("/firstsafety") }]);
-					}}
+					onPress={() => answer(false)}
 				>
 					<Text style={styles.buttonText}>{i18n.t("yes")}</Text>
 				</TouchableOpacity>
 				<TouchableOpacity
 					style={[styles.button, { backgroundColor: "#AAA" }]} //gray button
-					onPress={() => {
-						showAlert(i18n.t("warning"), i18n.t("questionnaireYes"), [
-							{ text: "OK", onPress: () => router.replace("/firstsafety") },
-						]);
-					}}
+					onPress={() => answer(true)}
 				>
 					<Text style={styles.buttonText}>{i18n.t("no")}</Text>
 				</TouchableOpacity>

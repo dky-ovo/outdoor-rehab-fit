@@ -1,0 +1,2179 @@
+
+/* ============================================================
+   1. 設計變數
+   ============================================================ */
+:root{
+  --maroon:#8C1D3B;
+  --maroon-dark:#641329;
+  --maroon-soft:#F5E7EB;
+
+  --gold:#C9973B;
+  --gold-dark:#94691E;
+  --gold-tint:#FBF1E1;
+
+  --teal:#2F8F82;
+  --teal-soft:#E5F3F0;
+
+  --ink:#241A1D;
+  --ink-soft:#66575B;
+  --paper:#FFFDFC;
+  --bg-tint:#FAF2F4;
+  --line:#E8DADD;
+
+  --radius:16px;
+  --radius-lg:30px;
+  --shadow:0 24px 60px -38px rgba(74,29,41,.34);
+}
+
+/* ============================================================
+   2. 基礎重設
+   ============================================================ */
+*,
+*::before,
+*::after{
+  box-sizing:border-box;
+}
+
+*{
+  margin:0;
+  padding:0;
+}
+
+html{
+  scroll-behavior:smooth;
+}
+
+body{
+  font-family:'Wix Madefor Text',sans-serif;
+  color:var(--ink);
+  line-height:1.7;
+  background:var(--paper);
+  -webkit-font-smoothing:antialiased;
+}
+
+img{
+  max-width:100%;
+}
+
+a{
+  text-underline-offset:3px;
+}
+
+a:focus-visible,
+button:focus-visible{
+  outline:3px solid var(--gold);
+  outline-offset:4px;
+}
+
+/* ============================================================
+   3. 版面基礎
+   ============================================================ */
+.wrap{
+  position:relative;
+  width:min(1160px,calc(100% - 64px));
+  margin:0 auto;
+}
+
+section{
+  position:relative;
+  padding:108px 0;
+  overflow:clip;
+}
+
+section + section{
+  border-top:1px solid rgba(140,29,59,.08);
+}
+
+/* ============================================================
+   4. 共用元件
+   ============================================================ */
+
+/* 標題群 */
+h2,
+h3,
+h4,
+.display{
+  font-family:'Wix Madefor Display',sans-serif;
+  letter-spacing:-.025em;
+}
+
+.head{
+  max-width:720px;
+  margin-bottom:54px;
+}
+
+.head::before{
+  display:block;
+  margin-bottom:12px;
+  color:var(--maroon);
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.16em;
+}
+
+#about .head::before{
+  content:"計劃簡介";
+}
+
+#design > .wrap > .head:first-child::before{
+  content:"研究設計";
+}
+
+#workshop-structure .head::before{
+  content:"執行方式";
+}
+
+#workshop-topics .head::before{
+  content:"四星期課程";
+}
+
+#impact .head::before{
+  content:"研究成效";
+}
+
+#team .head::before{
+  content:"專業團隊";
+}
+
+#partners .head::before{
+  content:"共同推動";
+}
+
+.head h2{
+  max-width:760px;
+  color:var(--ink);
+  font-size:clamp(32px,4vw,50px);
+  font-weight:700;
+  line-height:1.12;
+}
+
+.head p{
+  max-width:650px;
+  margin-top:16px;
+  color:var(--ink-soft);
+  font-size:17px;
+  line-height:1.75;
+}
+
+/* 按鈕 */
+.btn{
+  display:inline-flex;
+  min-height:48px;
+  align-items:center;
+  justify-content:center;
+  padding:12px 22px;
+  border-radius:999px;
+  font-family:'Wix Madefor Text',sans-serif;
+  font-size:15px;
+  font-weight:700;
+  text-decoration:none;
+  transition:
+    transform .18s ease,
+    background-color .18s ease,
+    box-shadow .18s ease;
+}
+
+.btn:hover{
+  transform:translateY(-2px);
+}
+
+.btn-fill{
+  color:#fff;
+  background:var(--maroon);
+  box-shadow:0 12px 28px -16px rgba(100,19,41,.7);
+}
+
+/* ============================================================
+   5. 置頂橫幅 HERO
+   ============================================================ */
+.hero{
+  position:relative;
+  overflow:clip;
+  padding-top:72px;
+  background:linear-gradient(180deg,#FFF8F3 0%,#FFFDFC 62%);
+  border-bottom:1px solid var(--line);
+}
+
+.hero-inner{
+  display:grid;
+  grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);
+  gap:clamp(32px,5vw,72px);
+  align-items:center;
+  padding-bottom:56px;
+}
+
+/* 左欄 ------------------------------------------------------ */
+.hero-lead{
+  max-width:640px;
+}
+
+.hero-logo{
+  display:block;
+  width:clamp(170px,20vw,232px);
+  height:auto;
+  margin-bottom:36px;
+}
+
+.hero-title{
+  margin:0;
+  color:var(--maroon-dark);
+  font-family:'Wix Madefor Display',sans-serif;
+  font-size:clamp(56px,8.5vw,104px);
+  font-weight:700;
+  letter-spacing:-.04em;
+  line-height:.98;
+}
+
+.hero-sub{
+  max-width:490px;
+  margin-top:22px;
+  color:var(--ink-soft);
+  font-size:clamp(16px,1.6vw,18px);
+  line-height:1.75;
+}
+
+.hero-cta{
+  margin-top:34px;
+}
+
+/* 右欄：器材 + 裝飾層 ---------------------------------------- */
+.hero-visual{
+  position:relative;
+  isolation:isolate;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:clamp(12px,2vw,26px);
+  align-items:end;
+}
+
+/* 裝飾層：絕對定位，不佔用網格 */
+.hero-deco{
+  position:absolute;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+}
+
+/* 像素點陣（6 × 6） */
+.deco-pixels{
+  position:absolute;
+  width:66px;
+  height:66px;
+  background-image:radial-gradient(circle, rgba(140,29,59,.30) 1.5px, transparent 1.6px);
+  background-size:11px 11px;
+  background-position:0 0;
+}
+
+.deco-pixels--tl{
+  top:-14px;
+  left:-4px;
+}
+
+.deco-pixels--br{
+  right:-4px;
+  bottom:-16px;
+  background-image:radial-gradient(circle, rgba(201,151,59,.62) 1.5px, transparent 1.6px);
+}
+
+/* 十字準星 */
+.deco-plus{
+  position:absolute;
+  width:17px;
+  height:17px;
+  color:var(--maroon);
+}
+
+.deco-plus::before,
+.deco-plus::after{
+  content:"";
+  position:absolute;
+  background:currentColor;
+  opacity:.34;
+}
+
+.deco-plus::before{
+  top:8px;
+  left:0;
+  width:17px;
+  height:1px;
+}
+
+.deco-plus::after{
+  top:0;
+  left:8px;
+  width:1px;
+  height:17px;
+}
+
+.deco-plus--tl{
+  top:6px;
+  left:-24px;
+}
+
+.deco-plus--br{
+  right:-22px;
+  bottom:28px;
+  color:var(--gold-dark);
+}
+
+/* 背景大圓弧 + 內圈虛線 */
+.deco-arc{
+  position:absolute;
+  right:-12%;
+  bottom:-30%;
+  width:62%;
+  aspect-ratio:1 / 1;
+  border:1.5px solid rgba(47,143,130,.20);
+  border-radius:50%;
+}
+
+.deco-arc::before{
+  content:"";
+  position:absolute;
+  inset:16%;
+  border:1.5px dashed rgba(201,151,59,.30);
+  border-radius:50%;
+}
+
+/* 器材圖 ---------------------------------------------------- */
+.hero-figure{
+  position:relative;
+  z-index:1;
+  margin:0;
+}
+
+.hero-figure img{
+  display:block;
+  width:100%;
+  height:auto;
+  aspect-ratio:1 / 1;
+  object-fit:contain;
+  filter:drop-shadow(0 26px 36px rgba(100,19,41,.17));
+}
+
+.hero-figure--b{
+  margin-bottom:clamp(20px,4vw,52px);
+}
+
+/* 器材 A：金色光暈 + 虛線環 */
+.hero-figure--a::before{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  inset:-22%;
+  border-radius:50%;
+  background:radial-gradient(
+    circle closest-side,
+    rgba(201,151,59,.34) 0%,
+    rgba(201,151,59,.12) 46%,
+    rgba(201,151,59,0) 74%
+  );
+  animation:heroGlow 9s ease-in-out infinite;
+}
+
+.hero-figure--a::after{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  inset:-4%;
+  border:1.5px dashed rgba(140,29,59,.28);
+  border-radius:50%;
+}
+
+/* 器材 B：青綠光暈 + 點線環 */
+.hero-figure--b::before{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  inset:-24%;
+  border-radius:50%;
+  background:radial-gradient(
+    circle closest-side,
+    rgba(47,143,130,.24) 0%,
+    rgba(47,143,130,.08) 46%,
+    rgba(47,143,130,0) 74%
+  );
+  animation:heroGlow 11s ease-in-out infinite;
+  animation-delay:-5s;
+}
+
+.hero-figure--b::after{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  inset:-6%;
+  border:1.5px dotted rgba(47,143,130,.44);
+  border-radius:50%;
+}
+
+@keyframes heroGlow{
+  0%,100%{ opacity:.88; }
+  50%{ opacity:1; }
+}
+
+/* 底部：資助機構 + 研究編號 -------------------------------- */
+.hero-foot{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px 40px;
+  padding:24px 0 26px;
+  border-top:1px solid var(--line);
+}
+
+.hero-funders{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:clamp(18px,2.4vw,32px);
+}
+
+.hero-funders img{
+  display:block;
+  width:auto;
+  object-fit:contain;
+}
+
+.funder-wide{
+  height:clamp(30px,3.4vw,40px);
+}
+
+.funder-mark{
+  height:clamp(42px,4.6vw,56px);
+}
+
+.funder-divider{
+  width:1px;
+  height:38px;
+  background:var(--line);
+}
+
+.hero-ref{
+  color:var(--maroon-dark);
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:.08em;
+  white-space:nowrap;
+}
+
+.hero-ref::before{
+  content:"";
+  display:inline-block;
+  width:6px;
+  height:6px;
+  margin-right:9px;
+  vertical-align:middle;
+  background:var(--gold);
+  border-radius:50%;
+}
+
+/* ============================================================
+   6. 計劃簡介 #about
+   ============================================================ */
+#about{
+  min-height:680px;
+  display:flex;
+  align-items:center;
+  background:
+    radial-gradient(
+      circle at 88% 17%,
+      rgba(201,151,59,.20) 0 7%,
+      transparent 7.2%
+    ),
+    radial-gradient(
+      circle at 92% 26%,
+      transparent 0 10%,
+      rgba(140,29,59,.08) 10.2% 10.8%,
+      transparent 11%
+    ),
+    linear-gradient(135deg,#FAEDF1 0%,#FFFDFC 56%,#FFF9ED 100%);
+}
+
+#about::after{
+  content:"";
+  position:absolute;
+  right:-130px;
+  bottom:-260px;
+  width:560px;
+  height:560px;
+  border:2px solid rgba(47,143,130,.16);
+  border-radius:50%;
+}
+
+#about .head{
+  max-width:900px;
+  margin-bottom:46px;
+}
+
+#about .head h2{
+  max-width:900px;
+  color:var(--maroon-dark);
+  font-size:clamp(44px,7vw,78px);
+  line-height:1;
+}
+
+.about-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1.55fr) minmax(260px,.65fr);
+  gap:72px;
+  align-items:end;
+}
+
+.about-grid > div:first-child{
+  position:relative;
+  padding-left:28px;
+  border-left:4px solid var(--gold);
+}
+
+.about-grid p{
+  max-width:720px;
+  margin-bottom:18px;
+  color:var(--ink-soft);
+  font-size:17px;
+  line-height:1.85;
+}
+
+.about-grid p:last-child{
+  margin-bottom:0;
+}
+
+.about-card{
+  position:relative;
+  padding:30px 30px 32px;
+  color:#fff;
+  background:var(--maroon);
+  border-radius:28px 28px 28px 6px;
+  box-shadow:var(--shadow);
+}
+
+.about-card::before{
+  content:"";
+  position:absolute;
+  top:-12px;
+  right:28px;
+  width:24px;
+  height:24px;
+  background:var(--gold);
+  border-radius:50%;
+}
+
+.about-card .big{
+  margin-bottom:12px;
+  color:#F7DCA8;
+  font-family:'Wix Madefor Display',sans-serif;
+  font-size:15px;
+  font-weight:700;
+  letter-spacing:.05em;
+}
+
+.about-card p{
+  margin:0;
+  padding:0;
+  color:#FFF7F8;
+  border:0;
+  font-size:16px;
+  line-height:1.7;
+}
+
+/* ============================================================
+   7. 研究設計 #design
+   ============================================================ */
+#design{
+  background:#fff;
+}
+
+.compare{
+  position:relative;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:18px;
+  align-items:stretch;
+}
+
+.compare .card{
+  min-height:220px;
+  padding:42px 38px;
+  border-radius:24px;
+}
+
+.compare .card.a{
+  background:#F3F0EF;
+  border:1px solid #E7DFDD;
+}
+
+.compare .card.b{
+  color:#fff;
+  background:linear-gradient(
+    145deg,
+    var(--maroon) 0%,
+    var(--maroon-dark) 100%
+  );
+  box-shadow:0 24px 50px -35px rgba(100,19,41,.75);
+}
+
+.compare .card h3{
+  margin-bottom:14px;
+  font-size:23px;
+  line-height:1.3;
+}
+
+.compare .card.b h3{
+  color:#fff;
+}
+
+.compare .card p{
+  max-width:400px;
+  color:var(--ink-soft);
+  font-size:15.5px;
+  line-height:1.75;
+}
+
+.compare .card.b p{
+  color:#F4DEE4;
+}
+
+.vs{
+  position:absolute;
+  z-index:2;
+  top:50%;
+  left:50%;
+  display:flex;
+  width:58px;
+  height:58px;
+  align-items:center;
+  justify-content:center;
+  transform:translate(-50%,-50%);
+  color:var(--maroon-dark);
+  background:var(--gold-tint);
+  border:5px solid #fff;
+  border-radius:50%;
+  font-family:'Wix Madefor Display',sans-serif;
+  font-size:13px;
+  font-weight:700;
+}
+
+#design > .wrap > .head[style]{
+  margin-top:100px !important;
+}
+
+/* 1–2–3–4 進度列 */
+.steps{
+  position:relative;
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:0;
+  margin-top:16px;
+}
+
+.steps::before{
+  content:"";
+  position:absolute;
+  z-index:0;
+  top:25px;
+  left:26px;
+  right:calc(25% - 26px);
+  height:2px;
+  background:linear-gradient(
+    90deg,
+    var(--maroon) 0%,
+    #A34B62 33%,
+    var(--gold-dark) 66%,
+    var(--teal) 100%
+  );
+}
+
+.step{
+  position:relative;
+  z-index:1;
+  min-width:0;
+  padding:0 24px 10px 0;
+  border:0;
+  border-radius:0;
+}
+
+.step .n{
+  display:flex;
+  width:52px;
+  height:52px;
+  align-items:center;
+  justify-content:center;
+  margin-bottom:20px;
+  color:#fff;
+  background:var(--maroon);
+  border:6px solid #fff;
+  border-radius:50%;
+  font-family:'Wix Madefor Display',sans-serif;
+  font-size:18px;
+  font-weight:700;
+  box-shadow:0 0 0 1px var(--line);
+}
+
+.step:nth-child(2) .n{
+  background:#A34B62;
+}
+
+.step:nth-child(3) .n{
+  background:var(--gold-dark);
+}
+
+.step:nth-child(4) .n{
+  background:var(--teal);
+}
+
+.step p{
+  max-width:210px;
+  color:var(--ink-soft);
+  font-size:15px;
+  line-height:1.65;
+}
+
+/* 前置準備 */
+.prep-row{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:0;
+  margin-top:68px;
+  padding:30px 0;
+  background:var(--gold-tint);
+  border-radius:22px;
+}
+
+.prep{
+  padding:4px 30px;
+}
+
+.prep + .prep{
+  border-left:1px solid rgba(148,105,30,.22);
+}
+
+.prep .t{
+  margin-bottom:7px;
+  color:var(--ink);
+  font-size:16px;
+  font-weight:700;
+}
+
+.prep p{
+  color:var(--ink-soft);
+  font-size:14.5px;
+  line-height:1.65;
+}
+
+/* ============================================================
+   8. 工作坊執行詳情 #workshop-structure
+   ============================================================ */
+#workshop-structure{
+  background:#FFFDFC;
+}
+
+.cat-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:28px;
+  align-items:start;
+}
+
+.cat-card{
+  min-height:310px;
+  padding:28px 0 0;
+  border:0;
+  border-top:5px solid var(--maroon);
+  border-radius:0;
+}
+
+.cat-card:nth-child(2){
+  margin-top:54px;
+  border-color:var(--gold);
+}
+
+.cat-card:nth-child(3){
+  border-color:var(--teal);
+}
+
+.cat-card:nth-child(4){
+  margin-top:54px;
+  border-color:var(--maroon-dark);
+}
+
+.cat-card .label{
+  min-height:52px;
+  margin-bottom:18px;
+  color:var(--ink);
+  font-family:'Wix Madefor Display',sans-serif;
+  font-size:18px;
+  font-weight:700;
+  line-height:1.4;
+}
+
+.cat-card ul{
+  list-style:none;
+}
+
+.cat-card li{
+  position:relative;
+  margin-bottom:13px;
+  padding-left:20px;
+  color:var(--ink-soft);
+  font-size:14.5px;
+  line-height:1.65;
+}
+
+.cat-card li:last-child{
+  margin-bottom:0;
+}
+
+.cat-card li::before{
+  content:"";
+  position:absolute;
+  top:10px;
+  left:0;
+  width:8px;
+  height:2px;
+  background:var(--gold);
+}
+
+.note-pill{
+  margin-top:20px;
+  padding:12px 15px;
+  color:var(--maroon-dark);
+  background:var(--maroon-soft);
+  border-radius:8px;
+  font-size:13.5px;
+  font-weight:700;
+}
+
+/* ============================================================
+   9. 工作坊主題 #workshop-topics
+   ============================================================ */
+#workshop-topics{
+  background:linear-gradient(
+    120deg,
+    #FAEEF1 0%,
+    #FFF9ED 100%
+  ) !important;
+}
+
+#workshop-topics::after{
+  content:"04";
+  position:absolute;
+  right:4vw;
+  bottom:-90px;
+  color:rgba(140,29,59,.055);
+  font-family:'Wix Madefor Display',sans-serif;
+  font-size:260px;
+  font-weight:700;
+  line-height:1;
+}
+
+.topic-list{
+  position:relative;
+  z-index:1;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:0 70px;
+  list-style:none;
+  counter-reset:topics;
+}
+
+.topic-list li{
+  position:relative;
+  min-height:78px;
+  padding:20px 10px 20px 58px;
+  color:var(--ink);
+  border-bottom:1px solid rgba(140,29,59,.15);
+  font-size:16px;
+  line-height:1.55;
+  counter-increment:topics;
+}
+
+.topic-list li::before{
+  content:counter(topics,decimal-leading-zero);
+  position:absolute;
+  top:17px;
+  left:0;
+  color:var(--maroon);
+  font-family:'Wix Madefor Display',sans-serif;
+  font-size:15px;
+  font-weight:700;
+}
+
+/* ============================================================
+   10. 應用程式 #app
+   ============================================================ */
+#app{
+  background:#fff;
+}
+
+.app-grid{
+  display:grid;
+  grid-template-columns:1.05fr .95fr;
+  gap:90px;
+  align-items:center;
+}
+
+.app-header{
+  display:flex;
+  align-items:center;
+  gap:22px;
+  margin-bottom:26px;
+}
+
+.app-icon{
+  flex:none;
+  width:92px;
+  height:92px;
+  overflow:hidden;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:25px;
+  box-shadow:0 18px 32px -18px rgba(140,29,59,.45);
+}
+
+.app-icon img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+
+.app-title h2{
+  margin-bottom:2px;
+  color:var(--maroon-dark);
+  font-size:clamp(31px,4vw,46px);
+  line-height:1.1;
+}
+
+.app-title .en{
+  color:var(--ink-soft);
+  font-size:15px;
+  font-weight:600;
+  letter-spacing:.035em;
+}
+
+.app-grid p.lead{
+  max-width:580px;
+  margin-bottom:38px;
+  color:var(--ink-soft);
+  font-size:17px;
+  line-height:1.75;
+}
+
+.feature{
+  display:grid;
+  grid-template-columns:46px 1fr;
+  gap:18px;
+  margin-bottom:26px;
+}
+
+.feature:last-of-type{
+  margin-bottom:0;
+}
+
+.feature .ico{
+  display:flex;
+  width:44px;
+  height:44px;
+  align-items:center;
+  justify-content:center;
+  color:var(--maroon);
+  background:var(--gold-tint);
+  border-radius:50%;
+  font-family:'Wix Madefor Display',sans-serif;
+  font-size:16px;
+  font-weight:700;
+}
+
+.feature h3{
+  margin-bottom:4px;
+  font-size:17px;
+}
+
+.feature p{
+  color:var(--ink-soft);
+  font-size:14.5px;
+  line-height:1.65;
+}
+
+.store-badges{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:36px;
+}
+
+.badge{
+  display:inline-flex;
+  min-height:40px;
+  align-items:center;
+  gap:9px;
+  padding:8px 15px;
+  color:var(--ink-soft);
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:999px;
+  font-size:13px;
+}
+
+.badge::before{
+  content:"";
+  width:7px;
+  height:7px;
+  background:var(--gold);
+  border-radius:50%;
+}
+
+#app .app-grid > div:last-child{
+  position:relative;
+  min-height:590px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+#app .app-grid > div:last-child::before{
+  content:"";
+  position:absolute;
+  width:460px;
+  height:460px;
+  background:
+    radial-gradient(
+      circle,
+      var(--gold-tint) 0 47%,
+      transparent 47.5%
+    ),
+    radial-gradient(
+      circle,
+      transparent 0 59%,
+      rgba(47,143,130,.18) 59.5% 60%,
+      transparent 60.5%
+    );
+  border-radius:50%;
+}
+
+.phone-mock{
+  position:relative;
+  z-index:1;
+  width:290px;
+  max-width:100%;
+  margin:0 auto;
+  padding:14px;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:34px;
+  box-shadow:0 34px 70px -30px rgba(100,19,41,.45);
+  transform:rotate(2deg);
+}
+
+.phone-mock img{
+  display:block;
+  width:100%;
+  height:auto;
+  border-radius:23px;
+}
+
+/* ============================================================
+   11. AI 助手 .chatbot-section
+   ============================================================ */
+.chatbot-section{
+  background:var(--bg-tint);
+}
+
+.chatbot-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:56px;
+  align-items:start;
+}
+
+.chatbot-copy{
+  position:sticky;
+  top:40px;
+  padding-top:18px;
+}
+
+.chatbot-copy::before{
+  content:"AI 設備推薦";
+  display:inline-block;
+  margin-bottom:18px;
+  padding:7px 12px;
+  color:var(--maroon);
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:999px;
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.08em;
+}
+
+.chatbot-copy h2{
+  margin-bottom:18px;
+  font-size:clamp(34px,4.5vw,52px);
+  line-height:1.12;
+}
+
+.chatbot-copy p.lead{
+  margin-bottom:30px;
+  color:var(--ink-soft);
+  font-size:17px;
+  line-height:1.75;
+}
+
+.app-feature-list{
+  list-style:none;
+}
+
+.app-feature-list li{
+  position:relative;
+  margin-bottom:13px;
+  padding-left:20px;
+  color:var(--ink-soft);
+  font-size:14.5px;
+}
+
+.app-feature-list li:last-child{
+  margin-bottom:0;
+}
+
+.app-feature-list li .dot{
+  position:absolute;
+  top:9px;
+  left:0;
+  width:6px;
+  height:6px;
+  background:var(--gold);
+  border-radius:50%;
+}
+
+.chat-thread{
+  display:flex;
+  flex-direction:column;
+  gap:20px;
+}
+
+.user-row{
+  display:flex;
+  justify-content:flex-end;
+}
+
+.user-bubble{
+  max-width:80%;
+  padding:16px 22px;
+  color:#fff;
+  background:var(--maroon);
+  border-radius:20px 20px 4px 20px;
+  font-size:15px;
+  font-weight:600;
+}
+
+.bot-row{
+  display:flex;
+  gap:14px;
+  align-items:flex-start;
+}
+
+.bot-avatar{
+  flex:none;
+  display:flex;
+  width:44px;
+  height:44px;
+  align-items:center;
+  justify-content:center;
+  background:#fff;
+  border:1.5px solid var(--maroon);
+  border-radius:50%;
+}
+
+.bot-card{
+  flex:1;
+  padding:20px 22px;
+  color:var(--ink);
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:4px 20px 20px 20px;
+  font-size:14.5px;
+}
+
+.rec-list{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  margin-left:58px;
+}
+
+.rec-card{
+  display:flex;
+  gap:16px;
+  align-items:center;
+  padding:14px;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:16px;
+}
+
+.rec-card img{
+  flex:none;
+  width:76px;
+  height:76px;
+  object-fit:cover;
+  background:var(--bg-tint);
+  border-radius:10px;
+}
+
+.rec-card .t{
+  margin-bottom:6px;
+  color:var(--ink);
+  font-size:15px;
+  font-weight:600;
+}
+
+.rec-card a{
+  color:var(--maroon);
+  font-size:13.5px;
+  font-weight:600;
+  text-decoration:none;
+}
+
+/* ============================================================
+   12. 研究成效 #impact
+   ============================================================ */
+#impact{
+  background:#fff;
+}
+
+.impact-grid{
+  display:grid;
+  grid-template-columns:.85fr 1.15fr;
+  gap:80px;
+  align-items:center;
+}
+
+#impact .head{
+  margin-bottom:30px !important;
+}
+
+.impact-list{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:0 30px;
+  margin-top:6px;
+  list-style:none;
+}
+
+.impact-list li{
+  position:relative;
+  padding:16px 0 16px 26px;
+  color:var(--ink-soft);
+  border-bottom:1px solid var(--line);
+  font-size:15px;
+}
+
+.impact-list li::before{
+  content:"";
+  position:absolute;
+  top:25px;
+  left:2px;
+  width:9px;
+  height:9px;
+  background:var(--teal);
+  border-radius:50%;
+  box-shadow:0 0 0 5px var(--teal-soft);
+}
+
+.quote-box{
+  position:relative;
+  padding:56px 48px 50px;
+  color:#fff;
+  background:linear-gradient(
+    145deg,
+    #2C2024 0%,
+    #1D1518 100%
+  );
+  border-radius:8px 34px 34px 34px;
+  font-family:'Wix Madefor Display',sans-serif;
+  font-size:21px;
+  font-weight:600;
+  line-height:1.6;
+  box-shadow:var(--shadow);
+}
+
+.quote-box::before{
+  content:"“";
+  position:absolute;
+  top:-36px;
+  left:28px;
+  color:var(--gold);
+  font-family:Georgia,serif;
+  font-size:100px;
+  line-height:1;
+}
+
+.quote-box p{
+  margin-top:18px;
+}
+
+.quote-box p:first-child{
+  margin-top:0;
+}
+
+.quote-box span{
+  color:#F0C977;
+}
+
+/* ============================================================
+   13. 研究團隊 #team
+   ============================================================ */
+#team{
+  background:#F8F1F3 !important;
+}
+
+.team-subhead{
+  display:flex;
+  align-items:center;
+  gap:18px;
+  margin-bottom:28px;
+  padding:0;
+  color:var(--maroon);
+  border:0;
+  font-size:18px;
+  font-weight:700;
+}
+
+.team-subhead::after{
+  content:"";
+  flex:1;
+  height:1px;
+  background:var(--line);
+}
+
+.team-group{
+  margin-bottom:62px;
+}
+
+.team-group:last-child{
+  margin-bottom:0;
+}
+
+.team-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:28px;
+}
+
+.person{
+  display:flex;
+  min-width:0;
+  flex-direction:column;
+  padding:14px 14px 20px;
+  text-align:left;
+  background:#fff;
+  border:1px solid rgba(140,29,59,.1);
+  border-radius:22px;
+  box-shadow:0 18px 42px -34px rgba(74,29,41,.4);
+}
+
+.avatar{
+  position:relative;
+  width:100%;
+  height:auto;
+  aspect-ratio:4 / 5;
+  overflow:hidden;
+  margin:0 0 17px;
+  background:#F8F4F5;
+  border:1px solid var(--line);
+  border-radius:16px;
+}
+
+.avatar img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  object-position:center bottom;
+}
+
+.person .name{
+  padding:0 7px;
+  color:var(--ink);
+  font-size:16px;
+  font-weight:700;
+  line-height:1.45;
+}
+
+.person .aff{
+  margin-top:6px;
+  padding:0 7px;
+  color:var(--ink-soft);
+  font-size:13px;
+  line-height:1.55;
+}
+
+/* 首席研究員 */
+.team-group--lead .team-grid{
+  grid-template-columns:1fr;
+}
+
+.team-group--lead .person{
+  display:grid;
+  grid-template-columns:150px minmax(0,1fr);
+  grid-template-rows:auto auto;
+  gap:5px 28px;
+  max-width:560px;
+  align-items:center;
+  padding:20px;
+}
+
+.team-group--lead .avatar{
+  grid-column:1;
+  grid-row:1 / 3;
+  width:150px;
+  margin:0;
+  aspect-ratio:4 / 5;
+}
+
+.team-group--lead .name{
+  grid-column:2;
+  grid-row:1;
+  align-self:end;
+  padding:0;
+  font-family:'Wix Madefor Display',sans-serif;
+  font-size:22px;
+}
+
+.team-group--lead .aff{
+  grid-column:2;
+  grid-row:2;
+  align-self:start;
+  margin-top:0;
+  padding:0;
+  font-size:14px;
+}
+
+/* ============================================================
+   14. 合作夥伴 #partners
+   ============================================================ */
+#partners{
+  background:#fff;
+}
+
+.partner-logos{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:18px;
+  align-items:stretch;
+  padding:36px 0;
+  border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+}
+
+.partner-logo{
+  display:flex;
+  min-width:0;
+  height:130px;
+  align-items:center;
+  justify-content:center;
+  padding:22px;
+  background:#fff;
+  border:1px solid rgba(140,29,59,.09);
+  border-radius:16px;
+}
+
+/* 支援原有 HTML，以及加入 .partner-logo 容器後的 HTML */
+.partner-logos > img{
+  box-sizing:border-box;
+  display:block;
+  width:100%;
+  height:130px;
+  max-width:none;
+  padding:26px 20px;
+  object-fit:contain;
+  object-position:center;
+  background:#fff;
+  border:1px solid rgba(140,29,59,.09);
+  border-radius:16px;
+  filter:none;
+  opacity:.88;
+  transition:opacity .18s ease,transform .18s ease;
+}
+
+.partner-logo img{
+  display:block;
+  width:100%;
+  height:76px;
+  max-width:190px;
+  padding:0;
+  object-fit:contain;
+  object-position:center;
+  filter:none;
+  opacity:.88;
+  transition:opacity .18s ease,transform .18s ease;
+}
+
+.partner-logos > img:hover,
+.partner-logo:hover img{
+  opacity:1;
+  transform:scale(1.03);
+}
+
+/* 香港理工大學標誌 */
+.partner-logos > img:first-child{
+  padding:31px 25px;
+}
+
+.partner-logo--polyu img{
+  width:88%;
+  max-width:180px;
+}
+
+.logo-lg,
+.logo-md{
+  height:130px;
+}
+
+.partner-note{
+  margin-top:20px;
+  color:var(--ink-soft);
+  font-size:13.5px;
+}
+
+/* ============================================================
+   15. 支持我們 #support
+   ============================================================ */
+#support{
+  padding-top:70px;
+  background:#fff;
+  border-top:0;
+}
+
+.support{
+  position:relative;
+  display:grid;
+  grid-template-columns:1.2fr .8fr;
+  gap:64px;
+  overflow:hidden;
+  padding:72px 64px;
+  color:#fff;
+  background:
+    radial-gradient(
+      circle at 95% 10%,
+      rgba(201,151,59,.27) 0 10%,
+      transparent 10.5%
+    ),
+    linear-gradient(
+      135deg,
+      var(--maroon) 0%,
+      var(--maroon-dark) 100%
+    );
+  border-radius:34px 34px 8px 34px;
+}
+
+.support::after{
+  content:"";
+  position:absolute;
+  right:-85px;
+  bottom:-145px;
+  width:300px;
+  height:300px;
+  border:2px solid rgba(255,255,255,.12);
+  border-radius:50%;
+}
+
+.support h2{
+  color:#fff;
+  font-size:clamp(36px,5vw,54px);
+  font-weight:700;
+  line-height:1.1;
+}
+
+.support p{
+  max-width:520px;
+  margin-top:18px;
+  color:#F4DDE3;
+  font-size:16px;
+  line-height:1.75;
+}
+
+.support .ctas{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin-top:30px;
+}
+
+.support .btn-fill{
+  color:var(--maroon-dark);
+  background:#fff;
+}
+
+.contact-card{
+  position:relative;
+  z-index:1;
+  align-self:center;
+  padding:30px;
+  background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:18px;
+  font-size:14.5px;
+  backdrop-filter:blur(8px);
+}
+
+.contact-card .t{
+  margin-bottom:5px;
+  font-size:17px;
+  font-weight:700;
+}
+
+.contact-card .r{
+  margin-bottom:3px;
+  color:#F3DCE2;
+  overflow-wrap:anywhere;
+}
+
+.contact-card .divider{
+  height:1px;
+  margin:18px 0;
+  background:rgba(255,255,255,.2);
+}
+
+/* ============================================================
+   16. 響應式 — 平板
+   ============================================================ */
+@media (max-width:960px){
+  section{
+    padding:88px 0;
+  }
+
+  .hero{
+    padding-top:56px;
+  }
+
+  .hero-inner{
+    grid-template-columns:1fr;
+    gap:48px;
+    padding-bottom:44px;
+  }
+
+  .hero-visual{
+    max-width:520px;
+  }
+
+  .about-grid,
+  .app-grid,
+  .chatbot-grid,
+  .impact-grid,
+  .support{
+    grid-template-columns:1fr;
+  }
+
+  .about-grid{
+    gap:38px;
+  }
+
+  .about-card{
+    max-width:520px;
+  }
+
+  .cat-grid{
+    grid-template-columns:1fr 1fr;
+  }
+
+  .cat-card:nth-child(2),
+  .cat-card:nth-child(4){
+    margin-top:38px;
+  }
+
+  .app-grid{
+    gap:45px;
+  }
+
+  #app .app-grid > div:last-child{
+    min-height:500px;
+  }
+
+  .chatbot-copy{
+    position:static;
+  }
+
+  .impact-grid{
+    gap:54px;
+  }
+
+  .team-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+
+  .partner-logos{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+  }
+
+  .support{
+    gap:38px;
+    padding:58px 48px;
+  }
+}
+
+/* ============================================================
+   16b. 響應式 — 流動裝置
+   ============================================================ */
+@media (max-width:680px){
+  .wrap{
+    width:min(calc(100% - 36px),1160px);
+  }
+
+  section{
+    padding:72px 0;
+  }
+
+  .hero{
+    padding-top:44px;
+  }
+
+  .hero-logo{
+    width:168px;
+    margin-bottom:26px;
+  }
+
+  .hero-title{
+    font-size:clamp(46px,13vw,62px);
+  }
+
+  .hero-sub{
+    margin-top:16px;
+    font-size:16px;
+  }
+
+  .hero-cta{
+    margin-top:26px;
+  }
+
+  .hero-visual{
+    max-width:400px;
+  }
+
+  /* 裝飾縮小 */
+  .deco-pixels{
+    width:54px;
+    height:54px;
+    background-size:9px 9px;
+    background-image:radial-gradient(circle, rgba(140,29,59,.30) 1.2px, transparent 1.3px);
+  }
+
+  .deco-pixels--tl{
+    top:-12px;
+    left:-2px;
+  }
+
+  .deco-pixels--br{
+    right:-2px;
+    bottom:-14px;
+    background-image:radial-gradient(circle, rgba(201,151,59,.62) 1.2px, transparent 1.3px);
+  }
+
+  .deco-plus--tl{
+    left:-16px;
+  }
+
+  .deco-plus--br{
+    right:-14px;
+    bottom:22px;
+  }
+
+  .deco-arc{
+    right:-16%;
+    bottom:-26%;
+    width:66%;
+  }
+
+  .hero-foot{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:18px;
+    padding:22px 0 24px;
+  }
+
+  .hero-funders{
+    gap:18px;
+  }
+
+  .head{
+    margin-bottom:38px;
+  }
+
+  .head h2{
+    font-size:34px;
+  }
+
+  .head p,
+  .about-grid p,
+  .app-grid p.lead,
+  .chatbot-copy p.lead{
+    font-size:16px;
+  }
+
+  #about{
+    min-height:auto;
+    padding-top:82px;
+  }
+
+  #about .head h2{
+    font-size:48px;
+  }
+
+  .about-grid > div:first-child{
+    padding-left:20px;
+  }
+
+  .compare{
+    grid-template-columns:1fr;
+    gap:18px;
+  }
+
+  .compare .card{
+    min-height:auto;
+    padding:30px 26px;
+  }
+
+  .vs{
+    position:relative;
+    top:auto;
+    left:50%;
+    margin:-7px 0;
+    transform:translateX(-50%);
+  }
+
+  #design > .wrap > .head[style]{
+    margin-top:72px !important;
+  }
+
+  .steps{
+    grid-template-columns:1fr;
+    gap:0;
+  }
+
+  .steps::before{
+    top:26px;
+    right:auto;
+    bottom:56px;
+    left:25px;
+    width:2px;
+    height:auto;
+    background:linear-gradient(
+      180deg,
+      var(--maroon) 0%,
+      #A34B62 33%,
+      var(--gold-dark) 66%,
+      var(--teal) 100%
+    );
+  }
+
+  .step{
+    display:grid;
+    grid-template-columns:52px minmax(0,1fr);
+    gap:18px;
+    padding:0 0 30px;
+  }
+
+  .step:last-child{
+    padding-bottom:0;
+  }
+
+  .step .n{
+    margin-bottom:0;
+  }
+
+  .step p{
+    max-width:none;
+    padding-top:9px;
+  }
+
+  .prep-row{
+    grid-template-columns:1fr;
+    padding:16px 24px;
+  }
+
+  .prep{
+    padding:20px 0;
+  }
+
+  .prep + .prep{
+    border-top:1px solid rgba(148,105,30,.22);
+    border-left:0;
+  }
+
+  .cat-grid{
+    grid-template-columns:1fr;
+    gap:38px;
+  }
+
+  .cat-card{
+    min-height:auto;
+  }
+
+  .cat-card:nth-child(2),
+  .cat-card:nth-child(4){
+    margin-top:0;
+  }
+
+  .cat-card .label{
+    min-height:auto;
+  }
+
+  .topic-list{
+    grid-template-columns:1fr;
+  }
+
+  .topic-list li{
+    min-height:auto;
+    padding-right:0;
+  }
+
+  #app .app-grid > div:last-child{
+    min-height:440px;
+  }
+
+  #app .app-grid > div:last-child::before{
+    width:360px;
+    height:360px;
+  }
+
+  .phone-mock{
+    width:245px;
+  }
+
+  .chatbot-grid{
+    gap:44px;
+  }
+
+  .user-bubble{
+    max-width:90%;
+  }
+
+  .bot-card{
+    padding:18px;
+  }
+
+  .rec-list{
+    margin-left:0;
+  }
+
+  .rec-card img{
+    width:68px;
+    height:68px;
+  }
+
+  .impact-list{
+    grid-template-columns:1fr;
+  }
+
+  .quote-box{
+    padding:48px 28px 34px;
+    font-size:18px;
+  }
+
+  .team-grid{
+    grid-template-columns:1fr 1fr;
+    gap:18px;
+  }
+
+  .person{
+    padding:10px 10px 17px;
+    border-radius:17px;
+  }
+
+  .avatar{
+    margin-bottom:13px;
+    border-radius:12px;
+  }
+
+  .person .name{
+    padding:0 4px;
+    font-size:14px;
+  }
+
+  .person .aff{
+    padding:0 4px;
+    font-size:12px;
+  }
+
+  .team-group--lead .person{
+    grid-template-columns:100px minmax(0,1fr);
+    gap:4px 18px;
+    padding:16px;
+  }
+
+  .team-group--lead .avatar{
+    width:100px;
+  }
+
+  .team-group--lead .name{
+    padding:0;
+    font-size:18px;
+  }
+
+  .team-group--lead .aff{
+    padding:0;
+  }
+
+  .partner-logos{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+  }
+
+  .partner-logo,
+  .partner-logos > img{
+    height:110px;
+  }
+
+  .partner-logo{
+    padding:16px;
+  }
+
+  .partner-logo img{
+    height:66px;
+    max-width:160px;
+  }
+
+  .partner-logos > img{
+    padding:20px 16px;
+  }
+
+  .partner-logos > img:first-child{
+    padding:25px 20px;
+  }
+
+  .logo-lg,
+  .logo-md{
+    height:110px;
+  }
+
+  .support{
+    gap:34px;
+    padding:48px 26px;
+    border-radius:26px 26px 6px 26px;
+  }
+
+  .support .btn{
+    width:100%;
+    text-align:center;
+  }
+
+  .contact-card{
+    padding:24px 20px;
+  }
+}
+
+/* ============================================================
+   16c. 響應式 — 小手機
+   ============================================================ */
+@media (max-width:430px){
+  .hero-title{
+    font-size:44px;
+  }
+
+  .hero-visual{
+    gap:10px;
+  }
+
+  .hero-figure--b{
+    margin-bottom:20px;
+  }
+
+  .funder-wide{
+    height:28px;
+  }
+
+  .funder-mark{
+    height:40px;
+  }
+
+  .funder-divider{
+    height:28px;
+  }
+
+  .hero-ref{
+    font-size:12px;
+  }
+
+  #about .head h2{
+    font-size:42px;
+  }
+
+  .app-header{
+    align-items:flex-start;
+  }
+
+  .app-icon{
+    width:76px;
+    height:76px;
+    border-radius:20px;
+  }
+
+  .app-title h2{
+    font-size:31px;
+  }
+
+  .feature{
+    grid-template-columns:40px 1fr;
+    gap:14px;
+  }
+
+  .feature .ico{
+    width:40px;
+    height:40px;
+  }
+
+  .bot-row{
+    gap:9px;
+  }
+
+  .bot-avatar{
+    width:38px;
+    height:38px;
+  }
+
+  .rec-card{
+    align-items:flex-start;
+  }
+
+  .team-grid{
+    grid-template-columns:1fr;
+  }
+
+  .team-group--lead .person{
+    grid-template-columns:90px minmax(0,1fr);
+  }
+
+  .team-group--lead .avatar{
+    width:90px;
+  }
+
+  .partner-logos{
+    grid-template-columns:1fr;
+  }
+
+  .partner-logo,
+  .partner-logos > img{
+    height:112px;
+  }
+}
+
+/* ============================================================
+   17. 減少動態效果
+   ============================================================ */
+@media (prefers-reduced-motion:reduce){
+  html{
+    scroll-behavior:auto;
+  }
+
+  *,
+  *::before,
+  *::after{
+    scroll-behavior:auto !important;
+    transition:none !important;
+    animation:none !important;
+  }
+
+  .phone-mock{
+    transform:none;
+  }
+}

@@ -1,0 +1,28 @@
+import React from "react";
+import renderer, { act } from "react-test-renderer";
+import { AppState } from "react-native";
+import Slider from "@react-native-community/slider";
+import AudioPlayer from "../AudioPlayer";
+import { createPlaybackCoverage } from "../../utils/learningCoverage";
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+let mockStatus; const mockPlayer = { volume: 1, play: jest.fn(), pause: jest.fn(), seekTo: jest.fn().mockResolvedValue() };
+jest.mock("expo-audio", () => ({ useAudioPlayer: () => mockPlayer, useAudioPlayerStatus: () => mockStatus }));
+jest.mock("@react-navigation/native", () => ({ useIsFocused: () => true }));
+jest.mock("expo-speech", () => ({ stop: jest.fn().mockResolvedValue() }));
+jest.mock("../../utils/audioMode", () => ({ ensurePlaybackAudioMode: jest.fn().mockResolvedValue() }));
+jest.mock("@expo/vector-icons", () => ({ MaterialIcons: "MaterialIcons" }));
+let tree; let listeners; let sample; let range;
+beforeEach(() => { jest.useFakeTimers(); mockStatus = { playing: false, currentTime: 0, duration: 100 }; listeners = new Set(); range = jest.fn(); sample = createPlaybackCoverage(range); jest.spyOn(AppState, "addEventListener").mockImplementation((_, callback) => { listeners.add(callback); return { remove: () => listeners.delete(callback) }; }); });
+afterEach(async () => { if (tree) await act(async () => tree.unmount()); tree = null; jest.restoreAllMocks(); jest.useRealTimers(); });
+const update = async (next) => act(async () => { jest.advanceTimersByTime(1000); mockStatus = { ...mockStatus, ...next }; tree.update(<AudioPlayer audioFile={1} onPlaybackSample={sample} />); });
+test("recorded audio forwards genuine play intervals; dragging and background do not count", async () => {
+	await act(async () => { tree = renderer.create(<AudioPlayer audioFile={1} onPlaybackSample={sample} />); });
+	await update({ playing: true }); expect(range).not.toHaveBeenCalled();
+	await update({ currentTime: 1 }); expect(range).toHaveBeenLastCalledWith(0, 1000, 100000);
+	await act(async () => tree.root.findByType(Slider).props.onSlidingStart());
+	await update({ currentTime: 80 }); expect(range).toHaveBeenCalledTimes(1);
+	await act(async () => tree.root.findByType(Slider).props.onSlidingComplete(80));
+	await update({ currentTime: 81 }); await update({ currentTime: 82 }); expect(range).toHaveBeenCalledTimes(2);
+	await act(async () => listeners.forEach((listener) => listener("background")));
+	await update({ currentTime: 99, playing: false }); expect(range).toHaveBeenCalledTimes(2); expect(mockPlayer.pause).toHaveBeenCalled();
+});

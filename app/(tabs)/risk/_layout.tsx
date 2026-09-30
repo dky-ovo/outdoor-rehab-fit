@@ -4,19 +4,26 @@ import { TouchableOpacity } from "react-native";
 import { LocaleContext } from "../../../contexts/LocaleContext";
 import { Ionicons } from "@expo/vector-icons";
 import { RFValue } from "react-native-responsive-fontsize";
+import { getReturnStackOptions } from "../../../utils/stackNavigationOptions";
 
 export default function RiskLayout() {
 	const { i18n } = useContext(LocaleContext);
 
 	const renderBackButton = () => (
-		<TouchableOpacity onPress={() => router.navigate("/(tabs)")}>
+		<TouchableOpacity onPress={() => router.replace("/(tabs)/other" as never)}>
 			<Ionicons name="chevron-back" size={RFValue(18)} color={"#000"} />
+		</TouchableOpacity>
+	);
+	const renderRiskBackButton = () => (
+		<TouchableOpacity onPress={() => router.dismissTo("/(tabs)/risk")}>
+			<Ionicons name="chevron-back" size={RFValue(18)} color="#000" />
 		</TouchableOpacity>
 	);
 
 	return (
 		<Stack
 			screenOptions={{
+				...getReturnStackOptions(),
 				headerShown: false,
 			}}
 		>
@@ -33,6 +40,7 @@ export default function RiskLayout() {
 				options={{
 					title: i18n.t("parq"),
 					headerShown: true,
+					headerLeft: renderRiskBackButton,
 				}}
 			/>
 			<Stack.Screen
@@ -40,6 +48,7 @@ export default function RiskLayout() {
 				options={{
 					title: i18n.t("sprm"),
 					headerShown: true,
+					headerLeft: renderRiskBackButton,
 				}}
 			/>
 		</Stack>

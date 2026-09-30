@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-09-21",
+  "purpose": "Unmodified upstream license texts and supporting source documentation for bundled offline speech. SHA-256 values identify exact UTF-8 bytes, not a legal or security assurance.",
+  "sources": [
+    {
+      "file": "sherpa-onnx-1.13.8-LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/LICENSE",
+      "size": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "file": "onnxruntime-1.28.2-LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/microsoft/onnxruntime/33ca9628233dc8f002435e868d4c2e9f82766ca1/LICENSE",
+      "size": 1073,
+      "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
+    },
+    {
+      "file": "onnxruntime-1.28.2-ThirdPartyNotices.txt",
+      "url": "https://raw.githubusercontent.com/microsoft/onnxruntime/33ca9628233dc8f002435e868d4c2e9f82766ca1/ThirdPartyNotices.txt",
+      "size": 325054,
+      "sha256": "0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2"
+    },
+    {
+      "file": "SenseVoiceSmall-FunASR-MODEL_LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/modelscope/FunASR/58830eca4012644aac0c3218c3ccc7d98f003fda/MODEL_LICENSE",
+      "size": 5306,
+      "sha256": "7dba975a2069691db4992b0592d70828b330d2f8a30a71450f4e152a554e84f8"
+    },
+    {
+      "file": "SenseVoice-upstream-README.md",
+      "url": "https://raw.githubusercontent.com/FunAudioLLM/SenseVoice/ea15219509625e5d4c5143c37c86970135886b5d/README.md",
+      "size": 26816,
+      "sha256": "ce31cd7c065d40fa95829a191870c6f9b25feb94d23500d6bc522927857f721f"
+    }
+  ],
+  "pinnedRefs": {
+    "sherpaOnnx": {
+      "repository": "k2-fsa/sherpa-onnx",
+      "tag": "v1.13.8",
+      "commit": "11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf"
+    },
+    "onnxRuntime": {
+      "repository": "microsoft/onnxruntime",
+      "tag": "v1.28.2",
+      "commit": "33ca9628233dc8f002435e868d4c2e9f82766ca1"
+    },
+    "funasrModelLicense": {
+      "repository": "modelscope/FunASR",
+      "commit": "58830eca4012644aac0c3218c3ccc7d98f003fda",
+      "version": "1.1",
+      "alsoVerifiedIdenticalAt": "02f8b43fc9222e3d14d41565acbebbb23bf3b56c"
+    },
+    "senseVoiceDocumentation": {
+      "repository": "QwenAudio/SenseVoice (formerly FunAudioLLM/SenseVoice)",
+      "commit": "ea15219509625e5d4c5143c37c86970135886b5d"
+    }
+  },
+  "originalModel": {
+    "name": "SenseVoiceSmall",
+    "modelIds": [
+      "iic/SenseVoiceSmall",
+      "FunAudioLLM/SenseVoiceSmall"
+    ],
+    "authorAttribution": "FunAudioLLM / Alibaba Group; see copyright and author notices in the upstream model license and model card.",
+    "conversion": "k2-fsa/sherpa-onnx: sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+    "distributionLicense": "FunASR Model Open Source License Agreement v1.1; not the MIT bridge license or the Apache engine license."
+  },
+  "additionalReferences": [
+    "https://huggingface.co/FunAudioLLM/SenseVoiceSmall",
+    "https://www.modelscope.cn/models/iic/SenseVoiceSmall",
+    "https://github.com/QwenAudio/SenseVoice/issues/334#issuecomment-5083546605"
+  ],
+  "limitations": [
+    "The upstream model clarification covers official model weights; converted artifacts and bundled dependencies must be checked separately.",
+    "The full upstream ONNX Runtime third-party notices are retained, rather than assuming every listed dependency is included in these exact binaries.",
+    "No claim is made that license collection is a complete legal review, binary provenance audit, or security assessment."
+  ]
+}

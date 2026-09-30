@@ -1,0 +1,54 @@
+{
+	email {$ACME_EMAIL}
+	admin off
+	# High container ports allow an unprivileged process with no capabilities.
+	http_port 8080
+	https_port 8443
+	servers {
+		protocols h1 h2
+	}
+}
+
+api.outdoorfit.hk {
+	encode zstd gzip
+	@api path /api /api/*
+	handle @api {
+		reverse_proxy api:3000
+	}
+	handle {
+		respond "Not found" 404
+	}
+}
+
+app.outdoorfit.hk {
+	encode zstd gzip
+	@api path /api /api/*
+	handle @api {
+		reverse_proxy api:3000
+	}
+	handle {
+		# The existing web export contains both the user app and admin routes.
+		root * /srv/admin
+		try_files {path} /index.html
+		header Cache-Control "no-cache"
+		file_server
+	}
+}
+
+admin.outdoorfit.hk {
+	encode zstd gzip
+	@api path /api /api/*
+	handle @api {
+		# Keep the /api prefix, including authenticated media and upload routes.
+		reverse_proxy api:3000
+	}
+	handle {
+		root * /srv/admin
+		@home path /
+		redir @home /admin 302
+		try_files {path} /index.html
+		# A new release must not leave an old HTML shell in the browser cache.
+		header Cache-Control "no-cache"
+		file_server
+	}
+}

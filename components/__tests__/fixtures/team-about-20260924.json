@@ -1,0 +1,208 @@
+{
+  "sourceSha256": "7748E292FB25556B73EF5425C171BD89533DBA990F5119497E06F78334DFE4F0",
+  "trackedChanges": 0,
+  "comments": 0,
+  "media": 0,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "Our team"
+    },
+    {
+      "type": "paragraph",
+      "text": "Research and Development"
+    },
+    {
+      "type": "table",
+      "rows": [
+        [
+          "Content of the Mobile APP\n\nPrincipal Investigator\nDr. Janet Lee\nResearch Assistant Professor\n\nDepartment of Rehabilitation Sciences \n Hong Kong Polytechnic University \n",
+          "Development of the Mobile APP\n\nCo-Investigator\nProf. Peter Ng\nAssistant Professor\n\nDepartment of Computing\n Hong Kong Polytechnic University\n"
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Other Co-Investigators"
+    },
+    {
+      "type": "table",
+      "rows": [
+        [
+          "Prof. Rick Kwan",
+          "School of Nursing, Tung Wah College"
+        ],
+        [
+          "Prof. Alex Wong",
+          "Department of Physical Medicine and Rehabilitation, Northwestern University Feinberg School of Medicine"
+        ],
+        [
+          "Dr. Karly Chan",
+          "Division of Science, Engineering and Health Studies, College of Professional and Continuing Education"
+        ],
+        [
+          "Prof. Arnold Wong",
+          "Department of Rehabilitation Sciences, the Hong Kong Polytechnic University"
+        ],
+        [
+          "Prof. Fadi Al Zoubi",
+          "Department of Rehabilitation Sciences, the Hong Kong Polytechnic University"
+        ],
+        [
+          "Prof. Kenneth Fong ",
+          "Department of Rehabilitation Sciences, the Hong Kong Polytechnic University"
+        ],
+        [
+          "Dr. Sam Wong",
+          "Physical Fitness Association of Hong Kong"
+        ],
+        [
+          "Dr. Raymond Chung",
+          "Department of Rehabilitation Sciences, the Hong Kong Polytechnic University"
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Collaborating Scholars"
+    },
+    {
+      "type": "table",
+      "rows": [
+        [
+          "Prof. Ben Fong",
+          "Faculty of Health and Social Sciences\nHong Kong Polytechnic University"
+        ],
+        [
+          "Prof. Liu Xintao",
+          "Department of Land Surveying and Geo-Informatics\nHong Kong Polytechnic University"
+        ],
+        [
+          "Prof. Mandy Peng",
+          "Department of Social Work \nThe Chinese University of Hong Kong"
+        ],
+        [
+          "Ms. Xindi Li",
+          "Department of Social Work and Social Administration\nThe University of Hong Kong"
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "Project Staff"
+    },
+    {
+      "type": "table",
+      "rows": [
+        [
+          "Project Execution",
+          "Software Development "
+        ],
+        [
+          "Mr. Leung Ho Wang",
+          "Mr. Du Kai Yu"
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "團隊"
+    },
+    {
+      "type": "paragraph",
+      "text": "研究及開發"
+    },
+    {
+      "type": "table",
+      "rows": [
+        [
+          "手機應用程式內容\n首席研究員\n李樂真博士\n助理教授（研究）\n香港理工大學康復治療學系",
+          "手機應用程式開發\n聯合研究員\n吳曉峰教授 \n助理教授\n香港理工大學電子計算學系\n"
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "其他聯合研究員"
+    },
+    {
+      "type": "table",
+      "rows": [
+        [
+          "關耀祖 教授",
+          "東華學院護理系"
+        ],
+        [
+          "黃榮楷 教授",
+          "美國西北大學物理醫學與康復學系"
+        ],
+        [
+          "陳靄允 博士",
+          "香港專上學院健康及生命科學系"
+        ],
+        [
+          "黃宇樂 教授",
+          "香港理工大學康復治療學系"
+        ],
+        [
+          "Prof. Fadi Al Zoubi",
+          "香港理工大學康復治療科學系"
+        ],
+        [
+          "方乃權 教授",
+          "香港理工大學康復治療學系"
+        ],
+        [
+          "黃永森 博士",
+          "中國香港體適能總會"
+        ],
+        [
+          "鍾志強 博士",
+          "香港理工大學康復治療科學系"
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "合作學者"
+    },
+    {
+      "type": "table",
+      "rows": [
+        [
+          "方玉輝 教授",
+          "香港理工大學醫療及社會科學系"
+        ],
+        [
+          "劉信陶 教授",
+          "香港理工大學土地測量及地理資訊學系"
+        ],
+        [
+          "彭曼曼 教授",
+          "香港中文大學社會工作學系"
+        ],
+        [
+          "李欣迪 中醫師",
+          "香港大學社會工作及社會行政學系"
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "項目人員"
+    },
+    {
+      "type": "table",
+      "rows": [
+        [
+          "項目執行",
+          "手機應用程式開發"
+        ],
+        [
+          "梁皓泓 先生",
+          "杜鎧羽 先生"
+        ]
+      ]
+    }
+  ]
+}

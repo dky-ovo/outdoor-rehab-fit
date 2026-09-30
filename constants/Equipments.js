@@ -1,4 +1,7 @@
 // translations.js
+import { traditionalChineseMedicineContent } from "./TraditionalChineseMedicine";
+import { newMachineTranslations } from "./NewMachines";
+
 export const equipmentTranslations = {
 	en: {
 		equipmentList: [
@@ -172,9 +175,10 @@ export const equipmentTranslations = {
 				id: 9,
 				name: "Rider",
 				categories: ["multifunctional", "muscle", "mobility", "aerobic"],
-				icon: require("./../assets/images/icon/10.jpg"),
+				// The retired photo must not reappear before the managed catalog loads.
+				icon: require("./../assets/icons/outdoor.png"),
 				pic: "",
-				horizontalPic: require("./../assets/images/horizontal/10.jpg"),
+				horizontalPic: require("./../assets/icons/outdoor.png"),
 				youtubeKey: "J-__1ClLJqY",
 
 				details:
@@ -334,7 +338,7 @@ export const equipmentTranslations = {
 				otTip:
 					"By strengthening leg muscles and improving joint mobility, it helps with daily activities such as getting in and out of the bathtub, climbing stairs, and getting on and off buses.",
 				careTip:
-					"Be cautious of the user's safety when getting on and off the bicycle.\n\nIf cycling is for aerobic purposes, they can cycle continuously for 10 minutes, take a rest, then cycle for another 10 minutes, rest, and cycle again for 10 minutes, totaling 30 minutes.\n\nIf the user feels any pain in the hip, knee, or ankle joints, they should consult physiotherapists for advice before using or continuing to use the bicycle.\n\nEnsure the user maintains body balance while cycling.\n\nObserve if the user maintains proper posture and stability while cycling, keeping the torso upright and stable while cycling.\n\nCaregivers should pay attention to whether the users maintain good posture while exercising. Users should have their heads up, spine extended, shoulders away from ears and chest lifted up. ",
+					"Be cautious of the user's safety when getting on and off the bicycle.\n\nIf cycling is for aerobic purposes, they can cycle continuously for 10 minutes, take a rest, then cycle for another 10 minutes, rest, and cycle again for 10 minutes, totaling 30 minutes.\n\nIf the user feels any pain in the hip, knee, or ankle joints, they should consult physiotherapists for advice before using or continuing to use the bicycle.\n\nEnsure the user maintains body balance while cycling.\n\nObserve if the user maintains proper posture and stability while cycling, keeping the torso upright and stable while cycling.\n\nVolunteers should pay attention to whether the users maintain good posture while exercising. Users should have their heads up, spine extended, shoulders away from ears and chest lifted up. ",
 			},
 			{
 				id: 18,
@@ -418,7 +422,7 @@ export const equipmentTranslations = {
 			{
 				id: 22,
 				name: "Back Massage",
-				categories: ["relaxation"],
+				categories: ["relaxation", "back"],
 				icon: require("./../assets/images/icon/23.jpg"),
 				pic: "",
 				horizontalPic: require("./../assets/images/horizontal/23.jpg"),
@@ -535,7 +539,7 @@ export const equipmentTranslations = {
 		equipmentList: [
 			{
 				id: 0,
-				name: "太極揉腿器/太極推手器",
+				name: "太極揉推器",
 				categories: ["multifunctional", "mobility", "muscle", "upper"],
 				icon: require("./../assets/images/icon/1.jpg"),
 				pic: require("./../assets/images/equipment/1.jpg"),
@@ -690,9 +694,9 @@ export const equipmentTranslations = {
 				id: 9,
 				name: "健騎機",
 				categories: ["multifunctional", "muscle", "mobility", "aerobic"],
-				icon: require("./../assets/images/icon/10.jpg"),
+				icon: require("./../assets/icons/outdoor.png"),
 				pic: "",
-				horizontalPic: require("./../assets/images/horizontal/10.jpg"),
+				horizontalPic: require("./../assets/icons/outdoor.png"),
 				details:
 					"首先，坐穩喺座位上面，向前緊握扶手。兩隻腳踩喺踏板上面。眼望前方，頭向上頂，延伸脊柱。唔好縮膊，膊頭遠離耳仔，膊頭轉向後，挺起胸膛。\n\n然後我哋可以試下屈曲手臂，推拉扶手。做嘅時候保持節奏平穩，輕拉輕放，唔好時快時慢。動作嘅幅度亦唔好過大，以免受傷。\n\n如有腰椎痛，就要諮詢物理治療師建議，先可以決定點樣使用，或者係咪需要停止使用。",
 
@@ -851,7 +855,7 @@ export const equipmentTranslations = {
 
 				otTip: "透過使用這個健身設施進行踏單車訓練，使用者可以增強其腿部功能以及關節活動能力，對其出入浴缸、走樓梯、上落巴士等日常移動都有所幫助。",
 				careTip:
-					"上落單車時要留意使用者的安全。\n\n如果踩單車是以帶氧為目的，可以連續踩10分鐘，休息，然後再踩10分鐘，休息，休息然後再踩10分鐘，共30分鐘。\n\n如果使用者在運動時，髖關節及、膝關節及腳腕關節在屈曲時候感到痛楚，應先諮詢物理治療師的建議，才可決定如何使用或是否繼續使用。\n\n留意使用者踏單車時的身體平衡。\n\n觀察使用者在踩單車時，軀幹有沒有保持中正位置，以及其穩定性。\n\n照顧者應留意使用者運動時是否眼望前方，頭向上頂，延伸脊柱。不要縮膊，膊頭遠離耳朵，膊頭轉向後，挺起胸膛。",
+					"上落單車時要留意使用者的安全。\n\n如果踩單車是以帶氧為目的，可以連續踩10分鐘，休息，然後再踩10分鐘，休息，休息然後再踩10分鐘，共30分鐘。\n\n如果使用者在運動時，髖關節及、膝關節及腳腕關節在屈曲時候感到痛楚，應先諮詢物理治療師的建議，才可決定如何使用或是否繼續使用。\n\n留意使用者踏單車時的身體平衡。\n\n觀察使用者在踩單車時，軀幹有沒有保持中正位置，以及其穩定性。\n\n志願者應留意使用者運動時是否眼望前方，頭向上頂，延伸脊柱。不要縮膊，膊頭遠離耳朵，膊頭轉向後，挺起胸膛。",
 			},
 			{
 				id: 18,
@@ -929,7 +933,7 @@ export const equipmentTranslations = {
 			{
 				id: 22,
 				name: "腰背按摩器",
-				categories: ["relaxation"],
+				categories: ["relaxation", "back"],
 				icon: require("./../assets/images/icon/23.jpg"),
 				pic: "",
 				horizontalPic: require("./../assets/images/horizontal/23.jpg"),
@@ -1037,6 +1041,18 @@ export const equipmentTranslations = {
 		],
 	},
 };
+
+for (const locale of ["en", "zh"]) {
+	equipmentTranslations[locale].equipmentList.push(...newMachineTranslations[locale]);
+}
+
+for (const locale of ["en", "zh"]) {
+	for (const item of equipmentTranslations[locale].equipmentList) {
+		const content = traditionalChineseMedicineContent[locale][item.id] || "";
+		item.tcmTip = content;
+		item.tcmEnabled = Boolean(content);
+	}
+}
 
 export const gifFiles1 = {
 	0: require("@/assets/images/gif/1a.gif"),

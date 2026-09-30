@@ -1,0 +1,6 @@
+business-report.*/
+*.tar.gz
+*.sqlite*
+*.jsonl
+*.pem
+.env*

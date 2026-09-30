@@ -1,10 +1,10 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
+	findNodeHandle,
 	ImageBackground,
 	KeyboardAvoidingView,
 	Platform,
-	SafeAreaView,
 	ScrollView,
 	StyleSheet,
 	Text,
@@ -13,16 +13,16 @@ import {
 	View,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { RFValue } from "react-native-responsive-fontsize";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from "react-native-responsive-screen";
 import { LocaleContext } from "../contexts/LocaleContext";
 import { showAlert } from "../utils/alert";
 import { useAuth } from "../contexts/AuthContext";
-import { USER_PROFILE_ROLES } from "../constants/auth";
-import { requestSmsCode, verifySmsCode } from "../utils/api";
 import { navigateAfterAuth } from "../utils/onboarding";
 import CountrySelector from "../components/CountrySelector";
-import { isValidInternationalPhone } from "../constants/countries";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useKeyboardInset } from "../hooks/useKeyboardInset";
 
 const ERROR_MESSAGES = {
 	registerRequired: "registerRequired",
@@ -34,19 +34,14 @@ const ERROR_MESSAGES = {
 	emailExists: "emailExists",
 	nameRequired: "nameRequired",
 	roleRequired: "roleRequired",
-	phoneNotVerified: "phoneNotVerified",
-	smsDeliveryFailed: "smsDeliveryFailed",
-	smsRateLimited: "smsRateLimited",
-	smsVerificationFailed: "smsVerificationFailed",
-	invalidOrExpiredCode: "invalidCode",
-	networkError: "networkError",
+	networkError: "registrationNetworkError",
 	serverError: "serverError",
+	registrationCodeRequired: "registrationCodeRequired",
+	invalidRegistrationCode: "invalidRegistrationCode",
+	registrationRateLimited: "registrationRateLimited",
+	passwordTooLong: "passwordTooLong",
+	invalidRegistration: "registerRequired",
 };
-
-const ROLE_OPTIONS = [
-	USER_PROFILE_ROLES.PARTICIPANT,
-	USER_PROFILE_ROLES.CAREGIVER,
-];
 
 export default function RegisterScreen() {
 	const { i18n } = useContext(LocaleContext);
@@ -55,21 +50,55 @@ export default function RegisterScreen() {
 	const [name, setName] = useState("");
 	const [phone, setPhone] = useState("");
 	const [countryCode, setCountryCode] = useState("+852");
-	const [verificationCode, setVerificationCode] = useState("");
-	const [verificationToken, setVerificationToken] = useState("");
-	const [codeSent, setCodeSent] = useState(false);
-	const [sendingCode, setSendingCode] = useState(false);
-	const [verifyingCode, setVerifyingCode] = useState(false);
-	const [email, setEmail] = useState("");
-	const [profileRole, setProfileRole] = useState("");
 	const [password, setPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
+	const [registrationCode, setRegistrationCode] = useState("");
 	const [submitting, setSubmitting] = useState(false);
+	const submittingRef = useRef(false);
+	const isFocused = useIsFocused();
+	const focusedRef = useRef(isFocused);
+	focusedRef.current = isFocused;
+	const insets = useSafeAreaInsets();
+	const keyboard = useKeyboardInset();
+	const scrollRef = useRef(null);
+	const currentInputRef = useRef(null);
+	const focusTimers = useRef([]);
+	const passwordRef = useRef(null);
+	const confirmationRef = useRef(null);
+	const codeRef = useRef(null);
+	const revealInput = () => {
+		const input = currentInputRef.current;
+		if (!input?.isFocused?.()) return;
+		if (Platform.OS === "web") { input.scrollIntoView?.({ block: "nearest" }); return; }
+		const handle = findNodeHandle(input);
+		if (handle) scrollRef.current?.scrollResponderScrollNativeHandleToKeyboard?.(handle, 28, true);
+	};
+	const focusInput = (ref) => {
+		currentInputRef.current = ref.current;
+		focusTimers.current.forEach(clearTimeout);
+		focusTimers.current = [setTimeout(revealInput, 40), setTimeout(revealInput, 260)];
+	};
+	useEffect(() => {
+		if (!keyboard.visible) return;
+		const timer = setTimeout(revealInput, 80);
+		return () => clearTimeout(timer);
+	}, [keyboard.inset, keyboard.visible]);
+	useEffect(() => () => { focusTimers.current.forEach(clearTimeout); }, []);
 
 	const handleRegister = async () => {
+		if (submittingRef.current) return;
+		submittingRef.current = true;
 		setSubmitting(true);
-		const result = await register({ name, phone, countryCode, email, profileRole, password, confirmPassword, verificationToken });
-		setSubmitting(false);
+		let result;
+		try {
+			result = await register({ name, phone, countryCode, registrationCode, password, confirmPassword });
+		} catch {
+			result = { success: false, error: "serverError" };
+		} finally {
+			submittingRef.current = false;
+			setSubmitting(false);
+		}
+		if (!focusedRef.current || result.error === "sessionChanged") return;
 
 		if (!result.success) {
 			const messageKey = ERROR_MESSAGES[result.error] || "registerRequired";
@@ -80,75 +109,36 @@ export default function RegisterScreen() {
 		showAlert("", i18n.t("registerSuccess"), [
 			{
 				text: "OK",
-				onPress: () => navigateAfterAuth(from),
+				onPress: () => navigateAfterAuth(Array.isArray(from) ? from[0] : from),
 			},
 		]);
 	};
 
-	const handlePhoneChange = (value) => {
-		setPhone(value);
-		setVerificationCode("");
-		setVerificationToken("");
-		setCodeSent(false);
-	};
-
 	const handleCountryChange = (value) => {
 		setCountryCode(value);
-		handlePhoneChange("");
-	};
-
-	const handleSendCode = async () => {
-		if (!isValidInternationalPhone(phone, countryCode)) {
-			showAlert(i18n.t("warning"), i18n.t("invalidPhone"));
-			return;
-		}
-		setSendingCode(true);
-		try {
-			await requestSmsCode(phone, "registration", countryCode);
-			setCodeSent(true);
-			showAlert(i18n.t("codeSentTitle"), i18n.t("codeSentSimple"));
-		} catch (error) {
-			showAlert(i18n.t("warning"), i18n.t(ERROR_MESSAGES[error.code] || "serverError"));
-		} finally {
-			setSendingCode(false);
-		}
-	};
-
-	const handleVerifyCode = async () => {
-		if (!/^\d{6}$/.test(verificationCode)) {
-			showAlert(i18n.t("warning"), i18n.t("invalidCode"));
-			return;
-		}
-		setVerifyingCode(true);
-		try {
-			const result = await verifySmsCode(phone, verificationCode, "registration", countryCode);
-			setVerificationToken(result.verificationToken);
-			showAlert("", i18n.t("verificationSuccess"));
-		} catch (error) {
-			showAlert(i18n.t("warning"), i18n.t(ERROR_MESSAGES[error.code] || "invalidCode"));
-		} finally {
-			setVerifyingCode(false);
-		}
+		setPhone("");
 	};
 
 	return (
-		<ImageBackground source={require("@/assets/images/background.png")} resizeMethod="cover" style={styles.background}>
+		<ImageBackground source={require("@/assets/images/background.png")} resizeMode="cover" style={styles.background}>
 			<SafeAreaView style={styles.safeArea}>
-				<KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
-					<ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+				<KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0} style={styles.flex}>
+					<ScrollView ref={scrollRef} contentContainerStyle={[styles.scrollContent, keyboard.inset > 0 && { paddingBottom: keyboard.inset + 32 }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
 						<View style={styles.header}>
 							<Text style={styles.title}>{i18n.t("registerTitle")}</Text>
 							<Text style={styles.subtitle}>{i18n.t("registerSubtitle")}</Text>
 						</View>
 
 						<View style={styles.formCard}>
-							<Text style={styles.label}>{i18n.t("name")}</Text>
+							<Text style={styles.label}>{i18n.t("registrationNickname")}</Text>
 							<TextInput
 								style={styles.input}
 								value={name}
 								onChangeText={setName}
+								autoCapitalize="words"
 								autoCorrect={false}
-								placeholder={i18n.t("namePlaceholder")}
+								maxLength={50}
+								placeholder={i18n.t("usernamePlaceholder")}
 								placeholderTextColor="#999"
 							/>
 
@@ -158,7 +148,7 @@ export default function RegisterScreen() {
 								<TextInput
 									style={[styles.input, styles.phoneInput]}
 									value={phone}
-									onChangeText={handlePhoneChange}
+									onChangeText={setPhone}
 									keyboardType="phone-pad"
 									autoCorrect={false}
 									placeholder={i18n.t("internationalPhonePlaceholder")}
@@ -166,78 +156,18 @@ export default function RegisterScreen() {
 								/>
 							</View>
 
-							<TouchableOpacity
-								style={[styles.codeButton, sendingCode && styles.buttonDisabled]}
-								onPress={handleSendCode}
-								disabled={sendingCode || !!verificationToken}
-							>
-								{sendingCode ? <ActivityIndicator color="#840B1C" /> : (
-									<Text style={styles.codeButtonText}>
-										{codeSent ? i18n.t("resendCodeButton") : i18n.t("sendCodeButton")}
-									</Text>
-								)}
-							</TouchableOpacity>
-
-							{codeSent && !verificationToken && (
-								<>
-									<Text style={styles.label}>{i18n.t("verificationCode")}</Text>
-									<TextInput
-										style={styles.input}
-										value={verificationCode}
-										onChangeText={setVerificationCode}
-										keyboardType="number-pad"
-										maxLength={6}
-										placeholder={i18n.t("verificationCodePlaceholder")}
-										placeholderTextColor="#999"
-									/>
-									<TouchableOpacity
-										style={[styles.codeButton, verifyingCode && styles.buttonDisabled]}
-										onPress={handleVerifyCode}
-										disabled={verifyingCode}
-									>
-										{verifyingCode ? <ActivityIndicator color="#840B1C" /> : (
-											<Text style={styles.codeButtonText}>{i18n.t("verifyCodeButton")}</Text>
-										)}
-									</TouchableOpacity>
-								</>
-							)}
-
-							{!!verificationToken && <Text style={styles.verifiedText}>{i18n.t("verifiedPhone")}</Text>}
-
-							<Text style={styles.label}>{i18n.t("email")}</Text>
-							<TextInput
-								style={styles.input}
-								value={email}
-								onChangeText={setEmail}
-								autoCapitalize="none"
-								autoCorrect={false}
-								keyboardType="email-address"
-								placeholder={i18n.t("emailPlaceholder")}
-								placeholderTextColor="#999"
-							/>
-
-							<Text style={styles.label}>{i18n.t("role")}</Text>
-							<View style={styles.roleContainer}>
-								{ROLE_OPTIONS.map((role) => {
-									const selected = profileRole === role;
-									return (
-										<TouchableOpacity
-											key={role}
-											style={[styles.roleOption, selected && styles.roleOptionSelected]}
-											onPress={() => setProfileRole(role)}
-										>
-											<Text style={[styles.roleOptionText, selected && styles.roleOptionTextSelected]}>
-												{i18n.t(`profileRole_${role}`)}
-											</Text>
-										</TouchableOpacity>
-									);
-								})}
-							</View>
-
+							<Text style={styles.label}>{i18n.t("registrationCode")}</Text>
+							<TextInput testID="registration-code" style={styles.input} ref={codeRef} onFocus={() => focusInput(codeRef)}
+								value={registrationCode} onChangeText={setRegistrationCode}
+								autoCapitalize="characters" autoCorrect={false} maxLength={40}
+								placeholder={i18n.t("registrationCodePlaceholder")} placeholderTextColor="#999" />
 							<Text style={styles.label}>{i18n.t("password")}</Text>
 							<TextInput
 								style={styles.input}
 								value={password}
+								ref={passwordRef}
+								onFocus={() => focusInput(passwordRef)}
+								maxLength={256}
 								onChangeText={setPassword}
 								secureTextEntry
 								autoCapitalize="none"
@@ -245,18 +175,11 @@ export default function RegisterScreen() {
 								placeholder={i18n.t("passwordPlaceholder")}
 								placeholderTextColor="#999"
 							/>
-
 							<Text style={styles.label}>{i18n.t("confirmPassword")}</Text>
-							<TextInput
-								style={styles.input}
-								value={confirmPassword}
-								onChangeText={setConfirmPassword}
-								secureTextEntry
-								autoCapitalize="none"
-								autoCorrect={false}
-								placeholder={i18n.t("confirmPasswordPlaceholder")}
-								placeholderTextColor="#999"
-							/>
+							<TextInput testID="registration-confirm-password" style={styles.input} ref={confirmationRef} onFocus={() => focusInput(confirmationRef)}
+								value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry
+								autoCapitalize="none" autoCorrect={false} maxLength={256}
+								placeholder={i18n.t("confirmPasswordPlaceholder")} placeholderTextColor="#999" />
 
 							<TouchableOpacity
 								style={[styles.primaryButton, submitting && styles.buttonDisabled]}

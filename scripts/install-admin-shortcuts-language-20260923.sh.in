@@ -1,0 +1,132 @@
+#!/bin/bash
+set -Eeuo pipefail
+umask 077
+
+UPDATE_ZIP="${1:-/home/dukaiyu2004/outdoor-fit-admin-shortcuts-language-20260923-update.zip}"
+WEB_DIR="/var/www/outdoor-fit"
+BACKUP_ROOT="/home/dukaiyu2004/outdoor-fit-backups"
+DEPLOY_ROOT="/home/dukaiyu2004/.outdoor-fit-deploy"
+LOCK="/run/outdoor-fit-file-explorer-deploy.lock"
+RELEASE="admin-shortcuts-language-20260923"
+WORK_DIR="" BACKUP_DIR="" CHECKER="" NODE=""
+TOUCHED=0
+
+recover() {
+  local status="${1:-1}" rollback_ok=1
+  trap - ERR INT TERM
+  set +e
+  if [ "$TOUCHED" -eq 1 ]; then
+    echo "Deployment failed; restoring only the known Web files."
+    "$NODE" "$CHECKER" rollback "$WEB_DIR" "$WORK_DIR/package" "$BACKUP_DIR" || rollback_ok=0
+  else echo "Stopped in preflight, before replacing Web files."; fi
+  [ "$rollback_ok" -eq 1 ] || echo "WARNING: automatic recovery stopped safely; review retained backup before retrying."
+  echo "API service, database, uploads, accounts, API keys, dependencies and Nginx were NOT changed."
+  echo "Diagnostics: ${WORK_DIR:-not created}; backup: ${BACKUP_DIR:-not created}."
+  exit "$status"
+}
+trap 'recover $?' ERR
+trap 'recover 130' INT
+trap 'recover 143' TERM
+
+[ "$(id -u)" -eq 0 ]
+for tool in python3 node flock sha256sum readlink stat cmp mktemp; do command -v "$tool" >/dev/null; done
+NODE="$(readlink -f "$(command -v node)")"
+[ -x "$NODE" ]
+[ -f "$UPDATE_ZIP" ] && [ ! -L "$UPDATE_ZIP" ]
+[ "$(readlink -f "$UPDATE_ZIP")" = "$UPDATE_ZIP" ]
+[ "$(stat -c %h "$UPDATE_ZIP")" = 1 ]
+[ "$(stat -c %s "$UPDATE_ZIP")" -le 536870912 ]
+for directory in "$WEB_DIR" "$BACKUP_ROOT" "$DEPLOY_ROOT"; do [ "$(readlink -m "$directory")" = "$directory" ]; done
+[ -d "$WEB_DIR" ] && [ ! -L "$WEB_DIR" ]
+[ ! -L "$LOCK" ]
+if [ -e "$LOCK" ]; then [ -f "$LOCK" ] && [ "$(stat -c %h "$LOCK")" = 1 ]; fi
+exec 9>"$LOCK"
+flock -n 9 || { echo "Another deployment is running; nothing changed."; exit 1; }
+mkdir -p "$DEPLOY_ROOT" "$BACKUP_ROOT"
+[ "$(readlink -f "$DEPLOY_ROOT")" = "$DEPLOY_ROOT" ]
+[ "$(readlink -f "$BACKUP_ROOT")" = "$BACKUP_ROOT" ]
+WORK_DIR="$(mktemp -d "$DEPLOY_ROOT/$RELEASE.XXXXXX")"
+mkdir "$WORK_DIR/package"
+
+# Check every ZIP member before extraction. Only static Web files are installable.
+python3 - "$UPDATE_ZIP" "$WORK_DIR/package" <<'PY'
+import os, re, shutil, stat, sys, zipfile
+archive, destination = sys.argv[1:]
+expected = {'install-admin-shortcuts-language-20260923.sh', 'verify-admin-shortcuts-language-release.cjs', 'release-manifest.json', 'README.md'}
+with zipfile.ZipFile(archive) as z:
+    entries = z.infolist()
+    if len(entries) > 20000: raise RuntimeError('Too many archive entries')
+    seen, roots, total = set(), set(), 0
+    for entry in entries:
+        name = entry.orig_filename
+        if name != entry.filename: raise RuntimeError('Normalized ZIP member name rejected')
+        if name in seen: raise RuntimeError('Duplicate ZIP member')
+        seen.add(name)
+        segments = name.rstrip('/').split('/')
+        if not re.fullmatch(r'[A-Za-z0-9_@().+/-]+', name) or any(not p or p.startswith('.') for p in segments): raise RuntimeError('Unsafe ZIP path')
+        mode = stat.S_IFMT(entry.external_attr >> 16)
+        if entry.flag_bits & 1 or mode not in (0, stat.S_IFREG, stat.S_IFDIR): raise RuntimeError('Special or encrypted ZIP member')
+        if entry.is_dir():
+            if segments[0] != 'web' or mode not in (0, stat.S_IFDIR) or entry.file_size != 0: raise RuntimeError('Unexpected ZIP directory')
+            continue
+        if mode == stat.S_IFDIR: raise RuntimeError('ZIP mode/name mismatch')
+        if len(segments) == 1:
+            if name not in expected: raise RuntimeError('Unknown root member')
+            if entry.file_size < 1: raise RuntimeError('Empty root member')
+            roots.add(name); limit = 8 * 1024 * 1024
+        else:
+            if segments[0] != 'web': raise RuntimeError('Only the Web tree is allowed')
+            limit = 64 * 1024 * 1024
+        if entry.file_size < 0 or entry.file_size > limit: raise RuntimeError('ZIP size limit exceeded')
+        total += entry.file_size
+    file_names = {entry.filename for entry in entries if not entry.is_dir()}
+    for entry in entries:
+        parts = entry.filename.rstrip('/').split('/')
+        if any('/'.join(parts[:index]) in file_names for index in range(1, len(parts))) or (entry.is_dir() and entry.filename.rstrip('/') in file_names): raise RuntimeError('ZIP file/directory collision')
+    if roots != expected or 'web/index.html' not in seen or total > 512 * 1024 * 1024: raise RuntimeError('Incomplete or oversized release')
+    if shutil.disk_usage(destination).free < total + 100 * 1024 * 1024: raise RuntimeError('Insufficient staging disk space')
+    for entry in entries:
+        target = os.path.join(destination, *entry.filename.rstrip('/').split('/'))
+        if entry.is_dir(): os.makedirs(target, exist_ok=True); continue
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with z.open(entry) as source, open(target, 'xb') as output:
+            remaining = entry.file_size
+            while remaining:
+                chunk = source.read(min(65536, remaining))
+                if not chunk: raise RuntimeError('Truncated ZIP member')
+                output.write(chunk); remaining -= len(chunk)
+            if source.read(1): raise RuntimeError('ZIP size mismatch')
+PY
+cmp "$0" "$WORK_DIR/package/install-$RELEASE.sh"
+# Trusted checker/manifest/readme hashes are embedded here: no sidecar download.
+(cd "$WORK_DIR/package" && sha256sum -c - <<'EMBEDDED_CHECKSUMS'
+@@EMBEDDED_CHECKSUMS@@
+EMBEDDED_CHECKSUMS
+)
+CHECKER="$WORK_DIR/package/verify-admin-shortcuts-language-release.cjs"
+"$NODE" "$CHECKER" package "$WORK_DIR/package"
+"$NODE" "$CHECKER" target "$WEB_DIR" "$WORK_DIR/package"
+
+python3 - "$WEB_DIR" "$WORK_DIR" "$BACKUP_ROOT" <<'PY'
+import json, os, shutil, sys
+web, work, backup = sys.argv[1:]
+with open(os.path.join(work, 'package', 'release-manifest.json'), encoding='utf-8') as stream: manifest = json.load(stream)
+incoming = sum(item['bytes'] for item in manifest['web'])
+old_web = sum(os.path.getsize(os.path.join(web, item['path'])) for item in manifest['web'] if os.path.isfile(os.path.join(web, item['path'])))
+needs = {}
+for root, amount in [(web, incoming), (backup, old_web + incoming + 100 * 1024 * 1024)]:
+    device = os.stat(root).st_dev
+    previous = needs.get(device, (root, 0))
+    needs[device] = (root, previous[1] + amount)
+for root, amount in needs.values():
+    if shutil.disk_usage(root).free < amount: raise RuntimeError('Insufficient disk space for safe Web replacement and backup')
+PY
+BACKUP_DIR="$(mktemp -d "$BACKUP_ROOT/$RELEASE-$(date +%Y%m%d-%H%M%S).XXXXXX")"
+"$NODE" "$CHECKER" backup "$WEB_DIR" "$WORK_DIR/package" "$BACKUP_DIR"
+TOUCHED=1
+"$NODE" "$CHECKER" apply "$WEB_DIR" "$WORK_DIR/package" "$BACKUP_DIR"
+"$NODE" "$CHECKER" installed "$WEB_DIR" "$WORK_DIR/package"
+trap - ERR INT TERM
+echo "Admin shortcuts language Web update completed. Backup: $BACKUP_DIR"
+echo "Older Web assets retained. API service, database, uploads, accounts, API keys, dependencies and Nginx unchanged."
+echo "Staging retained: $WORK_DIR"

@@ -1,21 +1,31 @@
-import React, { useContext } from "react";
-import { StyleSheet, View, ScrollView, Text, TouchableOpacity, SafeAreaView, Alert } from "react-native";
+import React, { useCallback, useContext, useRef } from "react";
+import { StyleSheet, View, ScrollView, Text, TouchableOpacity, SafeAreaView } from "react-native";
 import { LocaleContext } from "../contexts/LocaleContext";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { showAlert } from "../utils/alert";
 
 const FirstSafety = () => {
 	const { i18n } = useContext(LocaleContext);
+	const activeRef = useRef(false);
+	const savingRef = useRef(false);
+	useFocusEffect(useCallback(() => {
+		activeRef.current = true; savingRef.current = false;
+		return () => { activeRef.current = false; };
+	}, []));
 	// Note: no auto-skip here; the first-launch gating is handled in app/index.js
 	// so this page is always shown during the onboarding flow.
 
 	const handleNo = async () => {
+		if (savingRef.current) return;
+		savingRef.current = true;
 		try {
 			await AsyncStorage.setItem("safetyResponse", "no");
-			showAlert("", i18n.t("agreeQuestionnaire"), [{ text: "OK", onPress: () => router.replace("/login") }]);
+			if (activeRef.current) showAlert("", i18n.t("agreeQuestionnaire"), [{ text: "OK", onPress: () => { if (activeRef.current) router.replace("/login"); } }]);
 		} catch (error) {
+			savingRef.current = false;
 			console.error("Error saving safety response status", error);
+			if (activeRef.current) showAlert(i18n.t("warning"), i18n.t("serverError"));
 		}
 	};
 

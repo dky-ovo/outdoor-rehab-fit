@@ -3,9 +3,9 @@ import { View, TouchableOpacity, StyleSheet, Text } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
 
-const CustomBackButton = ({ text }) => {
+const CustomBackButton = ({ text, onPress }) => {
 	return (
-		<TouchableOpacity style={styles.button} onPress={() => router.back()}>
+		<TouchableOpacity style={styles.button} onPress={onPress || (() => router.back())}>
 			<Ionicons name="chevron-back" size={30} color="black" />
 			<Text style={styles.text}>{text}</Text>
 		</TouchableOpacity>

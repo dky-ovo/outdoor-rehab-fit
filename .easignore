@@ -1,0 +1,53 @@
+# Dependencies and local Expo output
+node_modules/
+.expo/
+dist/
+dist-*/
+web-build/
+expo-env.d.ts
+
+# Native and local credentials
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+app.json.android-build-backup
+app.json.android-update-backup
+
+# Logs, caches and local environment
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+
+# Server, database and deployment artifacts are not part of the Android app
+server/
+deploy/
+docs/
+scripts/
+tmp/
+.tmp-*/
+workspace-artifacts/
+output/
+figma-poster/
+.dsh-uploads/
+.dsh-vision-router/
+
+# Miscellaneous local source copies
+app-example/
+
+# Speech input retired: keep downloaded resources locally, exclude from new builds.
+modules/offline-assistant-voice/vendor/
+modules/offline-assistant-voice/assets/
+modules/offline-assistant-voice/licenses/
+modules/offline-assistant-voice/scripts/
+modules/offline-assistant-voice/ios/OASenseVoiceEngine.h
+modules/offline-assistant-voice/ios/OASenseVoiceEngine.mm

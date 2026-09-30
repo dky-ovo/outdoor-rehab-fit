@@ -1,0 +1,31 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <application>
+    <service
+      android:name="expo.modules.sessiontimernotification.TimerAudioService"
+      android:exported="false"
+      android:stopWithTask="true"
+      android:foregroundServiceType="specialUse|mediaPlayback">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="User-started exercise countdown or stopwatch with a persistent visible timer, bounded countdown CPU wakefulness, and brief bundled halfway/completion audio. Stops on pause, cancel or completion; no silent audio or automatic restart." />
+    </service>
+    <receiver
+      android:name="expo.modules.sessiontimernotification.TimerAudioAlarmReceiver"
+      android:enabled="true"
+      android:exported="false" />
+    <receiver
+      android:name="expo.modules.sessiontimernotification.CountdownReminderReceiver"
+      android:enabled="true"
+      android:exported="false" />
+    <receiver
+      android:name="expo.modules.sessiontimernotification.TimerExpiryReceiver"
+      android:enabled="true"
+      android:exported="false" />
+  </application>
+</manifest>

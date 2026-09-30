@@ -1,0 +1,187 @@
+#!/bin/bash
+set -Eeuo pipefail
+umask 077
+
+UPDATE_ZIP="${1:-/home/dukaiyu2004/outdoor-fit-participant-facility-learning-20260922-update.zip}"
+API_DIR="/home/dukaiyu2004/outdoor-fit-api"
+BACKUP_ROOT="/home/dukaiyu2004/outdoor-fit-backups"
+DEPLOY_ROOT="/home/dukaiyu2004/.outdoor-fit-deploy"
+SERVICE="outdoor-fit-api"
+LOCK="/run/outdoor-fit-file-explorer-deploy.lock"
+RELEASE="participant-facility-learning-20260922"
+FILES=(app.js database.js learningProgress.js)
+WORK_DIR="" BACKUP_DIR="" CHECKER="" NODE="" BASELINE=""
+TOUCHED=0 STOPPED=0
+
+healthy() {
+  local attempt
+  for attempt in $(seq 1 30); do
+    if systemctl is-active --quiet "$SERVICE" && curl --max-time 2 -fsS http://127.0.0.1:3000/api/health |
+      "$NODE" -e 'const v=JSON.parse(require("fs").readFileSync(0,"utf8"));if(v.ok!==true||v.service!=="outdoor-fit-api")process.exit(1)'; then return 0; fi
+    sleep 1
+  done
+  return 1
+}
+recover() {
+  local status="${1:-1}" rollback_ok=1
+  trap - ERR INT TERM
+  set +e
+  if [ "$TOUCHED" -eq 1 ]; then
+    echo "Deployment failed; recovering ONLY app.js, database.js and learningProgress.js."
+    if systemctl stop "$SERVICE" && [ "$(systemctl show "$SERVICE" --property=MainPID --value)" = 0 ]; then
+      "$NODE" "$CHECKER" restore-preflight "$API_DIR" "$WORK_DIR/package" >/dev/null || rollback_ok=0
+      sha256sum -c "$BACKUP_DIR/original-sha256.txt" || rollback_ok=0
+      if [ "$rollback_ok" -eq 1 ]; then
+        for name in "${FILES[@]}"; do
+          if [ -f "$BACKUP_DIR/files/$name" ] && [ ! -L "$BACKUP_DIR/files/$name" ]; then
+            cp -a -- "$BACKUP_DIR/files/$name" "$WORK_DIR/restore/$name" &&
+              mv -f -- "$WORK_DIR/restore/$name" "$API_DIR/src/$name" || rollback_ok=0
+          elif [ -f "$API_DIR/src/$name" ] && [ ! -L "$API_DIR/src/$name" ]; then
+            # Preserve an originally absent new helper for diagnosis; never delete data.
+            mv -- "$API_DIR/src/$name" "$WORK_DIR/failed/$name" || rollback_ok=0
+          elif [ -e "$API_DIR/src/$name" ] || [ -L "$API_DIR/src/$name" ]; then rollback_ok=0; fi
+        done
+        for name in "${FILES[@]}"; do
+          if [ -f "$BACKUP_DIR/files/$name" ]; then cmp -s "$BACKUP_DIR/files/$name" "$API_DIR/src/$name" || rollback_ok=0
+          elif [ -e "$API_DIR/src/$name" ] || [ -L "$API_DIR/src/$name" ]; then rollback_ok=0; fi
+        done
+      fi
+      if [ "$rollback_ok" -eq 1 ]; then systemctl start "$SERVICE" && healthy || rollback_ok=0; fi
+    else rollback_ok=0; fi
+  elif [ "$STOPPED" -eq 1 ]; then
+    systemctl start "$SERVICE" && healthy || rollback_ok=0
+  else
+    echo "Preflight stopped before source replacement or service shutdown."
+  fi
+  [ "$rollback_ok" -eq 1 ] || echo "WARNING: code recovery requires manual review. Do not rerun the deployment blindly."
+  echo "Database, accounts, registrations, uploads, API keys, dependencies, Web and Nginx are NOT rolled back or deleted."
+  echo "Diagnostics: ${WORK_DIR:-not created}; source backup: ${BACKUP_DIR:-not created}."
+  exit "$status"
+}
+trap 'recover $?' ERR
+trap 'recover 130' INT
+trap 'recover 143' TERM
+
+same_baseline() {
+  local current
+  current="$("$NODE" "$CHECKER" baseline "$API_DIR" "$WORK_DIR/package")"
+  [ "$current" = "$BASELINE" ]
+}
+backup_matches_source() {
+  local name
+  for name in "${FILES[@]}"; do
+    if [ -f "$BACKUP_DIR/files/$name" ]; then
+      [ -f "$API_DIR/src/$name" ] && [ ! -L "$API_DIR/src/$name" ]
+      cmp -s "$BACKUP_DIR/files/$name" "$API_DIR/src/$name"
+    else [ ! -e "$API_DIR/src/$name" ] && [ ! -L "$API_DIR/src/$name" ]; fi
+  done
+}
+
+[ "$(id -u)" -eq 0 ]
+for tool in python3 curl flock sha256sum install systemctl readlink stat cmp mktemp; do command -v "$tool" >/dev/null; done
+[ -f "$UPDATE_ZIP" ] && [ ! -L "$UPDATE_ZIP" ]
+[ "$(readlink -f "$UPDATE_ZIP")" = "$UPDATE_ZIP" ]
+[ "$(stat -c %s "$UPDATE_ZIP")" -le 16777216 ]
+for directory in "$API_DIR" "$BACKUP_ROOT" "$DEPLOY_ROOT"; do [ "$(readlink -m "$directory")" = "$directory" ]; done
+[ -d "$API_DIR/src" ] && [ ! -L "$API_DIR/src" ]
+[ -d "$API_DIR/node_modules" ] && [ ! -L "$API_DIR/node_modules" ]
+[ ! -L "$LOCK" ]
+exec 9>"$LOCK"
+flock -n 9 || { echo "Another deployment is running; nothing changed."; exit 1; }
+systemctl is-active --quiet "$SERVICE"
+[ "$(df -PB1 "$API_DIR" | awk 'NR==2 {print $4}')" -ge 104857600 ]
+mkdir -p "$DEPLOY_ROOT" "$BACKUP_ROOT"
+[ "$(readlink -f "$DEPLOY_ROOT")" = "$DEPLOY_ROOT" ]
+[ "$(readlink -f "$BACKUP_ROOT")" = "$BACKUP_ROOT" ]
+WORK_DIR="$(mktemp -d "$DEPLOY_ROOT/$RELEASE.XXXXXX")"
+mkdir "$WORK_DIR/package" "$WORK_DIR/failed" "$WORK_DIR/restore" "$WORK_DIR/replacements" "$WORK_DIR/api" "$WORK_DIR/smoke"
+
+# Fixed flat files only: reject traversal, duplicate entries, links, special
+# files, encryption and oversize members before writing any package file.
+python3 - "$UPDATE_ZIP" "$WORK_DIR/package" <<'PY'
+import os, stat, sys, zipfile
+archive, destination = sys.argv[1:]
+expected = {'app.js', 'database.js', 'learningProgress.js', 'install-participant-facility-learning-20260922.sh', 'verify-participant-facility-learning-release.cjs', 'release-manifest.json', 'README.md'}
+with zipfile.ZipFile(archive) as z:
+    entries = z.infolist()
+    if len(entries) != len(expected) or {entry.filename for entry in entries} != expected:
+        raise RuntimeError('Unexpected, duplicate or missing ZIP members')
+    for entry in entries:
+        mode = stat.S_IFMT(entry.external_attr >> 16)
+        if entry.is_dir() or mode not in (0, stat.S_IFREG) or entry.flag_bits & 1:
+            raise RuntimeError('Links, directories, special or encrypted files are forbidden')
+        if entry.file_size < 1 or entry.file_size > 2 * 1024 * 1024:
+            raise RuntimeError('ZIP member size rejected')
+    for entry in entries:
+        with z.open(entry) as source, open(os.path.join(destination, entry.filename), 'xb') as output:
+            remaining = entry.file_size
+            while remaining:
+                chunk = source.read(min(65536, remaining))
+                if not chunk: raise RuntimeError('Truncated ZIP member')
+                output.write(chunk)
+                remaining -= len(chunk)
+            if source.read(1): raise RuntimeError('ZIP member size mismatch')
+PY
+cmp "$0" "$WORK_DIR/package/install-$RELEASE.sh"
+# Hashes are embedded at packaging time. No cloud .sha256 file is required.
+(cd "$WORK_DIR/package" && sha256sum -c - <<'EMBEDDED_CHECKSUMS'
+@@EMBEDDED_CHECKSUMS@@
+EMBEDDED_CHECKSUMS
+)
+CHECKER="$WORK_DIR/package/verify-participant-facility-learning-release.cjs"
+OLD_PID="$(systemctl show "$SERVICE" --property=MainPID --value)"
+[[ "$OLD_PID" =~ ^[1-9][0-9]*$ ]]
+NODE="$(readlink -f "/proc/$OLD_PID/exe")"
+[ -x "$NODE" ] && [ "$(basename "$NODE")" = node ]
+"$NODE" "$CHECKER" package "$WORK_DIR/package"
+"$NODE" "$CHECKER" runtime "$OLD_PID" > "$WORK_DIR/runtime-before.json"
+BASELINE="$("$NODE" "$CHECKER" baseline "$API_DIR" "$WORK_DIR/package")"
+printf '%s\n' "$BASELINE"
+
+# Check the new schema/import graph only against memory and scratch directories.
+# No npm install, production index.js or production database is executed here.
+cp -a -- "$API_DIR/src" "$API_DIR/package.json" "$WORK_DIR/api/"
+ln -s "$API_DIR/node_modules" "$WORK_DIR/api/node_modules"
+for name in "${FILES[@]}"; do
+  install -m 0644 "$WORK_DIR/package/$name" "$WORK_DIR/api/src/$name"
+  install -m 0644 "$WORK_DIR/package/$name" "$WORK_DIR/replacements/$name"
+  chown --reference="$API_DIR/src/app.js" "$WORK_DIR/replacements/$name"
+  chmod --reference="$API_DIR/src/app.js" "$WORK_DIR/replacements/$name"
+  "$NODE" --check "$WORK_DIR/api/src/$name"
+done
+"$NODE" "$CHECKER" smoke "$WORK_DIR/api" "$WORK_DIR/smoke"
+same_baseline
+"$NODE" "$CHECKER" runtime "$(systemctl show "$SERVICE" --property=MainPID --value)" > "$WORK_DIR/runtime-recheck.json"
+cmp "$WORK_DIR/runtime-before.json" "$WORK_DIR/runtime-recheck.json"
+[ "$(stat -c %d "$WORK_DIR/replacements")" = "$(stat -c %d "$API_DIR/src")" ]
+BACKUP_DIR="$(mktemp -d "$BACKUP_ROOT/$RELEASE-$(date +%Y%m%d-%H%M%S).XXXXXX")"
+mkdir "$BACKUP_DIR/files"
+cp "$WORK_DIR/runtime-before.json" "$BACKUP_DIR/runtime-paths.json"
+for name in "${FILES[@]}"; do
+  if [ -f "$API_DIR/src/$name" ]; then
+    cp -a -- "$API_DIR/src/$name" "$BACKUP_DIR/files/$name"
+    sha256sum "$BACKUP_DIR/files/$name" >> "$BACKUP_DIR/original-sha256.txt"
+  else printf '%s\n' "$name" >> "$BACKUP_DIR/originally-absent.txt"; fi
+done
+same_baseline
+backup_matches_source
+STOPPED=1
+systemctl stop "$SERVICE"
+[ "$(systemctl show "$SERVICE" --property=MainPID --value)" = 0 ]
+same_baseline
+backup_matches_source
+TOUCHED=1
+for name in "${FILES[@]}"; do mv -- "$WORK_DIR/replacements/$name" "$API_DIR/src/$name"; done
+"$NODE" "$CHECKER" baseline "$API_DIR" "$WORK_DIR/package"
+systemctl start "$SERVICE"
+healthy
+NEW_PID="$(systemctl show "$SERVICE" --property=MainPID --value)"
+[ "$NEW_PID" != "$OLD_PID" ]
+"$NODE" "$CHECKER" runtime "$NEW_PID" > "$WORK_DIR/runtime-after.json"
+cmp "$WORK_DIR/runtime-before.json" "$WORK_DIR/runtime-after.json"
+"$NODE" "$CHECKER" baseline "$API_DIR" "$WORK_DIR/package"
+trap - ERR INT TERM
+echo "Participant facility learning backend update completed. Source backup: $BACKUP_DIR"
+echo "Only three source files were replaced. The API applies its additive schema initialization on restart."
+echo "No database rollback, data deletion, npm install, API-key change, Web replacement or Nginx change."
+echo "Staging retained: $WORK_DIR"

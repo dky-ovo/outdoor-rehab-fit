@@ -12,19 +12,30 @@ import { Colors } from "@/constants/Colors";
 import { RFValue } from "react-native-responsive-fontsize";
 
 import { LocaleContext } from "../../contexts/LocaleContext";
+import { AuthContext } from "../../contexts/AuthContext";
 
-import { Tabs, router } from "expo-router";
+import { Tabs, router, Redirect } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const renderBackButton = () => (
-	<TouchableOpacity onPress={() => router.back()}>
+const renderHomeBackButton = () => (
+	<TouchableOpacity onPress={() => router.replace("/(tabs)")} style={{ paddingHorizontal: 8 }}>
 		<Ionicons name="chevron-back" size={RFValue(18)} color={"#000"} />
 	</TouchableOpacity>
 );
 
 export default function TabLayout() {
 	const { i18n } = useContext(LocaleContext);
+	const { user, isLoading } = (useContext(AuthContext) as { user?: unknown; isLoading?: boolean } | null) || {};
+	const insets = useSafeAreaInsets();
+	// Logout/deletion must remove the whole tab subtree, not leave a previous
+	// account's local screen state reachable through Android Back or a deep link.
+	if (isLoading) return null;
+	if (!user) return <Redirect href="/login" />;
+	const tabBarSafeInset = Platform.OS === "android" ? Math.max(insets.bottom, 24) : insets.bottom;
+	const tabBarHeight = 78 + tabBarSafeInset;
 	return (
 		<Tabs
+			backBehavior="initialRoute"
 			screenOptions={{
 				tabBarActiveTintColor: Colors["light"].tint,
 				headerShown: false,
@@ -34,18 +45,22 @@ export default function TabLayout() {
 					ios: {
 						// Use a transparent background on iOS to show the blur effect
 						position: "absolute",
-						height: 100,
+						height: tabBarHeight,
+						paddingTop: 6,
+						paddingBottom: tabBarSafeInset,
 					},
 					default: {
-						height: 100,
+						height: tabBarHeight,
+						paddingTop: 6,
+						paddingBottom: tabBarSafeInset,
 					},
 				}),
 				tabBarLabelStyle: {
 					fontSize: 18, // Increase font size for better readability
-					marginTop: 3, // Adjust margin to position the label
+					marginTop: 1,
 				},
 				tabBarIconStyle: {
-					marginTop: 12, // Adjust margin to position the icon
+					marginTop: 4,
 				},
 			}}
 		>
@@ -60,30 +75,43 @@ export default function TabLayout() {
 				name="favorite"
 				options={{
 					title: i18n.t("favorite"),
-					headerShown: true,
+					headerShown: false,
 					tabBarIcon: ({ color }) => <MaterialIcons size={32} name="favorite" color={color} />,
+				}}
+			/>
+			<Tabs.Screen
+				name="other"
+				options={{
+					title: i18n.t("otherTab"),
+					headerTitle: i18n.t("otherTab"),
+					tabBarIcon: ({ color }) => <MaterialIcons size={32} name="apps" color={color} />,
+					headerShown: true,
+					headerLeft: renderHomeBackButton,
 				}}
 			/>
 			<Tabs.Screen
 				name="setting"
 				options={{
 					title: i18n.t("setting"),
-					headerTitle: i18n.t("setting"),
 					tabBarIcon: ({ color }) => <MaterialIcons size={32} name="settings" color={color} />,
-					headerShown: true,
-					headerLeft: renderBackButton,
+					// The Settings native stack owns every header, including its index.
+					// Toggling a tab header during a push resizes both animated screens.
+					headerShown: false,
+					tabBarHideOnKeyboard: Platform.OS === "android",
 				}}
 			/>
 			<Tabs.Screen name="risk" options={{ href: null }} />
 			<Tabs.Screen name="outdoor" options={{ href: null }} />
 			<Tabs.Screen name="location" options={{ href: null }} />
 			<Tabs.Screen name="research" options={{ href: null }} />
+			<Tabs.Screen name="activity-advice" options={{ href: null }} />
 			<Tabs.Screen name="session" options={{ href: null, tabBarStyle: { display: "none" } }} />
 			<Tabs.Screen name="sessionlog" options={{ href: null }} />
 			<Tabs.Screen name="goals" options={{ href: null }} />
 			<Tabs.Screen name="chat" options={{ href: null, tabBarStyle: { display: "none" } }} />
 			<Tabs.Screen name="stats" options={{ href: null }} />
 			<Tabs.Screen name="equipmentmap" options={{ href: null }} />
+			<Tabs.Screen name="participant-usage" options={{ href: null, tabBarStyle: { display: "none" } }} />
 		</Tabs>
 	);
 }

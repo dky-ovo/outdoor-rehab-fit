@@ -1,0 +1,17 @@
+**
+!Dockerfile
+!package.json
+!package-lock.json
+!src/
+!src/mysqlConfig.js
+!src/mysqlDatabase.js
+!src/mysqlSchema.js
+!src/mysqlSchemaApply.js
+!src/sqliteExportReader.js
+!src/mysqlDataImport.js
+!scripts/
+!scripts/productionMigrationCli.js
+!scripts/create-aliyun-production-schema.js
+!scripts/import-aliyun-production-data.js
+!migration/
+!migration/source-schema-audit.json

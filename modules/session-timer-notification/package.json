@@ -1,0 +1,7 @@
+{
+  "name": "session-timer-notification",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "description": "Native Android notification chronometer for active exercise timers"
+}

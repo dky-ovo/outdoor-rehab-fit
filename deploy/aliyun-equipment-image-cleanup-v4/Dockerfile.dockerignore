@@ -1,0 +1,8 @@
+**
+!server/
+!server/src/
+!server/src/**
+!deploy/
+!deploy/aliyun-equipment-image-cleanup-v4/
+!deploy/aliyun-equipment-image-cleanup-v4/Dockerfile
+!deploy/aliyun-equipment-image-cleanup-v4/Dockerfile.dockerignore

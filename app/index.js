@@ -1,23 +1,17 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { router } from "expo-router";
 import { StyleSheet, View, Animated, TouchableOpacity, Text, ImageBackground } from "react-native";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from "react-native-responsive-screen";
-import * as Updates from "expo-updates";
 import { RFValue } from "react-native-responsive-fontsize";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/contexts/AuthContext";
+import { LocaleContext } from "@/contexts/LocaleContext";
 
 export default function HomeScreen() {
-	const { currentlyRunning, isUpdateAvailable, isUpdatePending } = Updates.useUpdates();
 	const { ready, isAuthenticated } = useAuth();
+	const { i18n } = useContext(LocaleContext);
 	// null = still deciding, true = show Start cover
 	const [displayStart, setDisplayStart] = useState(null);
-
-	useEffect(() => {
-		if (isUpdatePending) {
-			Updates.reloadAsync();
-		}
-	}, [isUpdatePending]);
 
 	// Keep the Start screen, but skip it when the user already has a valid session
 	// (logged-in or guest). If onboarding is done but not logged in, go to login.
@@ -89,7 +83,7 @@ export default function HomeScreen() {
 				/>
 				{/* replace so Start is not left under the navigation stack */}
 				<TouchableOpacity style={styles.button} onPress={() => router.replace("/firstdisclaimer")}>
-					<Text style={styles.buttonText}>Start 開始</Text>
+					<Text style={styles.buttonText}>{i18n.t("start")}</Text>
 				</TouchableOpacity>
 				<Text style={styles.appVersionText}>App version 1.0.0</Text>
 			</View>

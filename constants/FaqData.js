@@ -40,8 +40,8 @@ export const FAQ_DATA = [
 	{
 		keywords: ["login", "logout", "account", "password", "登入", "登出", "密碼", "密码", "帳戶", "账户"],
 		answerEn:
-			"You can log in or register from the login screen. Note the app automatically logs you out after 1.5 hours of inactivity, so you may need to log in again.",
-		answerZh: "可在登入頁登入或註冊。請注意：如90分鐘內沒有操作，應用程式會自動登出，需要重新登入。",
+			"You can log in or register from the login screen. Inactivity does not sign you out. You may need to sign in again after signing out, changing your password, or when your secure session expires or is revoked.",
+		answerZh: "可在登入頁登入或註冊。應用程式不會因閒置自動登出；主動登出、修改密碼，或安全登入憑證到期或被撤銷後，可能需要重新登入。",
 	},
 	{
 		keywords: ["favorite", "favourite", "bookmark", "收藏", "最愛", "最爱"],

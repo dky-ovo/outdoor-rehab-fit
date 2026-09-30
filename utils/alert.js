@@ -1,25 +1,29 @@
-// Cross-platform alert: React Native's Alert is a no-op on web,
-// so use window.alert / window.confirm there to keep callbacks working.
-import { Alert, Platform } from "react-native";
+let alertHandler = null;
+let nextAlertId = 1;
+const pendingAlerts = [];
+let exclusiveAlertId = null;
+export const dismissAppAlert = id => { if (exclusiveAlertId === id) exclusiveAlertId = null; };
 
-export const showAlert = (title, message, buttons) => {
-	const btns = buttons && buttons.length ? buttons : [{ text: "OK" }];
-	if (Platform.OS !== "web") {
-		Alert.alert(title, message, btns);
-		return;
+export const setAppAlertHandler = (handler) => {
+	alertHandler = handler;
+	while (alertHandler && pendingAlerts.length) {
+		alertHandler(pendingAlerts.shift());
 	}
-	const text = [title, message].filter(Boolean).join("\n");
-	if (btns.length <= 1) {
-		window.alert(text);
-		btns[0]?.onPress?.();
-		return;
-	}
-	const cancelBtn = btns.find((b) => b.style === "cancel");
-	const confirmBtn = btns.find((b) => b !== cancelBtn) || btns[btns.length - 1];
-	const ok = window.confirm(text);
-	if (ok) {
-		confirmBtn?.onPress?.();
-	} else {
-		cancelBtn?.onPress?.();
-	}
+	return () => {
+		if (alertHandler === handler) alertHandler = null;
+	};
+};
+
+export const showAlert = (title, message, buttons, options = {}) => {
+	if (exclusiveAlertId !== null && !options.sessionEnded) return;
+	const payload = {
+		id: nextAlertId++,
+		title: title || "",
+		message: message || "",
+		buttons: buttons?.length ? buttons : [{ text: "OK" }],
+		...(options.sessionEnded ? { replaceAll: true } : {}),
+	};
+	if (options.sessionEnded) { exclusiveAlertId = payload.id; pendingAlerts.length = 0; }
+	if (alertHandler) alertHandler(payload);
+	else pendingAlerts.push(payload);
 };

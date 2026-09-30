@@ -1,0 +1,19 @@
+{
+  "source_sha256": "9e01e2f4d5b0e05cb0dac415ccffa4179e42105a76efc42df7e3788c9e46933d",
+  "missing_in_source": [],
+  "extra_in_source": [],
+  "column_differences": [],
+  "column_order_differences": [
+    "app_equipment_items"
+  ],
+  "index_differences": [],
+  "foreign_key_differences": [],
+  "ddl_differences": [
+    {
+      "type": "table",
+      "name": "app_equipment_items",
+      "source_sql": "CREATE TABLE app_equipment_items (\n\t\tid TEXT PRIMARY KEY,\n\t\tis_custom INTEGER NOT NULL DEFAULT 0 CHECK (is_custom IN (0, 1)),\n\t\tname_zh TEXT NOT NULL DEFAULT '',\n\t\tname_en TEXT NOT NULL DEFAULT '',\n\t\tcategories_json TEXT NOT NULL DEFAULT '[]',\n\t\timage_url TEXT NOT NULL DEFAULT '',\n\t\tyoutube_key TEXT NOT NULL DEFAULT '',\n\t\tdetails_zh TEXT NOT NULL DEFAULT '',\n\t\tdetails_en TEXT NOT NULL DEFAULT '',\n\t\tkinesiology_zh TEXT NOT NULL DEFAULT '',\n\t\tkinesiology_en TEXT NOT NULL DEFAULT '',\n\t\tpt_tip_zh TEXT NOT NULL DEFAULT '',\n\t\tpt_tip_en TEXT NOT NULL DEFAULT '',\n\t\tot_tip_zh TEXT NOT NULL DEFAULT '',\n\t\tot_tip_en TEXT NOT NULL DEFAULT '',\n\t\tcare_tip_zh TEXT NOT NULL DEFAULT '',\n\t\tcare_tip_en TEXT NOT NULL DEFAULT '',\n\t\tsort_order INTEGER NOT NULL DEFAULT 0,\n\t\tis_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),\n\t\tcreated_by TEXT,\n\t\tcreated_at TEXT NOT NULL,\n\t\tupdated_at TEXT NOT NULL, deleted_at TEXT, tcm_zh TEXT NOT NULL DEFAULT '', tcm_en TEXT NOT NULL DEFAULT '', tcm_enabled INTEGER CHECK (tcm_enabled IN (0, 1)), gif_left_url TEXT NOT NULL DEFAULT '', gif_right_url TEXT NOT NULL DEFAULT '', video_url TEXT NOT NULL DEFAULT '', video_url_zh TEXT NOT NULL DEFAULT '', video_url_en TEXT NOT NULL DEFAULT '', video_localized INTEGER NOT NULL DEFAULT 0 CHECK (video_localized IN (0,1)),\n\t\tFOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL\n\t)",
+      "current_code_sql": "CREATE TABLE app_equipment_items (\n\t\tid TEXT PRIMARY KEY,\n\t\tis_custom INTEGER NOT NULL DEFAULT 0 CHECK (is_custom IN (0, 1)),\n\t\tname_zh TEXT NOT NULL DEFAULT '',\n\t\tname_en TEXT NOT NULL DEFAULT '',\n\t\tcategories_json TEXT NOT NULL DEFAULT '[]',\n\t\timage_url TEXT NOT NULL DEFAULT '',\n\t\tgif_left_url TEXT NOT NULL DEFAULT '',\n\t\tgif_right_url TEXT NOT NULL DEFAULT '',\n\t\tyoutube_key TEXT NOT NULL DEFAULT '',\n\t\tdetails_zh TEXT NOT NULL DEFAULT '',\n\t\tdetails_en TEXT NOT NULL DEFAULT '',\n\t\tkinesiology_zh TEXT NOT NULL DEFAULT '',\n\t\tkinesiology_en TEXT NOT NULL DEFAULT '',\n\t\tpt_tip_zh TEXT NOT NULL DEFAULT '',\n\t\tpt_tip_en TEXT NOT NULL DEFAULT '',\n\t\tot_tip_zh TEXT NOT NULL DEFAULT '',\n\t\tot_tip_en TEXT NOT NULL DEFAULT '',\n\t\ttcm_zh TEXT NOT NULL DEFAULT '',\n\t\ttcm_en TEXT NOT NULL DEFAULT '',\n\t\ttcm_enabled INTEGER CHECK (tcm_enabled IN (0, 1)),\n\t\tcare_tip_zh TEXT NOT NULL DEFAULT '',\n\t\tcare_tip_en TEXT NOT NULL DEFAULT '',\n\t\tsort_order INTEGER NOT NULL DEFAULT 0,\n\t\tis_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),\n\t\tcreated_by TEXT,\n\t\tcreated_at TEXT NOT NULL,\n\t\tupdated_at TEXT NOT NULL, deleted_at TEXT, video_url TEXT NOT NULL DEFAULT '', video_url_zh TEXT NOT NULL DEFAULT '', video_url_en TEXT NOT NULL DEFAULT '', video_localized INTEGER NOT NULL DEFAULT 0 CHECK (video_localized IN (0,1)),\n\t\tFOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL\n\t)"
+    }
+  ]
+}

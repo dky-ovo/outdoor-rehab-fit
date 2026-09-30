@@ -1,0 +1,7 @@
+# Only source files in this tool bundle are used by the image.
+import-run.*/
+*.jsonl
+*.sqlite*
+*.pem
+*.tar.gz
+.env*

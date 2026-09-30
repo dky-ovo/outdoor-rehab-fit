@@ -1,0 +1,127 @@
+name: outdoor-fit-production
+
+services:
+  api:
+    image: "outdoor-fit-api:${RELEASE_TAG:?Set a unique reviewed release tag}"
+    build:
+      context: ../..
+      dockerfile: deploy/aliyun-production/Dockerfile
+    init: true
+    user: "1000:1000"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m,uid=1000,gid=1000,mode=1770
+    cpus: 1.5
+    mem_limit: 1536m
+    pids_limit: 128
+    stop_grace_period: 110s
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=768
+      DATABASE_CLIENT: mysql
+      HOST: 0.0.0.0
+      PORT: "3000"
+      JWT_SECRET_FILE: /run/outdoor-secrets/jwt-secret
+      MYSQL_HOST: "${MYSQL_HOST:?Set the RDS private DNS endpoint}"
+      MYSQL_PORT: "${MYSQL_PORT:-3306}"
+      MYSQL_USER: "${MYSQL_USER:?Set the application database user}"
+      MYSQL_PASSWORD_FILE: /run/outdoor-secrets/mysql-password
+      MYSQL_DATABASE: "${MYSQL_DATABASE:?Explicitly select the prepared database}"
+      MYSQL_POOL_SIZE: "4"
+      MYSQL_SSL_CA: /run/rds-ca/ca-chain.pem
+      EQUIPMENT_UPLOAD_DIR: /app/data/equipment-images
+      MEDIA_UPLOAD_DIR: /app/data/media-library
+      MEDIA_SEED_DIR: /app/media-seed
+      SMS_MODE: "${SMS_MODE:?Explicitly select production SMS mode}"
+      TEST_SMS_CODE_ENABLED: "false"
+      TWILIO_ACCOUNT_SID: "${TWILIO_ACCOUNT_SID:-}"
+      TWILIO_API_KEY_SID: "${TWILIO_API_KEY_SID:-}"
+      TWILIO_API_KEY_SECRET: "${TWILIO_API_KEY_SECRET:-}"
+      TWILIO_VERIFY_SERVICE_SID: "${TWILIO_VERIFY_SERVICE_SID:-}"
+    volumes:
+      - type: bind
+        source: "${JWT_SECRET_FILE:?Set the preserved JWT secret file}"
+        target: /run/outdoor-secrets/jwt-secret
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${MYSQL_PASSWORD_FILE:?Set the private database password file}"
+        target: /run/outdoor-secrets/mysql-password
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${EQUIPMENT_IMAGES_DIR:?Set the prepared equipment-images directory}"
+        target: /app/data/equipment-images
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${MEDIA_LIBRARY_DIR:?Set the prepared media-library directory}"
+        target: /app/data/media-library
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${MEDIA_SEED_DIR:?Set the prepared media-seed directory}"
+        target: /app/media-seed
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${RDS_CA_FILE:?Set the verified PEM CA file}"
+        target: /run/rds-ca/ca-chain.pem
+        read_only: true
+        bind: {create_host_path: false}
+    expose: ["3000"]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/health',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+
+  caddy:
+    image: "${CADDY_IMAGE:?Set an explicitly selected Caddy 2 image tag or digest}"
+    user: "1000:1000"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m,uid=1000,gid=1000,mode=1770
+    cpus: 0.5
+    mem_limit: 256m
+    pids_limit: 64
+    environment:
+      ACME_EMAIL: "${ACME_EMAIL:?Set the certificate renewal contact address}"
+      XDG_DATA_HOME: /data
+      XDG_CONFIG_HOME: /config
+    ports:
+      - "${HTTP_BIND:?Confirm the free host address and HTTP port}:8080"
+      - "${HTTPS_BIND:?Confirm the free host address and HTTPS port}:8443"
+    depends_on:
+      api: {condition: service_healthy}
+    volumes:
+      - type: bind
+        source: ./Caddyfile
+        target: /etc/caddy/Caddyfile
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${ADMIN_WEB_DIR:?Set the complete Expo web export directory}"
+        target: /srv/admin
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${CADDY_DATA_DIR:?Set the persistent Caddy certificate directory}"
+        target: /data
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${CADDY_CONFIG_DIR:?Set the persistent Caddy configuration directory}"
+        target: /config
+        bind: {create_host_path: false}
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}

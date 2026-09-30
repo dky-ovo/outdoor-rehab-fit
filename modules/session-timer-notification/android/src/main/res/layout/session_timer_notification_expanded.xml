@@ -1,0 +1,140 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/session_timer_content"
+  android:layout_width="match_parent"
+  android:layout_height="wrap_content"
+  android:orientation="vertical"
+  android:paddingTop="4dp"
+  android:paddingBottom="8dp">
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="32dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical">
+
+    <TextView
+      android:id="@+id/session_timer_mode"
+      android:layout_width="0dp"
+      android:layout_height="match_parent"
+      android:layout_weight="1"
+      android:layout_marginEnd="10dp"
+      android:textAppearance="@android:style/TextAppearance.Material.Notification.Title"
+      android:textStyle="bold"
+      android:textSize="18sp"
+      android:autoSizeTextType="uniform"
+      android:autoSizeMinTextSize="12sp"
+      android:autoSizeMaxTextSize="18sp"
+      android:autoSizeStepGranularity="1sp"
+      android:gravity="center_vertical"
+      android:includeFontPadding="false"
+      android:maxLines="1"
+      android:ellipsize="end" />
+
+    <TextView
+      android:id="@+id/session_timer_status"
+      android:layout_width="84dp"
+      android:layout_height="28dp"
+      android:paddingStart="10dp"
+      android:paddingEnd="10dp"
+      android:background="@drawable/session_timer_status_background"
+      android:textColor="@color/session_timer_accent"
+      android:textStyle="bold"
+      android:textSize="13sp"
+      android:autoSizeTextType="uniform"
+      android:autoSizeMinTextSize="10sp"
+      android:autoSizeMaxTextSize="13sp"
+      android:autoSizeStepGranularity="1sp"
+      android:gravity="center"
+      android:includeFontPadding="false"
+      android:maxLines="1"
+      android:ellipsize="end" />
+  </LinearLayout>
+
+  <TextView
+    android:id="@+id/session_timer_time_label"
+    android:layout_width="match_parent"
+    android:layout_height="24dp"
+    android:layout_marginTop="6dp"
+    android:textAppearance="@android:style/TextAppearance.Material.Notification"
+    android:textSize="13sp"
+    android:autoSizeTextType="uniform"
+    android:autoSizeMinTextSize="10sp"
+    android:autoSizeMaxTextSize="13sp"
+    android:autoSizeStepGranularity="1sp"
+    android:gravity="center_vertical"
+    android:includeFontPadding="false"
+    android:maxLines="1"
+    android:ellipsize="end" />
+
+  <FrameLayout
+    android:layout_width="match_parent"
+    android:layout_height="64dp">
+
+    <Chronometer
+      android:id="@+id/session_timer_running"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:textAppearance="@android:style/TextAppearance.Material.Notification.Title"
+      android:fontFamily="monospace"
+      android:textStyle="bold"
+      android:textSize="48sp"
+      android:autoSizeTextType="uniform"
+      android:autoSizeMinTextSize="14sp"
+      android:autoSizeMaxTextSize="48sp"
+      android:autoSizeStepGranularity="1sp"
+      android:gravity="center_vertical|start"
+      android:includeFontPadding="false"
+      android:maxLines="1"
+      android:ellipsize="end" />
+
+    <TextView
+      android:id="@+id/session_timer_paused"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:textAppearance="@android:style/TextAppearance.Material.Notification.Title"
+      android:fontFamily="monospace"
+      android:textStyle="bold"
+      android:textSize="48sp"
+      android:autoSizeTextType="uniform"
+      android:autoSizeMinTextSize="14sp"
+      android:autoSizeMaxTextSize="48sp"
+      android:autoSizeStepGranularity="1sp"
+      android:gravity="center_vertical|start"
+      android:includeFontPadding="false"
+      android:maxLines="1"
+      android:ellipsize="end"
+      android:visibility="gone" />
+  </FrameLayout>
+
+  <TextView
+    android:id="@+id/session_timer_detail"
+    android:layout_width="match_parent"
+    android:layout_height="42dp"
+    android:layout_marginTop="4dp"
+    android:textAppearance="@android:style/TextAppearance.Material.Notification"
+    android:textSize="13sp"
+    android:autoSizeTextType="uniform"
+    android:autoSizeMinTextSize="9sp"
+    android:autoSizeMaxTextSize="13sp"
+    android:autoSizeStepGranularity="1sp"
+    android:includeFontPadding="false"
+    android:maxLines="2"
+    android:ellipsize="end"
+    android:visibility="gone" />
+
+  <TextView
+    android:id="@+id/session_timer_open"
+    android:layout_width="match_parent"
+    android:layout_height="32dp"
+    android:layout_marginTop="8dp"
+    android:textAppearance="@android:style/TextAppearance.Material.Notification"
+    android:textSize="14sp"
+    android:autoSizeTextType="uniform"
+    android:autoSizeMinTextSize="10sp"
+    android:autoSizeMaxTextSize="14sp"
+    android:autoSizeStepGranularity="1sp"
+    android:gravity="center_vertical"
+    android:includeFontPadding="false"
+    android:maxLines="1"
+    android:ellipsize="end" />
+</LinearLayout>

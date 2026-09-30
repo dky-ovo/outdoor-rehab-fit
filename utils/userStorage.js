@@ -21,9 +21,11 @@ export const USER_DATA_ROOT = "userData";
 const CURRENT_OWNER_KEY = "currentOwnerKey";
 
 let memoryOwnerKey = null;
+const retiredPhoneOwners = new Set();
+const retiredOwnerKey = owner => `userDataRetiredOwner/${encodeURIComponent(owner)}`;
 
 /** Stable folder id for a session user object. */
-export function getOwnerKey(user) {
+function baseOwnerKey(user) {
 	if (!user) return null;
 	if (user.role === AUTH_ROLES.GUEST || user.isGuest || user.name === "guest") {
 		return "guest";
@@ -38,6 +40,34 @@ export function getOwnerKey(user) {
 		return `name:${String(user.name || user.username).trim().toLowerCase()}`;
 	}
 	return "user:unknown";
+}
+
+export function getOwnerKey(user) {
+	const base = baseOwnerKey(user);
+	return user?.id && retiredPhoneOwners.has(base) ? `user:${String(user.id)}` : base;
+}
+
+// Keep deletion/re-registration isolated even if an old offline write finishes
+// late. A retired phone namespace is never reused by a newly registered ID.
+export async function purgeDeletedUserData(user) {
+	const owner = getOwnerKey(user), base = baseOwnerKey(user);
+	if (!user?.id || !owner || owner === "guest") return;
+	let meta;
+	try { meta = JSON.parse(await AsyncStorage.getItem(userDataKey("meta", base)) || "null"); } catch { /* Remove only this legacy namespace below. */ }
+	retiredPhoneOwners.add(base);
+	await AsyncStorage.setItem(retiredOwnerKey(base), "1");
+	const owners = new Set([`user:${String(user.id)}`]);
+	if (!meta?.remoteId || String(meta.remoteId) === String(user.id)) owners.add(base);
+	if (owner !== base) owners.add(owner);
+	const prefixes = [...owners].map(value => `${USER_DATA_ROOT}/${value}/`);
+	const chatKeys = ["zh", "en"].flatMap(locale => [
+		`@outdoor_fit_ai_conversations_v2:${encodeURIComponent(String(user.id))}:${locale}`,
+		`@outdoor_fit_ai_history_v1:${String(user.id)}:${locale}`,
+	]);
+	chatKeys.push(`@outdoor_fit_ai_jobs_v1:${encodeURIComponent(String(user.id))}`);
+	const keys = await AsyncStorage.getAllKeys();
+	const removing = keys.filter(key => prefixes.some(prefix => key.startsWith(prefix)) || chatKeys.includes(key));
+	if (removing.length) await AsyncStorage.multiRemove(removing);
 }
 
 export function getCurrentOwnerKey() {
@@ -74,6 +104,18 @@ export function userDataKey(leaf, ownerKey = memoryOwnerKey) {
  * Call on register / login so each account has its own directory.
  */
 export async function ensureUserFolder(user) {
+	const base = baseOwnerKey(user);
+	if (user?.id && base && base !== "guest") {
+		if (await AsyncStorage.getItem(retiredOwnerKey(base)) === "1") retiredPhoneOwners.add(base);
+		if (!retiredPhoneOwners.has(base)) {
+			let previous;
+			try { previous = JSON.parse(await AsyncStorage.getItem(userDataKey("meta", base)) || "null"); } catch { /* Legacy unreadable metadata is handled below. */ }
+			if (previous?.remoteId && String(previous.remoteId) !== String(user.id)) {
+				retiredPhoneOwners.add(base);
+				await AsyncStorage.setItem(retiredOwnerKey(base), "1");
+			}
+		}
+	}
 	const ownerKey = getOwnerKey(user);
 	if (!ownerKey) return null;
 
@@ -94,8 +136,8 @@ export async function ensureUserFolder(user) {
 			role: user?.role || "",
 			profileRole: user?.profileRole || "",
 			// Placeholder for future cloud sync
-			remoteId: null,
-			syncStatus: "local-only",
+			remoteId: user?.id || null,
+			syncStatus: user?.token ? "cloud-connected" : "local-only",
 		};
 		await AsyncStorage.setItem(metaKey, JSON.stringify(meta));
 	} else {
@@ -105,6 +147,8 @@ export async function ensureUserFolder(user) {
 			meta.name = user?.name || meta.name;
 			meta.phone = user?.phone || meta.phone;
 			meta.email = user?.email || meta.email;
+			meta.remoteId = user?.id || meta.remoteId || null;
+			meta.syncStatus = user?.token ? "cloud-connected" : meta.syncStatus;
 			await AsyncStorage.setItem(metaKey, JSON.stringify(meta));
 		} catch (e) {
 			// ignore corrupt meta
@@ -143,8 +187,8 @@ export async function getUserJson(leaf, fallback, legacyKey) {
 }
 
 export async function setUserJson(leaf, value) {
-	await restoreCurrentOwnerKey();
-	const key = userDataKey(leaf);
+	const owner = memoryOwnerKey || await restoreCurrentOwnerKey();
+	const key = userDataKey(leaf, owner);
 	await AsyncStorage.setItem(key, JSON.stringify(value));
 }
 

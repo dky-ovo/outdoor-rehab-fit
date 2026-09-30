@@ -1,3 +1,4 @@
+import { useAccountDataRevision } from '../../../hooks/useAccountDataRevision';
 // App Upgrade #4: display of the recorded app usage data
 import React, { useCallback, useContext, useState } from "react";
 import { StyleSheet, View, Text, ScrollView } from "react-native";
@@ -7,15 +8,22 @@ import { RFValue } from "react-native-responsive-fontsize";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from "react-native-responsive-screen";
 import { LocaleContext } from "../../../contexts/LocaleContext";
 import { getUsageStats } from "../../../utils/usage";
+import { useAndroidBackTarget } from "../../../hooks/useAndroidBackTarget";
+import UsageMetricCards from "../../../components/UsageMetricCards";
 
 const UsageStats = () => {
+	const accountRevision = useAccountDataRevision(['usage']);
+	useAndroidBackTarget("/(tabs)/other");
 	const { i18n } = useContext(LocaleContext);
 	const [stats, setStats] = useState(null);
 
 	useFocusEffect(
 		useCallback(() => {
-			getUsageStats().then(setStats);
-		}, [])
+			let active = true;
+			setStats(null);
+			getUsageStats().then((result) => { if (active) setStats(result); });
+			return () => { active = false; };
+		}, [accountRevision])
 	);
 
 	if (!stats) return null;
@@ -33,18 +41,7 @@ const UsageStats = () => {
 
 	return (
 		<ScrollView style={styles.container} contentContainerStyle={{ padding: wp("5%"), paddingBottom: hp("15%") }}>
-			{rows.map((row) => (
-				<View key={row.labelKey} style={styles.card}>
-					<View style={[styles.iconCircle, { backgroundColor: row.color }]}>
-						<Ionicons name={row.icon} size={RFValue(22)} color="#fff" />
-					</View>
-					<Text style={styles.label}>{i18n.t(row.labelKey)}</Text>
-					<View style={styles.valueBox}>
-						<Text style={[styles.value, { color: row.color }]}>{row.value}</Text>
-						<Text style={styles.unit}>{i18n.t(row.unitKey)}</Text>
-					</View>
-				</View>
-			))}
+			<UsageMetricCards rows={rows} i18n={i18n} />
 		</ScrollView>
 	);
 };

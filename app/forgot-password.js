@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useCallback, useContext, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	ImageBackground,
@@ -12,7 +12,7 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { RFValue } from "react-native-responsive-fontsize";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from "react-native-responsive-screen";
 import { LocaleContext } from "../contexts/LocaleContext";
@@ -31,6 +31,7 @@ const ERROR_MESSAGES = {
 	invalidCode: "invalidCode",
 	codeExpired: "codeExpired",
 	smsDeliveryFailed: "smsDeliveryFailed",
+	smsUnavailable: "smsUnavailable",
 	smsRateLimited: "smsRateLimited",
 	smsVerificationFailed: "smsVerificationFailed",
 	invalidOrExpiredCode: "invalidCode",
@@ -49,26 +50,47 @@ export default function ForgotPasswordScreen() {
 	const [newPassword, setNewPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
 	const [submitting, setSubmitting] = useState(false);
+	const submittingRef = useRef(false);
+	const focusedRef = useRef(false);
+	const requestVersionRef = useRef(0);
+	const normalizedFrom = Array.isArray(from) ? from[0] : from;
+	useFocusEffect(useCallback(() => {
+		focusedRef.current = true;
+		submittingRef.current = false;
+		setSubmitting(false);
+		return () => { focusedRef.current = false; requestVersionRef.current += 1; };
+	}, []));
+	const isCurrentRequest = (version) => focusedRef.current && version === requestVersionRef.current;
+	const backToLogin = () => {
+		requestVersionRef.current += 1;
+		router.dismissTo({ pathname: "/login", params: { from: normalizedFrom } });
+	};
 
 	const handleSendCode = async () => {
+		if (submittingRef.current) return;
 		if (!isValidInternationalPhone(identifier, countryCode)) {
 			showAlert(i18n.t("warning"), i18n.t("invalidPhone"));
 			return;
 		}
 
+		const version = ++requestVersionRef.current;
+		submittingRef.current = true;
 		setSubmitting(true);
 		try {
 			await requestSmsCode(identifier, "password_reset", countryCode);
+			if (!isCurrentRequest(version)) return;
+			setCode("");
 			setStep(2);
 			showAlert(i18n.t("codeSentTitle"), i18n.t("codeSentSimple"));
 		} catch (error) {
-			showAlert(i18n.t("warning"), i18n.t(ERROR_MESSAGES[error.code] || "serverError"));
+			if (isCurrentRequest(version)) showAlert(i18n.t("warning"), i18n.t(ERROR_MESSAGES[error.code] || "serverError"));
 		} finally {
-			setSubmitting(false);
+			if (isCurrentRequest(version)) { submittingRef.current = false; setSubmitting(false); }
 		}
 	};
 
 	const handleResetPassword = async () => {
+		if (submittingRef.current) return;
 		if (!/^\d{6}$/.test(code) || !newPassword || !confirmPassword) {
 			showAlert(i18n.t("warning"), i18n.t("resetRequired"));
 			return;
@@ -81,20 +103,24 @@ export default function ForgotPasswordScreen() {
 			showAlert(i18n.t("warning"), i18n.t("passwordMismatch"));
 			return;
 		}
+		const version = ++requestVersionRef.current;
+		submittingRef.current = true;
 		setSubmitting(true);
 		try {
 			const verified = await verifySmsCode(identifier, code, "password_reset", countryCode);
+			if (!isCurrentRequest(version)) return;
 			await resetPassword(identifier, newPassword, verified.verificationToken, countryCode);
+			if (!isCurrentRequest(version)) return;
 			showAlert("", i18n.t("resetSuccess"), [
 				{
 					text: "OK",
-					onPress: () => router.replace({ pathname: "/login", params: { from } }),
+					onPress: () => { if (isCurrentRequest(version)) backToLogin(); },
 				},
 			]);
 		} catch (error) {
-			showAlert(i18n.t("warning"), i18n.t(ERROR_MESSAGES[error.code] || "serverError"));
+			if (isCurrentRequest(version)) showAlert(i18n.t("warning"), i18n.t(ERROR_MESSAGES[error.code] || "serverError"));
 		} finally {
-			setSubmitting(false);
+			if (isCurrentRequest(version)) { submittingRef.current = false; setSubmitting(false); }
 		}
 	};
 
@@ -122,12 +148,13 @@ export default function ForgotPasswordScreen() {
 										<CountrySelector
 											i18n={i18n}
 											value={countryCode}
-											onChange={(value) => { setCountryCode(value); setIdentifier(""); }}
+											onChange={(value) => { if (!submittingRef.current) { setCountryCode(value); setIdentifier(""); } }}
 										/>
 										<TextInput
 											style={[styles.input, styles.phoneInput]}
 											value={identifier}
 											onChangeText={setIdentifier}
+											editable={!submitting}
 											autoCapitalize="none"
 											autoCorrect={false}
 											keyboardType="phone-pad"
@@ -213,7 +240,7 @@ export default function ForgotPasswordScreen() {
 							)}
 
 							<View style={styles.footerRow}>
-								<TouchableOpacity onPress={() => router.replace({ pathname: "/login", params: { from } })}>
+								<TouchableOpacity onPress={backToLogin}>
 									<Text style={styles.footerLink}>{i18n.t("backToLogin")}</Text>
 								</TouchableOpacity>
 							</View>

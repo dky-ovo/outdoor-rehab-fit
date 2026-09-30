@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "firstNativeRuntime": "1.1.6",
+  "format": "24 kHz, 16-bit, mono linear PCM WAV",
+  "cues": [
+    {
+      "file": "countdown_yue_halfway.wav",
+      "locale": "zh",
+      "language": "zh-HK",
+      "phase": "halfway",
+      "text": "倒數計時已過一半。",
+      "voice": "zh-HK-HiuMaanNeural",
+      "rate": "-20%",
+      "durationSeconds": 3.432,
+      "bytes": 164814,
+      "sha256": "008eeac438ccd21dd53374961e8cd9c6be5712464e52126c08ee45c821bc5322",
+      "sourceMp3Sha256": "c6993e117b759af689b194eb3956830d550b0ad032ce886b667679acc691f0e8"
+    },
+    {
+      "file": "countdown_yue_complete.wav",
+      "locale": "zh",
+      "language": "zh-HK",
+      "phase": "complete",
+      "text": "倒數計時已結束。",
+      "voice": "zh-HK-HiuMaanNeural",
+      "rate": "-20%",
+      "durationSeconds": 3.024,
+      "bytes": 145230,
+      "sha256": "dc07758ae45bf7917f19fd469b0b33bfb959ce2eefb5bd000ab23ed06dbf534b",
+      "sourceMp3Sha256": "ff97393d96f4774bb9ba9f2f0349e6193bd78cdf985439c778e8173170d1acaa"
+    },
+    {
+      "file": "countdown_en_halfway.wav",
+      "locale": "en",
+      "language": "en-US",
+      "phase": "halfway",
+      "text": "The countdown is halfway complete.",
+      "voice": "Microsoft Zira Desktop",
+      "rate": "SAPI -1",
+      "durationSeconds": 2.9895,
+      "bytes": 143542,
+      "sha256": "4a2cb554b61b3db4da5c0f949fd15fa5e6a1cbe96438c9072be33d85b1031bcc"
+    },
+    {
+      "file": "countdown_en_complete.wav",
+      "locale": "en",
+      "language": "en-US",
+      "phase": "complete",
+      "text": "The countdown has finished.",
+      "voice": "Microsoft Zira Desktop",
+      "rate": "SAPI -1",
+      "durationSeconds": 2.5195,
+      "bytes": 120982,
+      "sha256": "98577de8ba80cbc833becc29ad5d2f45826642821a5a086624375f336d0f4f5d"
+    }
+  ]
+}

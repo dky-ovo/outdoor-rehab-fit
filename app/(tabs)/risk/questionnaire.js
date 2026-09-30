@@ -1,11 +1,13 @@
 import React, { useContext } from "react";
-import { StyleSheet, View, ScrollView, Text, TouchableOpacity, SafeAreaView, Alert } from "react-native";
+import { StyleSheet, View, ScrollView, Text, TouchableOpacity, SafeAreaView } from "react-native";
 import { LocaleContext } from "../../../contexts/LocaleContext";
 import { RFValue } from "react-native-responsive-fontsize";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from "react-native-responsive-screen";
 import { showAlert } from "../../../utils/alert";
+import { useUsageBack } from "../../../hooks/useUsageBack";
 
 const Questionnaire = () => {
+	useUsageBack("/(tabs)/risk", true);
 	const { i18n } = useContext(LocaleContext);
 	return (
 		<SafeAreaView style={styles.container}>
