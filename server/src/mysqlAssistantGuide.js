@@ -1,5 +1,9 @@
+import { createAssistantDeadline } from "./assistantDeadline.js";
 import { assistantLocalEquipmentMatch, normalizeEquipmentLookup } from "./assistant.js";
+import { conflictingRopeInstructions } from "./assistantContentPolicy.js";
 import { symptomConcern } from "./assistantSymptomEvidence.js";
+export { assistantNamedGuideAnswer, assistantQuickGuideAnswer, assistantInvalidResponseAnswer } from "./assistantGuide.js";
+import { assistantGuideReply as sharedGuideReply } from "./assistantGuide.js";
 
 const FIELDS = ["details", "kinesiologyTip", "ptTip", "otTip", "tcmTip", "careTip"];
 const PAGE_CHARACTERS = 4000;
@@ -119,19 +123,15 @@ export class AssistantGuideError extends Error {
 // DeepSeek thinking + tools requires reasoning_content to be returned with
 // the assistant tool-call message (official /guides/thinking_mode/). Never send
 // that private provider trace to the APP, persist it, or accept it from clients.
-export async function completeAssistantWithGuide({ client, body, access, timeoutMs = ASSISTANT_GUIDE_LIMITS.timeoutMs }) {
-	const controller = new AbortController();
-	let timer;
-	const deadline = new Promise((_, reject) => {
-		timer = setTimeout(() => { controller.abort(); reject(new AssistantGuideError("deepSeekUnavailable")); }, timeoutMs);
-	});
+export async function completeAssistantWithGuide({ client, body, access, timeoutMs = ASSISTANT_GUIDE_LIMITS.timeoutMs, signal }) {
+	const deadline = createAssistantDeadline({ timeoutMs, signal });
 	const messages = [...body.messages];
 	let toolCalls = 0;
 	const seenIds = new Set();
 	try {
 		for (let round = 0; round < ASSISTANT_GUIDE_LIMITS.modelCalls; round += 1) {
 			const finalRound = round === ASSISTANT_GUIDE_LIMITS.modelCalls - 1 || toolCalls >= ASSISTANT_GUIDE_LIMITS.toolCalls;
-			const payload = await Promise.race([client.chat.completions.create({ ...body, messages: [...messages], tools: ASSISTANT_GUIDE_TOOLS, tool_choice: finalRound ? "none" : "auto" }, { signal: controller.signal, maxRetries: 0 }), deadline]);
+			const payload = await deadline.run(() => client.chat.completions.create({ ...body, messages: [...messages], tools: ASSISTANT_GUIDE_TOOLS, tool_choice: finalRound ? "none" : "auto" }, { signal: deadline.signal, maxRetries: 0 }));
 			const choice = payload?.choices?.[0], message = choice?.message;
 			if (!message || (choice.finish_reason && !["stop", "tool_calls"].includes(choice.finish_reason))) throw new AssistantGuideError("deepSeekInvalidResponse");
 			const calls = message.tool_calls;
@@ -142,27 +142,13 @@ export async function completeAssistantWithGuide({ client, body, access, timeout
 				...(typeof message.reasoning_content === "string" ? { reasoning_content: message.reasoning_content } : {}), tool_calls: calls });
 			for (const call of calls) {
 				toolCalls += 1;
-				messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(await Promise.race([access.run(call), deadline])) });
+				messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(await deadline.run(() => access.run(call))) });
 			}
 		}
 		throw new AssistantGuideError("deepSeekInvalidResponse");
-	} finally { clearTimeout(timer); }
+	} finally { deadline.close(); }
 }
 
-export function assistantGuideReply(references, locale) {
-	const en = locale === "en";
-	const labels = {
-		details: en ? "Instructions" : "使用說明", kinesiologyTip: en ? "Exercise specialist tips" : "運動學專家介紹",
-		ptTip: en ? "Physiotherapy tips" : "物理治療師貼士", otTip: en ? "Occupational therapy tips" : "職業治療師貼士",
-		tcmTip: en ? "TCM background" : "中醫背景", careTip: en ? "Care tips" : "護理貼士",
-	};
-	let remaining = 6000;
-	return references.map(reference => {
-		// Keep the whole section, including warnings; never cut an instruction in
-		// half to fit the reply. Long sections remain available in the guide.
-		const fits = reference.text.length <= remaining;
-		if (fits) remaining -= reference.text.length;
-		const text = fits ? reference.text : en ? "Open this Facility Guide for the complete section and precautions." : "請開啟此設施教學，查看完整段落和注意事項。";
-		return `${reference.name} — ${labels[reference.field]}\n\n${text}`;
-	}).join("\n\n");
+export function assistantGuideReply(references, locale, catalog = []) {
+	return sharedGuideReply(references, locale, catalog);
 }

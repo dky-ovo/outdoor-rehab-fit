@@ -1,4 +1,7 @@
 import { createPublicEquipmentCatalogCache, publicEquipmentCatalog } from "../publicEquipmentCatalogCache";
+import { mergeEquipmentCatalog } from "../equipmentCatalog";
+import { Platform } from "react-native";
+jest.mock('../api', () => ({ resolveApiAssetUrl: value => value }));
 
 const deferred = () => { let resolve; const promise = new Promise(yes => { resolve = yes; }); return { promise, resolve }; };
 const flush = async () => { for (let i = 0; i < 12; i += 1) await Promise.resolve(); };
@@ -102,4 +105,35 @@ test("a post-invalidation read never races the pending tombstone write by readin
 test("tombstones, custom equipment and cleared replacement URLs survive public projection", () => {
 	const result = publicEquipmentCatalog({ items: [{ id: "9", imageUrl: "", deletedAt: "2026-09-24T00:00:00Z", isActive: false }, { id: "custom", isCustom: true, nameEn: "Custom", videoLocalesEnabled: true }] });
 	expect(result.items).toEqual([{ id: "9", imageUrl: "", isActive: false, deletedAt: "2026-09-24T00:00:00Z" }, { id: "custom", nameEn: "Custom", isCustom: true, videoLocalesEnabled: true }]);
+});
+
+test("route changes and a new process keep public optimized playback and exact original learning identity", async () => {
+	const originalOS = Platform.OS;
+	try {
+		Platform.OS = "web";
+		const storage = memoryStorage(), catalog = payload(), clip = catalog.items[0];
+		Object.assign(clip, { videoLocalesEnabled: true, videoUrlZh: "/api/media/source/original.mp4", videoPlaybackUrlZh: "/api/media/source/hash.mp4", videoIdentityUrlZh: "/api/media/source/original.mp4", videoIdentityDurationSecondsZh: 24.557875,
+			additionalVideos: [{ id: "extra", titleZh: "附加", videoUrlZh: "/api/media/extra/original.mp4", videoPlaybackUrlZh: "/api/media/extra/hash.mp4", videoIdentityUrlZh: "/api/media/extra/original.mp4", privateToken: "PRIVATE_CHILD" }],
+			teachingSections: [{ id: "home", titleZh: "家居", bodyZh: "步驟", adminNotes: "PRIVATE_NOTES" }] });
+		const cache = createPublicEquipmentCatalogCache(base, storage); expect(cache.store(catalog)).toBe(true); await flush();
+		for (const result of [cache.get(), await createPublicEquipmentCatalogCache(base, storage).load()]) {
+			const item = mergeEquipmentCatalog([{ id: 9, name: "Machine" }], result.items, "zh")[0];
+			expect(item.videoUrl).toBe(clip.videoPlaybackUrlZh); expect(item.videoIdentityUrl).toBe(clip.videoUrlZh); expect(item.videoIdentityDurationSeconds).toBe(24.557875);
+			expect(item.additionalVideos[0].videoUrl).toBe(clip.additionalVideos[0].videoPlaybackUrlZh);
+			expect(item.teachingSections[0].body).toBe("步驟");
+		}
+		for (const secret of ["PRIVATE_CHILD", "PRIVATE_NOTES", "privateToken", "adminNotes"]) expect([...storage.data.values()][0]).not.toContain(secret);
+		Platform.OS = "android";
+		const native = mergeEquipmentCatalog([{ id: 9, name: "Machine" }], cache.get().items, "zh")[0];
+		expect(native.videoUrl).toBe(clip.videoUrlZh); expect(native.videoIdentityDurationSeconds).toBeUndefined(); expect(native.additionalVideos[0].videoUrl).toBe(clip.additionalVideos[0].videoUrlZh);
+	} finally { Platform.OS = originalOS; }
+});
+
+test.each([
+	{ videoIdentityDurationSecondsZh: NaN }, { videoIdentityDurationSecondsZh: -1 },
+	{ additionalVideos: Array.from({ length: 41 }, (_, id) => ({ id: String(id) })) },
+	{ additionalVideos: [{ id: "duplicate" }, { id: "duplicate" }] },
+	{ teachingSections: Array.from({ length: 33 }, (_, id) => ({ id: String(id) })) },
+])("invalid or oversized public video metadata cannot reach the cache", fields => {
+	expect(publicEquipmentCatalog({ items: [{ id: "0", ...fields }] })).toBeNull();
 });

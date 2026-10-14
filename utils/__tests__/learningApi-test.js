@@ -20,3 +20,11 @@ test("access and offline failures are surfaced, not replaced by own local progre
 	fetch.mockRejectedValue(new Error("offline"));
 	await expect(saveLearningProgress("token", [])).rejects.toMatchObject({ code: "networkError" });
 });
+
+test("overload exposes a bounded retry delay without replaying a learning mutation", async () => {
+	fetch.mockResolvedValue({ ok: false, status: 503, headers: { get: () => "2" }, json: async () => ({ error: "serverBusy" }) });
+	await expect(saveLearningProgress("token", [])).rejects.toMatchObject({ status: 503, code: "serverBusy", retryAfterMs: 2000 });
+	expect(fetch).toHaveBeenCalledTimes(1);
+	fetch.mockResolvedValue({ ok: false, status: 503, headers: { get: () => "9999" }, json: async () => ({ error: "serverBusy" }) });
+	await expect(saveLearningProgress("token", [])).rejects.toMatchObject({ retryAfterMs: 120000 });
+});

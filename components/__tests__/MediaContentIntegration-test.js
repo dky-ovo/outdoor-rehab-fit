@@ -91,7 +91,7 @@ test("detail paints its image/text without waiting for catalog HTTP, and reserve
 	expect(tree.root.findAllByType("mock-video-webview")).toHaveLength(1);
 	expect(tree.root.findAllByType(AudioPlayer)).toHaveLength(1);
 	expect(StyleSheet.flatten(tree.root.findAllByType(EquipmentImage).find(node => node.props.imageKey === "0:left").props.style)).toEqual(gifStyle);
-	expect(getPublicContent).toHaveBeenCalledWith("outdoor.detail");
+	expect(getPublicContent).toHaveBeenCalledWith("outdoor.detail", { signal: expect.any(Object) });
 });
 
 test("Favorites reuses the same detail, pops its own stack and preserves its source for map return", async () => {

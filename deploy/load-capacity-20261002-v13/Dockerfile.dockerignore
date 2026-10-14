@@ -1,0 +1,7 @@
+*
+!server/
+!server/src/
+!server/src/appMysql.js
+!server/src/mysqlConfig.js
+!server/src/mysqlDatabase.js
+!server/src/lastSeenPolicy.js

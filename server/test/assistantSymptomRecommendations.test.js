@@ -98,7 +98,9 @@ test("empty selection with eligible guides gets one bounded model repair, not a 
 	const response = await ask("膝痛推薦器材"); assert.equal(response.status, 200); assert.ok(response.data.recommendations.length); assert.equal(calls.length, 2);
 }, { respond: (body, round) => result(round === 1 ? { style: "direct", recommendations: [] } : selection(body)) }));
 for (const bad of ["unknown", "foot-path", "altered-quote", "empty", "truncated"]) test(`invalid model ${bad} cannot become an unsupported recommendation`, async () => fixture(async ({ ask, calls }) => {
-	const response = await ask("膝痛推薦器材"); assert.equal(response.status, 502); assert.equal(response.data.error, "deepSeekInvalidResponse"); assert.deepEqual(response.data.recommendations, []); assert.equal(calls.length, 2);
+  const response = await ask("膝痛推薦器材"); assert.equal(response.status, 200); assert.equal(response.data.recoveryReason, "providerInvalidResponse");
+  assert.match(response.data.reply, /未能清楚回答/); assert.match(response.data.reply, /哪一款器材/);
+  assert.deepEqual(response.data.recommendations, []); assert.equal(calls.length, 2);
 }, { respond: body => {
 	const value = selection(body);
 	if (bad === "unknown") value.recommendations[0].id = "invented";
@@ -110,8 +112,10 @@ for (const bad of ["unknown", "foot-path", "altered-quote", "empty", "truncated"
 test("unknown anatomy asks only for the genuinely missing body part; no related prose returns no invented guides", async () => fixture(async ({ ask, database, calls }) => {
 	const unknown = await ask("好痛推薦器材"); assert.equal(unknown.status, 200); assert.deepEqual(unknown.data.recommendations, []); assert.match(unknown.data.reply, /部位/);
 	database.exec("UPDATE app_equipment_items SET is_active=0");
-	const unsupported = await ask("膝痛推薦器材"); assert.equal(unsupported.status, 200); assert.deepEqual(unsupported.data.recommendations, []); assert.match(unsupported.data.reply, /未找到/);
-	assert.equal(calls.length, 2);
+  const unsupported = await ask("膝痛推薦器材"); assert.equal(unsupported.status, 200); assert.deepEqual(unsupported.data.recommendations, []);
+  assert.match(unsupported.data.reply, /停止會令膝部更痛的動作/); assert.match(unsupported.data.reply, /未能判斷哪款器材適合/);
+  assert.match(unsupported.data.reply, /醫護人員評估/); assert.equal(unsupported.data.deepSeekUsed, false);
+  assert.equal(unknown.data.deepSeekUsed, false); assert.equal(calls.length, 0, 'no anatomy or evidence is not sent to a model');
 }));
 test("missing key and provider outage are explicit failures, not fake local DeepSeek recommendations", async () => {
 	await fixture(async ({ ask, calls }) => { const response = await ask("膝痛推薦器材"); assert.equal(response.status, 503); assert.equal(response.data.error, "deepSeekNotConfigured"); assert.equal(calls.length, 0); }, { configured: false });
@@ -120,14 +124,24 @@ test("missing key and provider outage are explicit failures, not fake local Deep
 test("urgent symptoms and short recommendations after them keep an immediate warning without provider calls", async () => fixture(async ({ ask, calls }) => {
 	const history = [];
 	for (const question of ["突然劇痛，無法站立", "膝盖", "推荐器材"]) {
-		const response = await ask(question, { history }); assert.equal(response.status, 200); assert.deepEqual(response.data.recommendations, []); assert.equal(response.data.deepSeekUsed, false); assert.match(response.data.reply, /醫護/);
+		const response = await ask(question, { history }); assert.equal(response.status, 200); assert.deepEqual(response.data.recommendations, []); assert.equal(response.data.deepSeekUsed, false); assert.match(response.data.reply, /(?:醫護|求醫)/); assert.match(response.data.reply, /999/);
 		history.push({ role: "user", content: question });
 	}
 	assert.equal(calls.length, 0);
 }));
 for (const edit of ["pt_tip_zh='內容已變更'", "is_active=0", "deleted_at='2026-09-22'"]) test(`maintenance ${edit} during model response cannot return stale evidence`, async () => fixture(async ({ ask }) => {
-	const response = await ask("膝痛推薦器材"); assert.equal(response.status, 502); assert.equal(response.data.error, "deepSeekInvalidResponse"); assert.deepEqual(response.data.recommendations, []);
+	const response = await ask("膝痛推薦器材"); assert.equal(response.status, 502); assert.equal(response.data.error, "assistantGuideChanged"); assert.deepEqual(response.data.recommendations, []);
 }, { respond: (body, _, database) => { const generated = selection(body, ["4"]); database.exec(`UPDATE app_equipment_items SET ${edit} WHERE id='4'`); return result(generated); } }));
 test("one global provider deadline bounds a transport that ignores cancellation", async () => {
-	await assert.rejects(deepSeekSymptomRecommendations({ client: { chat: { completions: { create: () => new Promise(() => {}) } } }, model: "deepseek-v4-flash", question: "好痛", history: [], locale: "zh", concern: { targets: [] }, catalog: [], getCatalog: () => [], timeoutMs: 10 }), { code: "deepSeekUnavailable" });
+  const catalog = [{ id: 'stretch', name: '伸展器', ptTip: '斜坡伸展可以幫助膝關節炎患者減輕膝關節痛楚。' }];
+  let providerCalls = 0, providerSignal;
+  const client = { chat: { completions: { create: (body, options) => {
+    providerCalls += 1; providerSignal = options.signal;
+    assert.equal(context(body).candidates.length, 1, 'a real eligible guide must reach the hanging transport');
+    return new Promise(() => {});
+  } } } };
+  await assert.rejects(deepSeekSymptomRecommendations({ client, model: 'deepseek-v4-flash', question: '膝痛推薦器材',
+    history: [], locale: 'zh', concern: { targets: ['knee'], requested: true }, catalog, getCatalog: () => catalog,
+    timeoutMs: 10 }), { code: 'deepSeekUnavailable' });
+  assert.equal(providerCalls, 1); assert.equal(providerSignal.aborted, true);
 });

@@ -7,6 +7,7 @@ import AiChatbox from "../../app/(tabs)/chat";
 import { AuthContext } from "../../contexts/AuthContext";
 import { LocaleContext } from "../../contexts/LocaleContext";
 import { getEquipmentCatalog, sendAssistantMessage } from "../../utils/api";
+import { notifyAccountData } from '../../utils/accountSyncEvents';
 import { localEquipmentAnswer } from "../../utils/assistantEquipmentSearch";
 import { withEquipmentTcmReply } from "../../utils/assistantTcm";
 import { mockCurrentAssistantConversation, persistedCurrentAssistantMessages } from "../../scripts/test-helpers/assistantConversationFixtures";
@@ -48,7 +49,7 @@ jest.mock("../../utils/assistantEquipmentSearch", () => {
 jest.mock("../../hooks/useAndroidBackTarget", () => ({ useAndroidBackTarget: jest.fn() }));
 jest.mock("../../hooks/useKeyboardInset", () => ({ useKeyboardInset: () => ({ visible: false, inset: 0 }) }));
 jest.mock("@react-navigation/elements", () => ({ useHeaderHeight: () => 48 }));
-jest.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
+jest.mock("react-native-safe-area-context", () => ({ SafeAreaProvider: ({ children }) => children, SafeAreaView: require("react-native").View, useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 jest.mock("react-native-responsive-fontsize", () => ({ RFValue: value => value }));
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null, MaterialCommunityIcons: () => null }));
 jest.mock("expo-image-picker", () => ({}));
@@ -185,6 +186,29 @@ test("two taps before React rerenders create only one question and one pending r
   await act(async () => request.resolve({ reply: "只回答一次", recommendations: [] }));
   expect(messages().map(visibleReply)).toEqual(["你好", "只回答一次"]);
   assertBusy(false);
+});
+
+test('cloud-history refresh cannot unlock a submission while device location is still pending', async () => {
+  Platform.OS = 'web';
+  let located;
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { geolocation: { getCurrentPosition: success => { located = success; } } } });
+  try {
+  await render();
+  await send('最近公園在哪裡');
+  expect(located).toBeDefined();
+  expect(sendAssistantMessage).not.toHaveBeenCalled();
+  await act(async () => notifyAccountData('person-one', 'assistant', true));
+  expect(sendButton().props.disabled).toBe(true);
+  await type('另一個問題');
+  await pressSend();
+  expect(messages().filter(message => message.sender === 'user')).toHaveLength(1);
+  await act(async () => located({ coords: { latitude: 22.3, longitude: 114.2 } }));
+  expect(sendAssistantMessage).toHaveBeenCalledTimes(1);
+  expect(messages().map(visibleReply)).toEqual(['最近公園在哪裡', '這是本次回答']);
+  expect(input().props.value).toBe('另一個問題');
+  assertBusy(false);
+  } finally { if (previous) Object.defineProperty(globalThis, 'navigator', previous); else delete globalThis.navigator; }
 });
 
 test("fast sequential sends in the same millisecond retain unique rows and complete saved history", async () => {
@@ -357,7 +381,7 @@ test("unrelated topic between a symptom and continuation cannot revive its old c
   await send("继续");
   expect(sendAssistantMessage).toHaveBeenCalledTimes(3);
   expect(messages().at(-1).recommendations).toEqual([]);
-  expect(visibleReply(messages().at(-1))).toContain("請重新發送問題");
+  expect(visibleReply(messages().at(-1))).toBe("這則舊回覆可能已不適用，請重新提問，查看最新說明。");
   expect(visibleReply(messages().at(-1))).not.toContain(symptomQuote);
 });
 
@@ -381,7 +405,7 @@ test("invalid v2 API card cannot disappear before evidence validation while leav
   await render();
   await send("我的膝蓋痛，推薦器材");
   expect(messages().at(-1).recommendations).toEqual([]);
-  expect(visibleReply(messages().at(-1))).toContain("請重新發送問題");
+  expect(visibleReply(messages().at(-1))).toBe("這則舊回覆可能已不適用，請重新提問，查看最新說明。");
   expect(visibleReply(messages().at(-1))).not.toContain("不存在的器材");
   expect(messages().at(-1).equipmentReplyBase).toBeUndefined();
 });
@@ -393,5 +417,39 @@ test("urgent symptoms stay on the immediate safety path and do not request model
   expect(sendAssistantMessage).not.toHaveBeenCalled();
   expect(messages().at(-1).recommendations).toEqual([]);
   expect(visibleReply(messages().at(-1))).toContain("請停止運動");
+});
+
+test("reviewed FAQ red flags override an otherwise local named-equipment lookup", async () => {
+  await render();
+  await send("突然雙腿麻木無力，太極揉推器怎麼用？");
+  expect(sendAssistantMessage).not.toHaveBeenCalled();
+  expect(localEquipmentAnswer).not.toHaveBeenCalled();
+  expect(messages().at(-1).recommendations).toEqual([]);
+  expect(visibleReply(messages().at(-1))).toContain("999");
+});
+
+test("numbness without an acute qualifier goes to the server rather than a local equipment answer", async () => {
+  await render();
+  await send("雙腿麻木，太極揉推器怎麼用？");
+  expect(localEquipmentAnswer).not.toHaveBeenCalled();
+  expect(sendAssistantMessage).toHaveBeenCalledTimes(1);
+  expect(sendAssistantMessage.mock.calls[0][0].message).toBe("雙腿麻木，太極揉推器怎麼用？");
+});
+
+test("restored assistant sources are hidden without changing the user's URL or removing precautions", async () => {
+  const userText = "請幫我解釋 https://example.org/question";
+  mockCurrentAssistantConversation(AsyncStorage, [
+    { id: "u-source", sender: "user", text: userText },
+    { id: "a-source", sender: "ai", action: "retired_image", retiredImage: true,
+      reply: "如疼痛加劇，請停止。\n資料來源：https://example.org/old\n請先閱讀器材教學。",
+      evidencePolicy: "app-faq-reviewed-v1", knowledgeReferences: [{ title: "External source", url: "https://example.org/old" }] },
+  ]);
+  await render();
+  expect(visibleReply(messages().find(item => item.id === "u-source"))).toBe(userText);
+  const reply = visibleReply(messages().find(item => item.id === "a-source"));
+  expect(reply).toContain("如疼痛加劇，請停止。");
+  expect(reply).toContain("請先閱讀器材教學。");
+  expect(reply).not.toMatch(/https?:|example\.org|資料來源/);
+  expect(tree.root.findAllByType(TouchableOpacity).filter(item => item.props.accessibilityRole === "link")).toHaveLength(0);
 });
 jest.mock("expo-image", () => ({ Image: "CachedImage" }));

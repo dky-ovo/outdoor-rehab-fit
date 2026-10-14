@@ -22,6 +22,7 @@ jest.mock("../../contexts/AuthContext", () => {
 jest.mock("../../hooks/useAndroidBackTarget", () => ({ useAndroidBackTarget: jest.fn() }));
 jest.mock("../../utils/api", () => ({ getCachedEquipmentCatalog: () => null, loadCachedEquipmentCatalog: async () => null, getEquipmentCatalog: jest.fn(), getFacilities: jest.fn(), resolveApiAssetUrl: (value) => value }));
 jest.mock("../../utils/bookmarks", () => ({ getBookmarks: jest.fn(), saveBookmarks: jest.fn() }));
+jest.mock("../../utils/userStorage", () => ({ getCurrentOwnerKey: () => "one" }));
 jest.mock("../../utils/learning", () => ({ getLearningProgress: () => Promise.resolve({}), equipmentLearningFlags: () => ({ read: false, watched: false, listened: false }) }));
 jest.mock("react-native-responsive-fontsize", () => ({ RFValue: (value) => value }));
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null, MaterialCommunityIcons: () => null }));
@@ -60,7 +61,7 @@ test("removing a favorite does not also open its detail and keeps other bookmark
 	await act(async () => remove.props.onPress({ stopPropagation }));
 	expect(stopPropagation).toHaveBeenCalledTimes(1);
 	expect(router.push).not.toHaveBeenCalled();
-	expect(saveBookmarks).toHaveBeenCalledWith({ custom: true });
+	expect(saveBookmarks).toHaveBeenCalledWith({ custom: true }, { changedIds: [0] });
 	expect(tree.root.findByType(FlatList).props.data.map((item) => item.id)).toEqual(["custom"]);
 });
 

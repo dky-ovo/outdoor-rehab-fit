@@ -40,8 +40,8 @@ export const FAQ_DATA = [
 	{
 		keywords: ["login", "logout", "account", "password", "登入", "登出", "密碼", "密码", "帳戶", "账户"],
 		answerEn:
-			"You can log in or register from the login screen. Inactivity does not sign you out. You may need to sign in again after signing out, changing your password, or when your secure session expires or is revoked.",
-		answerZh: "可在登入頁登入或註冊。應用程式不會因閒置自動登出；主動登出、修改密碼，或安全登入憑證到期或被撤銷後，可能需要重新登入。",
+			"You can log in or register from the login screen. You will be signed out after 90 minutes without activity, including time spent in the background. Tapping, scrolling or typing restarts this window. Saved account data is retained. You may also need to sign in again after changing your password or when your secure session expires or is revoked.",
+		answerZh: "可在登入頁登入或註冊。連續 90 分鐘沒有操作（包括停留在背景的時間）會自動登出；點按、捲動或輸入文字會重新計時。帳戶已儲存的資料會保留。修改密碼，或安全登入憑證到期或被撤銷後，也可能需要重新登入。",
 	},
 	{
 		keywords: ["favorite", "favourite", "bookmark", "收藏", "最愛", "最爱"],

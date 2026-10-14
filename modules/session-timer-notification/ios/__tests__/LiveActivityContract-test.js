@@ -80,3 +80,39 @@ test("timer presentation adapts to dark lock screens and preserves hour digits i
 	expect(widget).toContain(".accessibilityElement(children: .combine)");
 	expect(widget).toContain("currentValueLabel: { EmptyView() }");
 });
+
+test("compact layouts fit the smallest island slots with stable width across hour and pause transitions", () => {
+	const compact = widget.slice(widget.indexOf('} compactTrailing: {'), widget.indexOf('} minimal: {'));
+	const fixedFrame = compact.match(/\.frame\(width: ([0-9.]+), height: ([0-9.]+), alignment: \.trailing\)/);
+	expect(fixedFrame).not.toBeNull();
+	expect(Number(fixedFrame[1])).toBeLessThanOrEqual(52.33);
+	expect(Number(fixedFrame[2])).toBeLessThanOrEqual(36.67);
+	expect(compact.replace(/\/\/[^\n]*/g, '')).not.toMatch(/minWidth|maxWidth|Date\(\)|duration\(/);
+	expect(compact).toContain('alignment: .trailing');
+	const minimal = widget.slice(widget.indexOf('} minimal: {'), widget.indexOf('.keylineTint'));
+	expect(minimal).toContain('Image(systemName:');
+	expect(minimal).not.toMatch(/TimerDigits|Text\(/);
+	const leading = widget.slice(widget.indexOf('} compactLeading: {'), widget.indexOf('} compactTrailing: {'));
+	expect(leading).toContain('.frame(width: 20, height: 24)');
+});
+
+test("expanded and lock-screen clocks own a full row rather than sharing width with localized action labels", () => {
+	const expanded = widget.slice(widget.indexOf('DynamicIslandExpandedRegion(.bottom)'), widget.indexOf('} compactLeading: {'));
+	expect(expanded).toContain('VStack(alignment: .leading');
+	expect(expanded).not.toContain('HStack(');
+	expect(expanded).toMatch(/TimerDigits\([^\n]+\)\s+\.frame\(maxWidth: \.infinity, alignment: \.leading\)/);
+	const card = widget.slice(widget.indexOf('private struct TimerLockScreenCard'), widget.indexOf('private struct TimerDigits'));
+	expect(card).toMatch(/TimerDigits\(context: context, size: 44\)\s+\.frame\(maxWidth: \.infinity, alignment: \.leading\)/);
+	expect(card).not.toContain('.frame(maxWidth: 82)');
+	const trailing = widget.slice(widget.indexOf('DynamicIslandExpandedRegion(.trailing)'), widget.indexOf('DynamicIslandExpandedRegion(.bottom)'));
+	expect(trailing).toContain('.lineLimit(1)');
+});
+
+test("native preview fixtures cover difficult sizes without adding a runtime timer or requiring newer preview macros", () => {
+	expect(widget).toContain('struct OutdoorFitTimerWidget_Previews: PreviewProvider');
+	for (const preview of ['Compact · 24 hours', 'Compact · hour boundary', 'Compact · paused', 'Compact · maximum saved hours',
+		'Minimal · icon only', 'Expanded · 24 hours · larger text', 'Lock screen · paused · larger text', 'Lock screen · 中文 · dark']) expect(widget).toContain(preview);
+	expect(widget).toContain('elapsed: 31536000, countdown: false');
+	expect(widget).toContain('.environment(\\.dynamicTypeSize, .accessibility3)');
+	expect(widget).not.toMatch(/#Preview\s*\(/);
+});

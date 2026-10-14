@@ -7,7 +7,7 @@ import { AuthContext } from "../../contexts/AuthContext";
 import { LocaleContext } from "../../contexts/LocaleContext";
 import { getEquipmentCatalog, sendAssistantMessage } from "../../utils/api";
 import AssistantConversationHistory from "../AssistantConversationHistory";
-import { ASSISTANT_CONVERSATIONS_PREFIX } from "../../utils/assistantConversations";
+import { ASSISTANT_CONVERSATIONS_PREFIX, loadAssistantConversations, storeAssistantConversation, startNewAssistantConversation } from "../../utils/assistantConversations";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const mockRead = jest.fn(async () => {}), mockStop = jest.fn(async () => {});
@@ -34,7 +34,7 @@ jest.mock("../../utils/api", () => { const sendAssistantMessage = jest.fn(); ret
 jest.mock("../../hooks/useAndroidBackTarget", () => ({ useAndroidBackTarget: jest.fn() }));
 jest.mock("../../hooks/useKeyboardInset", () => ({ useKeyboardInset: () => ({ visible: false, inset: 0 }) }));
 jest.mock("@react-navigation/elements", () => ({ useHeaderHeight: () => 48 }));
-jest.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
+jest.mock("react-native-safe-area-context", () => ({ SafeAreaProvider: ({ children }) => children, SafeAreaView: require("react-native").View, useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 jest.mock("react-native-responsive-fontsize", () => ({ RFValue: value => value }));
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null, MaterialCommunityIcons: () => null }));
 jest.mock("expo-modules-core", () => ({ requireOptionalNativeModule: () => null }));
@@ -193,12 +193,12 @@ test("deleting one archive preserves the current conversation, draft, and model 
   await send("保留的現在問題");
   await act(async () => input().props.onChangeText("未發送的草稿"));
   await press("assistant-conversation-history");
-  const id = history().conversations[0].id;
+  const { id, sourceId } = history().conversations[0];
   const current = messages(); const calls = sendAssistantMessage.mock.calls.length;
   await act(async () => expect(await history().onDelete(id)).toBe(true));
   expect(history().conversations).toEqual([]); expect(messages()).toEqual(current);
   expect(input().props.value).toBe("未發送的草稿"); expect(sendAssistantMessage).toHaveBeenCalledTimes(calls);
-  expect(archive("person-one").conversations.some(item => item.id === id)).toBe(false);
+  expect(archive("person-one").conversations.some(item => item.id === sourceId)).toBe(false);
   await act(async () => history().onClose()); await press("assistant-conversation-history");
   expect(history().conversations).toEqual([]);
   await act(async () => history().onClose()); await send("下一個問題");
@@ -222,11 +222,11 @@ test("clear history keeps the current chat and other owners, and remains deleted
 test("failed deletion leaves records intact and can be retried", async () => {
   await render(); await send("保護舊記錄"); await press("assistant-new-conversation");
   await press("assistant-conversation-history");
-  const id = history().conversations[0].id;
+  const { id, sourceId } = history().conversations[0];
   AsyncStorage.setItem.mockRejectedValueOnce(new Error("storage unavailable"));
   await act(async () => expect(await history().onDelete(id)).toBe(false));
   expect(history().deleteError).toBeTruthy(); expect(history().conversations).toHaveLength(1);
-  expect(archive("person-one").conversations.some(item => item.id === id)).toBe(true);
+  expect(archive("person-one").conversations.some(item => item.id === sourceId)).toBe(true);
   await act(async () => expect(await history().onDelete(id)).toBe(true));
   expect(history().deleteError).toBeNull(); expect(history().conversations).toEqual([]);
 });
@@ -235,7 +235,7 @@ test("a pending AI response during deletion is saved without resurrecting delete
   await render(); await send("刪除舊問題"); await press("assistant-new-conversation");
   const request = deferred(); sendAssistantMessage.mockReturnValueOnce(request.promise);
   await send("等待新回答"); await press("assistant-conversation-history");
-  const id = history().conversations[0].id;
+  const { id, sourceId } = history().conversations[0];
   const gate = deferred(); const write = AsyncStorage.setItem.getMockImplementation();
   AsyncStorage.setItem.mockImplementationOnce(async (key, value) => { await gate.promise; await write(key, value); });
   let deletion;
@@ -255,7 +255,7 @@ test("a pending AI response during deletion is saved without resurrecting delete
 
 test("an old account's pending deletion cannot change the newly logged-in account", async () => {
   await render(); await send("甲記錄"); await press("assistant-new-conversation"); await press("assistant-conversation-history");
-  const id = history().conversations[0].id;
+  const { id, sourceId } = history().conversations[0];
   const gate = deferred(); const write = AsyncStorage.setItem.getMockImplementation();
   AsyncStorage.setItem.mockImplementationOnce(async (key, value) => { await gate.promise; await write(key, value); });
   let deletion; await act(async () => { deletion = history().onDelete(id); });
@@ -314,5 +314,23 @@ test("recovering from a transient initial read error archives the hidden active 
   expect(messages().map(item => item.text || item.reply)).toEqual(["臨時的新對話", "回答：臨時的新對話"]);
   await act(async () => history().onClose()); await send("保持隔離");
   expect(sendAssistantMessage.mock.calls.at(-1)[0].history.map(item => item.content)).toEqual(["臨時的新對話", "回答：臨時的新對話"]);
+});
+test('Chinese history lists an English dialogue and deletion targets its original locale only', async () => {
+  const english = { owner: 'person-one', locale: 'en', authSessionId: 'english-login' };
+  const remote = await loadAssistantConversations(english);
+  await storeAssistantConversation({ ...english, conversationId: remote.conversationId, messages: [
+    { id: 'english-question', sender: 'user', text: 'An English question' },
+    { id: 'english-answer', sender: 'ai', reply: 'An English reply' },
+  ] });
+  await startNewAssistantConversation(english);
+  await render();
+  await send('目前中文對話');
+  await press('assistant-conversation-history');
+  const item = history().conversations.find(row => row.locale === 'en');
+  expect(item.sourceId).toBe(remote.conversationId);
+  expect(item.messages.map(message => message.text)).toEqual(['An English question', 'An English reply']);
+  await act(async () => expect(await history().onDelete(item.id)).toBe(true));
+  expect(history().conversations.find(row => row.sourceId === remote.conversationId)).toBeUndefined();
+  expect(messages().map(message => message.text || message.reply)).toEqual(['目前中文對話', '回答：目前中文對話']);
 });
 jest.mock("expo-image", () => ({ Image: "CachedImage" }));

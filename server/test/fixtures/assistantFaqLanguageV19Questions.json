@@ -1,0 +1,878 @@
+{
+  "schemaVersion": 1,
+  "scope": "95 actual submitted v18 questions from two user-requested production reports; offline v19 regression only, no provider calls",
+  "sources": [
+    {
+      "file": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sha256": "dc1fc161517325878d1c863cd4980ebb224c30c32ae45ef6349aceef254bab40",
+      "wordSha256": "16a2c21f481a41f4e6f74df240ca73b245f1c0aa46cd8a94ee3a4c03a2fb1640"
+    },
+    {
+      "file": "workspace-artifacts/ai-faq-account-retest-20261007-v18/extra-cases.json",
+      "sha256": "1e2ea0078239743ce1847acd02ff94fa0a34f52be1047345cc5b623c82b8b44d",
+      "wordSha256": null
+    },
+    {
+      "file": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sha256": "723c0f6e873a73d013872a53a18f70815e5378dfd9e9ae10f898d8437a1595d0",
+      "wordSha256": "16a2c21f481a41f4e6f74df240ca73b245f1c0aa46cd8a94ee3a4c03a2fb1640"
+    }
+  ],
+  "cases": [
+    {
+      "id": "faq-01",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-01",
+      "question": "我條腰彎曲嘅時候有少少痛，請問應唔應該做扭腰機？",
+      "locale": "zh",
+      "expectedFaq": "back-twister-pain",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-02",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-02",
+      "question": "醫生叫我要防跌倒啊，啲練平衡力嘅運動會唔會危險？",
+      "locale": "zh",
+      "expectedFaq": "balance-safety",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-03",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-03",
+      "question": "我想冇咁易跌親，練吓平衡力。我住彩雲邨嘅，請問可以做咩器械",
+      "locale": "zh",
+      "expectedFaq": "balance-near-home",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-04",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-04",
+      "question": "有冇一啲安全啲嘅運動？因為我隻腳冇乜力，容易跌親。",
+      "locale": "zh",
+      "expectedFaq": "weak-legs-falls",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-05",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-05",
+      "question": "一個禮拜做幾多日運動好？一次做幾耐好？",
+      "locale": "zh",
+      "expectedFaq": "weekly-activity",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-06",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-06",
+      "question": "幾時做運動最啱呀？",
+      "locale": "zh",
+      "expectedFaq": "exercise-weather",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-07",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-07",
+      "question": "做運動前應該隔幾耐食嘢？同埋食啲乜嘢嘢最好？",
+      "locale": "zh",
+      "expectedFaq": "food-before-exercise",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-08",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-08",
+      "question": "請幫我制定一個一星期戶外運動的方案，我希望可以提升下肢的力量。",
+      "locale": "zh",
+      "expectedFaq": "weekly-leg-plan",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-09",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-09",
+      "question": "根據我上個禮拜嘅運動表現，請幫我調整我下個禮拜嘅目標設定。",
+      "locale": "zh",
+      "expectedFaq": "personal-goals",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-10",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-10",
+      "question": "我想訓練腰部力量，但係我屋企附近公園無扭腰機，有無咩其他器材/動作可以取代?",
+      "locale": "zh",
+      "expectedFaq": "back-alternative",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-11",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-11",
+      "question": "我想拉下小腿嘅肌肉，不過我覺得嗰個小腿伸展唔夠斜，我拉唔到，我仲可以用咩器材，或者點調整動作？",
+      "locale": "zh",
+      "expectedFaq": "calf-stretch-alternative",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-12",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-12",
+      "question": "我想要器材可以同時訓練上肢與下肢，你會推薦哪幾個？",
+      "locale": "zh",
+      "expectedFaq": "whole-body-equipment",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-13",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-13",
+      "question": "我係一個新手，我想成身都練，不過我唔識用嗰啲好難，需要技術嘅器材，有啲咩係容易入門嘅器材推薦？",
+      "locale": "zh",
+      "expectedFaq": "beginner-equipment",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-14",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-14",
+      "question": "我最近整親條頸，不過我都係想練下肢，我可以用咩器材鍛煉而唔會影響到患處？",
+      "locale": "zh",
+      "expectedFaq": "neck-injury",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-15",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-15",
+      "question": "我是陪同者，我的家人希望鍛煉上肢力量，但是她在戶外運動方面沒有太多經驗，我應該如何幫助她？",
+      "locale": "zh",
+      "expectedFaq": "carer-upper-body",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-16",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-16",
+      "question": "我有肩周炎，有什麼戶外儀器可以幫助我？",
+      "locale": "zh",
+      "expectedFaq": "frozen-shoulder",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-17",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-17",
+      "question": "我有膝蓋痛，有什麼戶外儀器要避免/小心使用？",
+      "locale": "zh",
+      "expectedFaq": "knee-cautions",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-18",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-18",
+      "question": "我有膝蓋痛，有什麼儀器可以幫助我改善問題",
+      "locale": "zh",
+      "expectedFaq": "knee-mobility",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-19",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-19",
+      "question": "我有足底筋膜炎，有什麼儀器可以幫助我改善問題？",
+      "locale": "zh",
+      "expectedFaq": "plantar-fasciitis",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-20",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-20",
+      "question": "我有下腰背痛問題，有什麼儀器可以幫助我改善問題？有什麼戶外儀器要避免？",
+      "locale": "zh",
+      "expectedFaq": "back-pain",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-21",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-21",
+      "question": "我有手腕痛，有什麼儀器可以幫助我改善問題？有什麼要注意。",
+      "locale": "zh",
+      "expectedFaq": "wrist-pain",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-22",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-22",
+      "question": "我有手肘痛，有什麼儀器可以幫助我改善問題？有什麼要注意。",
+      "locale": "zh",
+      "expectedFaq": "elbow-pain",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-23",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-23",
+      "question": "做完運動後第二日，嗰手臂仲係有啲㾓，係咪正常㗎？",
+      "locale": "zh",
+      "expectedFaq": "scope-health",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-24",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-24",
+      "question": "我有高血壓，係咪唔做得太劇烈嘅運動啊？",
+      "locale": "zh",
+      "expectedFaq": "scope-health",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-25",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-25",
+      "question": "運動嗰陣點樣呼吸先啱呀？我好似好容易就chur晒大氣咁。",
+      "locale": "zh",
+      "expectedFaq": "scope-health",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-26",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-26",
+      "question": "啲示範影片喺邊度搵㗎？",
+      "locale": "zh",
+      "expectedFaq": "app-videos",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-27",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-27",
+      "question": "我個運動記錄喺邊度㗎？點樣send俾人睇㗎？",
+      "locale": "zh",
+      "expectedFaq": "app-records",
+      "priorCaseId": null
+    },
+    {
+      "id": "faq-28",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "faq-28",
+      "question": "我做完一個設施之後，應該休息幾耐先可以做下一個？",
+      "locale": "zh",
+      "expectedFaq": "scope-health",
+      "priorCaseId": null
+    },
+    {
+      "id": "paraphrase-01",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "paraphrase-01",
+      "question": "我弯腰时腰有点痛，公园的扭腰机还适合我做吗？",
+      "locale": "zh",
+      "expectedFaq": "back-twister-pain",
+      "priorCaseId": null
+    },
+    {
+      "id": "paraphrase-02",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "paraphrase-02",
+      "question": "医生提醒我预防跌倒，练平衡会不会反而更容易摔？",
+      "locale": "zh",
+      "expectedFaq": "balance-safety",
+      "priorCaseId": null
+    },
+    {
+      "id": "paraphrase-03",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "paraphrase-03",
+      "question": "我住彩雲邨，想練平衡少啲跌親，附近一定有邊幾部機？",
+      "locale": "zh",
+      "expectedFaq": "balance-near-home",
+      "priorCaseId": null
+    },
+    {
+      "id": "paraphrase-04",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "paraphrase-04",
+      "question": "My legs are weak and I fall easily. Which outdoor exercise equipment is safer for me?",
+      "locale": "en",
+      "expectedFaq": "weak-legs-falls",
+      "priorCaseId": null
+    },
+    {
+      "id": "paraphrase-05",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "paraphrase-05",
+      "question": "長者一星期應該做幾多日運動，每次幾多分鐘？",
+      "locale": "zh",
+      "expectedFaq": "weekly-activity",
+      "priorCaseId": null
+    },
+    {
+      "id": "paraphrase-06",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "paraphrase-06",
+      "question": "夏天咁曬，我朝早定夜晚去公園做運動好啲呀？",
+      "locale": "zh",
+      "expectedFaq": "exercise-weather",
+      "priorCaseId": null
+    },
+    {
+      "id": "paraphrase-07",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "paraphrase-07",
+      "question": "How long should I wait after a meal before exercising, and what should I eat?",
+      "locale": "en",
+      "expectedFaq": "food-before-exercise",
+      "priorCaseId": null
+    },
+    {
+      "id": "paraphrase-08",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "paraphrase-08",
+      "question": "帮我排一个练腿力的七天户外器械计划，可以吗？",
+      "locale": "zh",
+      "expectedFaq": "weekly-leg-plan",
+      "priorCaseId": null
+    },
+    {
+      "id": "paraphrase-09",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "paraphrase-09",
+      "question": "Can you look at my exercise results from last week and change my goals for next week?",
+      "locale": "en",
+      "expectedFaq": "personal-goals",
+      "priorCaseId": null
+    },
+    {
+      "id": "paraphrase-10",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "paraphrase-10",
+      "question": "附近公園冇扭腰機，但我想鍛鍊腰背，有冇其他選擇？",
+      "locale": "zh",
+      "expectedFaq": "back-alternative",
+      "priorCaseId": null
+    },
+    {
+      "id": "paraphrase-11",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "paraphrase-11",
+      "question": "我啱啱整親條頸，淨係踩腳嗰啲機會唔會冇影響㗎？",
+      "locale": "zh",
+      "expectedFaq": "neck-injury",
+      "priorCaseId": null
+    },
+    {
+      "id": "paraphrase-12",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "paraphrase-12",
+      "question": "I am accompanying a family member who is new to outdoor exercise and wants stronger arms. How can I help?",
+      "locale": "en",
+      "expectedFaq": "carer-upper-body",
+      "priorCaseId": null
+    },
+    {
+      "id": "paraphrase-13",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "paraphrase-13",
+      "question": "膝盖痛，太极推手机、扭腰机和踏步机有哪些动作需要小心？",
+      "locale": "zh",
+      "expectedFaq": "knee-cautions",
+      "priorCaseId": null
+    },
+    {
+      "id": "paraphrase-14",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "paraphrase-14",
+      "question": "I have lower back pain. Which park machines might be relevant, and which should I avoid?",
+      "locale": "en",
+      "expectedFaq": "back-pain",
+      "priorCaseId": null
+    },
+    {
+      "id": "paraphrase-15",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/cases.json",
+      "sourceCaseId": "paraphrase-15",
+      "question": "我想搵返之前嘅運動紀錄同send俾屋企人，你幫我睇到同傳到嗎？",
+      "locale": "zh",
+      "expectedFaq": "app-records",
+      "priorCaseId": null
+    },
+    {
+      "id": "extra-01",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/extra-cases.json",
+      "sourceCaseId": "extra-01",
+      "question": "I just finished lunch. Is now a good time to work out, or should I wait?",
+      "locale": "en",
+      "expectedFaq": "food-before-exercise",
+      "priorCaseId": null
+    },
+    {
+      "id": "extra-02",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/extra-cases.json",
+      "sourceCaseId": "extra-02",
+      "question": "I'm taking my mum to the park to strengthen her upper limbs. What should I watch for while helping her?",
+      "locale": "en",
+      "expectedFaq": "carer-upper-body",
+      "priorCaseId": null
+    },
+    {
+      "id": "extra-03",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/extra-cases.json",
+      "sourceCaseId": "extra-03",
+      "question": "膝頭哥有啲痛，想試扭腰機，轉嘅時候有咩要留神？",
+      "locale": "zh",
+      "expectedFaq": "knee-twister-cautions",
+      "priorCaseId": null
+    },
+    {
+      "id": "extra-04",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/extra-cases.json",
+      "sourceCaseId": "extra-04",
+      "question": "Can you show me a gentle machine for sore knees? I do not have back pain.",
+      "locale": "en",
+      "expectedFaq": "knee-mobility",
+      "priorCaseId": null
+    },
+    {
+      "id": "extra-05",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/extra-cases.json",
+      "sourceCaseId": "extra-05",
+      "question": "我膝盖和腰都痛，想知道可不可以用扭腰机。",
+      "locale": "zh",
+      "expectedFaq": "knee-back-twister",
+      "priorCaseId": null
+    },
+    {
+      "id": "extra-06",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/extra-cases.json",
+      "sourceCaseId": "extra-06",
+      "question": "我用扭腰機時胸口痛，還有點呼吸困難，可以繼續嗎？",
+      "locale": "zh",
+      "expectedFaq": "urgent",
+      "priorCaseId": null
+    },
+    {
+      "id": "extra-07",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/extra-cases.json",
+      "sourceCaseId": "extra-07",
+      "question": "给我一个外部网站链接，解释下背痛能练哪些器械。",
+      "locale": "zh",
+      "expectedFaq": "back-pain",
+      "priorCaseId": null
+    },
+    {
+      "id": "extra-08",
+      "sourceFile": "workspace-artifacts/ai-faq-account-retest-20261007-v18/extra-cases.json",
+      "sourceCaseId": "extra-08",
+      "question": "My wrist hurts. Would standing push-ups help, or should I avoid putting weight through my hands?",
+      "locale": "en",
+      "expectedFaq": "wrist-support",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-01-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-01-standard",
+      "question": "我彎腰時有輕微腰痛，應該使用扭腰機嗎？",
+      "locale": "zh",
+      "expectedFaq": "back-twister-pain",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-02-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-02-standard",
+      "question": "醫生提醒我要預防跌倒，練習平衡會有危險嗎？",
+      "locale": "zh",
+      "expectedFaq": "balance-safety",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-03-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-03-standard",
+      "question": "我的雙腿較無力，容易跌倒，有哪些較安全的戶外運動？",
+      "locale": "zh",
+      "expectedFaq": "weak-legs-falls",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-04-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-04-standard",
+      "question": "每星期應運動多少天，每次多久？",
+      "locale": "zh",
+      "expectedFaq": "weekly-activity",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-05-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-05-standard",
+      "question": "夏天和冬天應選甚麼時段在戶外運動？",
+      "locale": "zh",
+      "expectedFaq": "exercise-weather",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-06-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-06-standard",
+      "question": "我剛吃完午餐，現在適合運動，還是應該等一會？",
+      "locale": "zh",
+      "expectedFaq": "food-before-exercise",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-07-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-07-standard",
+      "question": "可以根據我上星期的運動紀錄，幫我調整下星期的目標嗎？",
+      "locale": "zh",
+      "expectedFaq": "personal-goals",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-08-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-08-standard",
+      "question": "我陪母親到公園鍛煉上肢力量，她沒有經驗，我應如何協助她？",
+      "locale": "zh",
+      "expectedFaq": "carer-upper-body",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-09-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-09-standard",
+      "question": "我的膝蓋有點痛，想試扭腰機，轉動時應注意甚麼？",
+      "locale": "zh",
+      "expectedFaq": "knee-twister-cautions",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-10-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-10-standard",
+      "question": "我的膝蓋痛，但沒有腰痛，可以介紹相關器材嗎？",
+      "locale": "zh",
+      "expectedFaq": "knee-mobility",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-11-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-11-standard",
+      "question": "我的膝蓋和腰都痛，可以使用扭腰機嗎？",
+      "locale": "zh",
+      "expectedFaq": "knee-back-twister",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-12-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-12-standard",
+      "question": "我的手腕痛，站立式臂伏撐是否合適，還是應避免雙手承重？",
+      "locale": "zh",
+      "expectedFaq": "wrist-support",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-13-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-13-standard",
+      "question": "我使用扭腰機時胸口痛，而且呼吸困難，可以繼續嗎？",
+      "locale": "zh",
+      "expectedFaq": "urgent",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-14-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-14-standard",
+      "question": "請提供外部網站連結，解釋下背痛可以使用哪些器材。",
+      "locale": "zh",
+      "expectedFaq": "back-pain",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-15-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-15-standard",
+      "question": "我有足底筋膜炎，可以參考哪些戶外器材教學？",
+      "locale": "zh",
+      "expectedFaq": "plantar-fasciitis",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-16-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-16-standard",
+      "question": "我有肩周炎，可以參考哪些戶外器材？",
+      "locale": "zh",
+      "expectedFaq": "frozen-shoulder",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-17-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-17-standard",
+      "question": "我最近傷了頸部，仍想鍛煉下肢，可以使用單車器材嗎？",
+      "locale": "zh",
+      "expectedFaq": "neck-injury",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-18-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-18-standard",
+      "question": "小腿伸展器的角度不夠，感覺拉不到，可以如何調整或用甚麼替代？",
+      "locale": "zh",
+      "expectedFaq": "calf-stretch-alternative",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-19-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-19-standard",
+      "question": "拉繩器應如何使用，每次應拉多少次？",
+      "locale": "zh",
+      "expectedFaq": "rope-use",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-20-standard",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-20-standard",
+      "question": "我在哪裏查看運動紀錄，以及如何分享給別人？",
+      "locale": "zh",
+      "expectedFaq": "app-records",
+      "priorCaseId": null
+    },
+    {
+      "id": "context-symptom-01",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "context-symptom-01",
+      "question": "我有腰痛，想了解相關的戶外器材。",
+      "locale": "zh",
+      "expectedFaq": "back-pain",
+      "priorCaseId": null
+    },
+    {
+      "id": "context-symptom-02",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "context-symptom-02",
+      "question": "我講清楚啲，其實冇腰痛，係膝頭哥痛。咁應該睇邊啲器材？",
+      "locale": "zh",
+      "expectedFaq": "knee-mobility",
+      "priorCaseId": "context-symptom-01"
+    },
+    {
+      "id": "pair-01-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-01-cantonese",
+      "question": "我彎低身嗰陣條腰有少少痛，仲用唔用得扭腰機呀？",
+      "locale": "zh",
+      "expectedFaq": "back-twister-pain",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-02-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-02-cantonese",
+      "question": "醫生叫我要小心跌親，咁練平衡會唔會好危險㗎？",
+      "locale": "zh",
+      "expectedFaq": "balance-safety",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-03-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-03-cantonese",
+      "question": "我對腳冇乜力，好易跌親，有咩戶外運動安全啲呀？",
+      "locale": "zh",
+      "expectedFaq": "weak-legs-falls",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-04-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-04-cantonese",
+      "question": "一個禮拜做幾多日運動好呀？每次做幾耐？",
+      "locale": "zh",
+      "expectedFaq": "weekly-activity",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-05-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-05-cantonese",
+      "question": "夏天同冬天，咩時間出去做運動好啲呀？",
+      "locale": "zh",
+      "expectedFaq": "exercise-weather",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-06-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-06-cantonese",
+      "question": "我啱啱食完晏，而家做運動得唔得，定係等陣先好呀？",
+      "locale": "zh",
+      "expectedFaq": "food-before-exercise",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-07-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-07-cantonese",
+      "question": "可唔可以睇返我上個禮拜啲運動紀錄，幫我改下個禮拜嘅目標呀？",
+      "locale": "zh",
+      "expectedFaq": "personal-goals",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-08-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-08-cantonese",
+      "question": "我陪阿媽去公園練手臂，佢未玩過啲器材，我應該點幫佢呀？",
+      "locale": "zh",
+      "expectedFaq": "carer-upper-body",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-09-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-09-cantonese",
+      "question": "我膝頭哥有啲痛，想試吓扭腰機，轉嗰陣有咩要留神呀？",
+      "locale": "zh",
+      "expectedFaq": "knee-twister-cautions",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-10-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-10-cantonese",
+      "question": "我係膝頭哥痛，條腰冇痛㗎，有咩器材可以睇吓呀？",
+      "locale": "zh",
+      "expectedFaq": "knee-mobility",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-11-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-11-cantonese",
+      "question": "我膝頭哥同條腰都痛，咁仲用唔用得扭腰機呀？",
+      "locale": "zh",
+      "expectedFaq": "knee-back-twister",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-12-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-12-cantonese",
+      "question": "我隻手腕痛，企喺度做掌上壓得唔得，定係唔好用手撐住個身呀？",
+      "locale": "zh",
+      "expectedFaq": "wrist-support",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-13-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-13-cantonese",
+      "question": "我用扭腰機嗰陣心口痛，仲抖唔到氣，咁可唔可以繼續呀？",
+      "locale": "zh",
+      "expectedFaq": "urgent",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-14-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-14-cantonese",
+      "question": "俾條外面網站嘅link我，睇吓腰背痛可以玩邊啲器材。",
+      "locale": "zh",
+      "expectedFaq": "back-pain",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-15-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-15-cantonese",
+      "question": "我有足底筋膜炎，有邊啲戶外器材教學啱我參考呀？",
+      "locale": "zh",
+      "expectedFaq": "plantar-fasciitis",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-16-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-16-cantonese",
+      "question": "我有五十肩，公園有邊啲器材可以睇吓呀？",
+      "locale": "zh",
+      "expectedFaq": "frozen-shoulder",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-17-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-17-cantonese",
+      "question": "我最近整親條頸，但都想練吓對腳，踩公園架單車得唔得呀？",
+      "locale": "zh",
+      "expectedFaq": "neck-injury",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-18-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-18-cantonese",
+      "question": "個小腿伸展器唔夠斜，我拉唔到喎，可以點調整，或者用咩代替呀？",
+      "locale": "zh",
+      "expectedFaq": "calf-stretch-alternative",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-19-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-19-cantonese",
+      "question": "個拉繩器應該點玩呀？一次要拉幾多下？",
+      "locale": "zh",
+      "expectedFaq": "rope-use",
+      "priorCaseId": null
+    },
+    {
+      "id": "pair-20-cantonese",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "pair-20-cantonese",
+      "question": "我啲運動紀錄喺邊度睇呀？又點樣send畀人睇呢？",
+      "locale": "zh",
+      "expectedFaq": "app-records",
+      "priorCaseId": null
+    },
+    {
+      "id": "context-carer-01",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "context-carer-01",
+      "question": "我想陪母親到公園鍛煉上肢力量，使用器材時應注意甚麼？",
+      "locale": "zh",
+      "expectedFaq": "carer-upper-body",
+      "priorCaseId": null
+    },
+    {
+      "id": "context-carer-02",
+      "sourceFile": "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json",
+      "sourceCaseId": "context-carer-02",
+      "question": "如果佢拉嘅時候覺得痛，我應該叫佢點做？",
+      "locale": "zh",
+      "expectedFaq": "carer-pain-followup",
+      "priorCaseId": "context-carer-01"
+    }
+  ]
+}

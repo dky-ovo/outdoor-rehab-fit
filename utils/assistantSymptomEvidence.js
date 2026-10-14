@@ -1,7 +1,8 @@
-// Keep this pure module identical to server/src/assistantSymptomEvidence.js.
+// Keep this pure module mirrored in utils; only the shared-policy import differs.
 // Symptoms require affirmative, body-specific APP prose, never category scores.
 // This is educational retrieval, not a medical suitability assessment.
 import { withEquipmentTcm, withEquipmentTcmReply } from "./assistantTcm.js";
+import { analyzeAssistantLanguage, assistantConditionIds, assistantExerciseQuantityQuestion } from "../server/src/assistantLanguage.js";
 const PARTS = [
   ["knee", /膝|\bknees?\b/i, "膝部", "knee"],
   ["ankle", /踝|\bankles?\b/i, "腳踝", "ankle"],
@@ -17,8 +18,6 @@ const PARTS = [
   // used when a more precise body part (especially knee versus sole) is known.
   ["leg", /腿|膝|髖|髋|下肢|\b(?:legs?|knees?|hips?|calf|calves|lower[\s-]+(?:body|limbs?))\b/i, "下肢", "leg"],
 ];
-const SYMPTOM = /疼|痛|痠|酸|不適|不适|僵硬|腫|肿|關節炎|关节炎|肩周炎|五十肩|冷凍肩|冷冻肩|\bfrozen[\s-]+shoulder\b|\b(?:pains?|painful|hurts?|hurting|sore|soreness|aches?|aching|stiff|stiffness|discomfort|swelling|swollen|arthritis)\b/i;
-const URGENT = /胸痛|胸口痛|呼吸困難|呼吸困难|無法站立|无法站立|不能站|突然劇痛|突然剧痛|嚴重腫脹|严重肿胀|\b(?:chest pain|difficulty breathing|cannot stand|can't stand|sudden severe pain|severe swelling)\b/i;
 const LOCATION = /附近|最近|周邊|周边|公園|公园|\b(?:nearby|nearest|parks?)\b|(?:設施|设施|器材|儀器|仪器).{0,15}(?:位置|地點|地点|在哪|邊度|哪里)|\b(?:where|location)\b.*\b(?:facility|facilities|equipment|machine|park)\b/i;
 const FOLLOW_UP = /^(?:那|這個|这个|還有|还有|怎麼用|怎么用|如何使用|其他選擇|其他选择)|\b(?:that|those|another|how to use|how often|how long|what about)\b|^it\b/i;
 const SHORT_FOLLOW_UP = /^(?:(?:那|這個|这个|還有|还有)(?:其他選擇|其他选择)?(?:呢|嗎|吗)?|其他選擇|其他选择|(?:what about )?(?:that|those|another|it)(?: one| ones| options?)?)[!！。,.，?？\s]*$/i;
@@ -59,28 +58,27 @@ function chinesePhrase(text, tokens) {
   return true;
 }
 
-function concernTargets(text) {
-  const correction = text.match(/(?:不是|唔係|並非|并非)[^，,;；。]*(?:而是|而係|是|係|[，,;；]\s*(?:是|係)?)(.+)$/i)
-    || text.match(/\bnot\b.+?\bbut\b\s*(.+)$/i);
-  const targetText = correction ? correction[1] : text;
-  const specific = PARTS.filter(([id, pattern]) => id !== "leg" && pattern.test(targetText)).map(([id]) => id);
-  return specific.length ? specific : GENERIC_LEG.test(targetText) ? ["leg"] : [];
-}
-
 function anatomyReply(text) {
   return chinesePhrase(text.replace(/^(?:那|不是|唔係)/, '').replace(/(?:而是|而係|不是|唔係)/g, '是'), ANATOMY_REPLY_ZH)
     || ANATOMY_REPLY_EN.test(text.replace(/^what about\s+/i, ''));
 }
 
-function explicitConcernTargets(text) {
-  // Body words inside a newly named machine are not a change to the user's
-  // symptoms ("what about the shoulder wheel?" after a knee-pain question).
-  return SYMPTOM.test(text) || anatomyReply(text) ? concernTargets(text) : [];
+function explicitConcernTargets(text, analysis = analyzeAssistantLanguage(text)) {
+  // A named machine alone never changes an existing symptom. An isolated
+  // anatomy clarification may change it without repeating the word "pain".
+  if (analysis.hasSymptom) return analysis.targets;
+  return anatomyReply(text) || analysis.hasExplicitNegation ? analysis.mentionedTargets : [];
 }
 
-function concernTurn(text) {
-  if (!text || GREETING.test(text) || (LOCATION.test(text) && !SYMPTOM.test(text))) return false;
-  if (SYMPTOM.test(text) || URGENT.test(text)) return true;
+function concernTurn(text, analysis = analyzeAssistantLanguage(text)) {
+  if (!text || GREETING.test(text) || analysis.historicalOnly || (LOCATION.test(text) && !analysis.hasSymptom && !analysis.hasExplicitNegation)) return false;
+  if (analysis.hasSymptom || analysis.hasExplicitNegation) return true;
+  if (assistantExerciseQuantityQuestion(text)) return true;
+  // A request for another exercise guide is still part of an unresolved
+  // symptom conversation. A broader wording must not bypass recent urgency.
+  if (/器材|器械|設施|设施|\bequipment\b|\b(?:upper|lower)[ -](?:body|limbs?)[ -]+guide/i.test(analysis.subjectText)
+    && /推薦|推荐|教學|教学|使用|點用|点用|點玩|点玩|\b(?:show|explain|find|read|instructions?|use|guides?)\b/i.test(text)) return true;
+  if (/^(?:which|what) (?:exercise|equipment|machine)s?[?？!.\s]*$/i.test(text)) return true;
   if (text.length <= 80 && GUIDE_CONTINUATION.test(text.replace(/[^\p{L}\p{N}]/gu, ''))) return true;
   if (FOLLOW_UP.test(text) && (REQUEST.test(text) || SHORT_FOLLOW_UP.test(text) || FACILITY_FOLLOW_UP.test(text))) return true;
   if (anatomyReply(text)) return true;
@@ -91,33 +89,46 @@ function concernTurn(text) {
 
 export function symptomConcern(question, history = []) {
   const text = String(question || "").trim();
-  if (!concernTurn(text)) return null;
-  let urgent = URGENT.test(text), hasSymptom = SYMPTOM.test(text) || urgent;
-  let targets = explicitConcernTargets(text), requested = REQUEST.test(text);
+  const analysis = analyzeAssistantLanguage(text);
+  if (!concernTurn(text, analysis)) return null;
+  let hasSymptom = analysis.hasSymptom;
+  let targets = explicitConcernTargets(text, analysis), requested = REQUEST.test(text);
+  const urgentReasons = new Set(analysis.urgentReasons);
+  const excludedUrgent = new Set(analysis.excludedUrgentReasons);
+  const excludedTargets = new Set(analysis.excludedTargets);
+  const conditionStates = new Map([
+    ...analysis.deniedConditions.map(id => [id, false]),
+    ...analysis.affirmedConditions.map(id => [id, true]),
+  ]);
   const contextQuestions = [];
-  // Collect a contiguous, bounded chain of USER statements only. Short answers
-  // to our clarification retain the user's request; model prose supplies none.
+  // Only a contiguous bounded USER chain can supply missing facts. More recent
+  // denials block older targets/urgency even across a following "tell me more".
   const previousUsers = (Array.isArray(history) ? history : [])
     .filter(item => item?.role === "user" && typeof item.content === "string").slice(-8).reverse();
   for (const previous of previousUsers) {
-    const prior = previous.content.trim();
-    if (!concernTurn(prior)) break;
+    const prior = previous.content.trim(), priorAnalysis = analyzeAssistantLanguage(prior);
+    if (!concernTurn(prior, priorAnalysis)) break;
+    for (const id of priorAnalysis.deniedConditions) if (!conditionStates.has(id)) conditionStates.set(id, false);
+    for (const id of priorAnalysis.affirmedConditions) if (!conditionStates.has(id)) conditionStates.set(id, true);
     contextQuestions.push(prior);
-    urgent ||= URGENT.test(prior);
-    hasSymptom ||= SYMPTOM.test(prior) || URGENT.test(prior);
+    priorAnalysis.urgentReasons.filter(reason => !excludedUrgent.has(reason)).forEach(reason => urgentReasons.add(reason));
+    const previousTargets = explicitConcernTargets(prior, priorAnalysis).filter(target => !excludedTargets.has(target));
+    const clearedUrgency = priorAnalysis.urgent && priorAnalysis.urgentReasons.every(reason => excludedUrgent.has(reason));
+    const relevantSymptom = !clearedUrgency && priorAnalysis.hasSymptom && (targets.length || previousTargets.length || !priorAnalysis.targets.length);
+    hasSymptom ||= Boolean(relevantSymptom);
     requested ||= REQUEST.test(prior);
-    const previousTargets = explicitConcernTargets(prior);
     if (!targets.length || (targets.length === 1 && targets[0] === "leg" && previousTargets.length && previousTargets.every(target => LOWER_PARTS.has(target)))) targets = previousTargets.length ? previousTargets : targets;
+    priorAnalysis.excludedTargets.forEach(target => excludedTargets.add(target));
+    priorAnalysis.excludedUrgentReasons.forEach(reason => excludedUrgent.add(reason));
   }
+  if (urgentReasons.size) return { question: text, urgent: true, targets: [], requested: false, contextQuestions };
   if (!hasSymptom) return null;
-  if (urgent) return { question: text, urgent: true, targets: [], requested: false, contextQuestions };
-  // Do not carry a named facility from an older, different body-part topic into
-  // the new target. Older request intent can carry, but its body part cannot.
   const matchingContext = contextQuestions.filter(prior => {
     const previousTargets = explicitConcernTargets(prior);
     return !previousTargets.length || previousTargets.every(target => targets.includes(target) || (target === "leg" && targets.every(value => LOWER_PARTS.has(value))));
   });
-  return { question: text, urgent: false, targets, requested, ...(matchingContext.length ? { contextQuestions: matchingContext } : {}) };
+  const deniedConditions = [...conditionStates].filter(([, present]) => !present).map(([id]) => id);
+  return { question: text, urgent: false, targets, requested, ...(deniedConditions.length ? { deniedConditions } : {}), ...(matchingContext.length ? { contextQuestions: matchingContext } : {}) };
 }
 
 function activeItems(catalog) {
@@ -154,10 +165,17 @@ export function symptomEvidence(item, concern) {
   if (!concern || concern.urgent || !concern.targets.length) return null;
   for (const field of Object.keys(FIELD_LABELS)) {
     if (field === "tcmTip" && !item.tcmEnabled) continue;
+    // Do not replace explicitly rejected disease-specific advice with a
+    // different causal account from TCM unless the user asked about TCM.
+    if (field === "tcmTip" && concern.deniedConditions?.length
+      && !/中醫|中医|\b(?:tcm|traditional chinese medicine)\b/i.test([concern.question, ...(concern.contextQuestions || [])].join(" "))) continue;
     const prose = typeof item[field] === "string" ? item[field] : "";
     for (const part of prose.match(/[^。！？.!?\n]+[。！？.!?]?/g) || []) {
       const quote = part.trim();
       if (!quote || quote.length > 800 || !PAIN_EVIDENCE.test(quote) || !BENEFIT.test(quote) || NEGATIVE.test(quote)) continue;
+      // A body match cannot make disease-specific advice relevant after the
+      // user explicitly denies that condition (including a prior user turn).
+      if (assistantConditionIds(quote).some(id => concern.deniedConditions?.includes(id))) continue;
       if (!concern.targets.every(target => PARTS.find(([id]) => id === target)?.[1].test(quote))) continue;
       return { field, quote, targets: [...concern.targets] };
     }
@@ -189,17 +207,17 @@ export function symptomGuideAnswer(question, catalog, locale = "zh", history = [
   const recommendations = symptomGuideCandidates(question, available, locale, history).slice(0, 3);
   let reply;
   if (concern.urgent) {
-    reply = en ? "Please stop exercising and seek prompt medical help. I will not recommend equipment for these symptoms."
-      : "請停止運動並盡快尋求醫護協助。我不會根據這些症狀推薦器材。";
+    reply = en ? "Stop exercising and seek urgent medical help now. Call 999 for emergency assistance."
+      : "請立即停止運動並尋求緊急醫護協助；緊急情況請致電 999。";
   } else if (!concern.targets.length || !concern.requested) {
-    reply = en ? "I cannot determine suitable equipment from pain alone. Where exactly is the discomfort? I can help you look up related APP information, but a professional assessment is needed before exercising with pain."
-      : "不能單憑疼痛判斷哪項器材適合您。請問具體是哪個部位不適？我可以幫您查閱APP相關資料，但有疼痛時應先由醫護人員評估。";
+    reply = en ? "Stop any movement that makes the pain worse. Where exactly does it hurt, for example your knee or calf?"
+      : "先停止會令痛楚加劇的動作。請問是哪個部位不舒服，例如膝蓋還是小腿？";
   } else if (recommendations.length) {
-    reply = en ? `According to the APP Facility Guide, the following equipment descriptions explicitly discuss ${targetLabel} discomfort. Here are the original passages and their stated conditions. They are information for reference, not a diagnosis or confirmation of suitability for your symptoms; please have a healthcare professional assess suitability before use.`
-      : `根據APP設施教學，以下器材的說明有明確提及${targetLabel}疼痛或不適。以下列出相應原文及原文所述的適用情況，方便您查閱。這些資料並不代表已判斷器材適合您的症狀，也不是診斷或治療建議；使用前請先由醫護人員評估。`;
+    reply = en ? `You can learn about the equipment below for your ${targetLabel} question. This does not mean it is suitable for your pain. Please ask a healthcare professional before trying it; stop if it makes the pain worse.`
+      : `關於您提到的${targetLabel}，可以先了解下方器材。有疼痛不代表適合使用，請先找醫護人員評估；若做動作時更痛，就要停止。`;
   } else {
-    reply = en ? `I did not find an affirmative APP passage linking this request to relief of ${targetLabel} discomfort. A body-area category alone is not evidence of suitability, so I will not add equipment recommendations. Please seek a professional assessment if pain is severe, persistent or worsening.`
-      : `APP現有說明中，未找到能明確支持本次查詢與${targetLabel}疼痛緩解相對應的原文。僅屬於某個身體部位的分類，不能證明器材適合這種疼痛，因此不會補上器材推薦。疼痛嚴重、持續或加劇時，請尋求醫護人員評估。`;
+    reply = en ? `Please stop movements that make your ${targetLabel} hurt. I cannot tell which equipment is suitable from this description. If the pain is severe, continues or gets worse, ask a healthcare professional before trying equipment.`
+      : `先停止會令${targetLabel}更痛的動作。目前未能判斷哪款器材適合您；若痛楚嚴重、持續或加劇，請先找醫護人員評估，再決定是否使用器材。`;
   }
   return withEquipmentTcmReply({ reply, action: "equipment_evidence", focus: concern.targets.join(","), categories: [],
     recommendations, confirmationRequired: false, source: "app_content", knowledgeSource: "facility_guide",

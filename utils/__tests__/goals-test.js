@@ -93,6 +93,46 @@ test("migrates legacy aerobic days and minutes into one weekly-minute target", a
 	expect(setUserJson).toHaveBeenCalledWith("goalSettings", state);
 });
 
+test("an old account's delayed legacy read cannot migrate goals into the newly signed-in account", async () => {
+	let finishRead;
+	getUserJson.mockImplementationOnce(() => new Promise(resolve => { finishRead = resolve; }));
+	const pending = getGoalState();
+	await Promise.resolve();
+	getCurrentOwnerKey.mockReturnValue("participant-2");
+	finishRead({ targets: { aerobic: 5 }, minutes: { aerobic: 30 }, smartGoals: [{ id: "private-old-goal", text: "Account one goal" }] });
+	await expect(pending).rejects.toThrow("Goal account changed");
+	expect(setUserJson).not.toHaveBeenCalled();
+});
+
+test("a delayed current-format read rejects stale account data without writing or returning it", async () => {
+	let finishRead;
+	getUserJson.mockImplementationOnce(() => new Promise(resolve => { finishRead = resolve; }));
+	const pending = getGoalState();
+	await Promise.resolve();
+	getCurrentOwnerKey.mockReturnValue("participant-2");
+	finishRead({ ...currentGoalState, smartGoals: [{ id: "private-old-goal", text: "Account one goal" }] });
+	await expect(pending).rejects.toThrow("Goal account changed");
+	expect(setUserJson).not.toHaveBeenCalled();
+});
+
+test("a goal read waiting for a queued mutation keeps the account captured when requested", async () => {
+	let finishRead;
+	getUserJson.mockImplementationOnce(() => new Promise(resolve => { finishRead = resolve; }));
+	const mutation = setTarget("balance", 6);
+	await Promise.resolve();
+	const waiting = getGoalState();
+	const settled = Promise.allSettled([mutation, waiting]);
+	getCurrentOwnerKey.mockReturnValue("participant-2");
+	finishRead(currentGoalState);
+	const results = await settled;
+	expect(results.map(result => result.status)).toEqual(["rejected", "rejected"]);
+	for (const result of results) expect(result.reason.message).toBe("Goal account changed");
+	expect(getUserJson).toHaveBeenCalledTimes(1);
+	expect(setUserJson).not.toHaveBeenCalled();
+	// The aborted operation must not poison subsequent work for the new user.
+	await expect(getGoalState()).resolves.toEqual(currentGoalState);
+});
+
 test("normalizes target values to the required limits and increments", async () => {
 	const aerobic = await setTarget("aerobic", 1264);
 	expect(aerobic.targets.aerobic).toBe(1260);

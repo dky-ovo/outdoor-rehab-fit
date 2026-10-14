@@ -1,7 +1,7 @@
 import { useAccountDataRevision } from '../../hooks/useAccountDataRevision';
 import { appText } from "../../utils/appText";
 import React, { useCallback, useContext, useMemo, useState } from "react";
-import { StyleSheet, View, Text, TouchableOpacity, Image, ScrollView, useWindowDimensions } from "react-native";
+import { Platform, StyleSheet, View, Text, TouchableOpacity, Image, ScrollView, useWindowDimensions } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LocaleContext } from "../../contexts/LocaleContext";
@@ -92,6 +92,7 @@ export default function HomeScreen() {
 			route: "outdoor",
 			feature: FEATURES.OUTDOOR_EQUIPMENT,
 		},
+		{ color: "#D8EAD9", text: i18n.t("exerciseVideos"), iconName: "play-circle-outline", route: "exercise-videos", feature: FEATURES.OUTDOOR_AUDIO_VIDEO },
 		{
 			color: "#E8CCB0",
 			text: i18n.t("goalSetting"),
@@ -289,7 +290,7 @@ export default function HomeScreen() {
 											size={RFValue(16)}
 											color={goal.done ? "#2E8B57" : "#bbb"}
 										/>
-										<Text style={[styles.smartText, goal.done && styles.smartDone]} numberOfLines={1}>
+										<Text style={[styles.smartText, goal.done && styles.smartDone]}>
 											{goal.text}
 										</Text>
 									</View>
@@ -627,6 +628,8 @@ const styles = StyleSheet.create({
 		marginBottom: 8,
 	},
 	smartTitle: {
+		flexShrink: 1,
+		minWidth: 0,
 		fontSize: RFValue(14),
 		fontWeight: "bold",
 		color: "#333",
@@ -638,14 +641,17 @@ const styles = StyleSheet.create({
 	},
 	smartRow: {
 		flexDirection: "row",
-		alignItems: "center",
+		alignItems: "flex-start",
 		paddingVertical: 3,
 	},
 	smartText: {
 		flex: 1,
+		flexShrink: 1,
+		minWidth: 0,
 		fontSize: RFValue(13),
 		color: "#444",
 		marginLeft: 8,
+		...Platform.select({ web: { overflowWrap: "anywhere" } }),
 	},
 	smartDone: {
 		textDecorationLine: "line-through",

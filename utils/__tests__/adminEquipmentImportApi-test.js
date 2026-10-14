@@ -1,4 +1,4 @@
-import { confirmAdminEquipmentDocument, EQUIPMENT_DOCX_MAX_BYTES, EQUIPMENT_DOCX_MIME, getAdminEquipmentImportHistory, previewAdminEquipmentDocument, validateEquipmentDocumentFile } from "../adminEquipmentImportApi";
+import { confirmAdminEquipmentDocument, EQUIPMENT_DOCX_MAX_BYTES, EQUIPMENT_DOCX_MIME, getAdminEquipmentImportHistory, previewAdminEquipmentDocument, previewStoredAdminEquipmentDocument, validateEquipmentDocumentFile } from "../adminEquipmentImportApi";
 jest.mock("../api", () => ({ API_BASE_URL: "/api", ApiError: class ApiError extends Error { constructor(code, status) { super(code); this.code = code; this.status = status; } } }));
 const originalFetch = global.fetch;
 const file = { name: "器材.docx", size: 100 };
@@ -13,6 +13,12 @@ test("only bounded DOCX file input is accepted", () => {
 test("preview sends raw bytes with DOCX MIME and encoded filename, never auto confirms", async () => {
 	await expect(previewAdminEquipmentDocument("AUTH", file)).resolves.toEqual(draft);
 	const [url, options] = fetch.mock.calls[0]; expect(url).toBe("/api/admin/equipment/import/preview"); expect(options.body).toBe(file); expect(options.headers).toEqual({ Authorization: "Bearer AUTH", "Content-Type": EQUIPMENT_DOCX_MIME, "X-Document-Name": encodeURIComponent(file.name) }); expect(fetch).toHaveBeenCalledTimes(1);
+});
+test("stored preview sends only the selected library ID, no local file or URL", async () => {
+	await previewStoredAdminEquipmentDocument("AUTH", "stored-docx");
+	expect(fetch.mock.calls[0][0]).toBe("/api/admin/equipment/import/preview-stored");
+	expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ mediaId: "stored-docx" });
+	expect(() => previewStoredAdminEquipmentDocument("AUTH", "https://private.invalid/file")).toThrow();
 });
 test("confirm sends exact explicit selections and same replay key", async () => {
 	fetch.mockResolvedValue({ ok: true, status: 200, json: async () => confirmed });

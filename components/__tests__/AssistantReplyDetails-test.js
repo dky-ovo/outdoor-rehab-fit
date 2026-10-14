@@ -6,7 +6,7 @@ import AssistantReplyDetails from "../AssistantReplyDetails";
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("react-native-responsive-fontsize", () => ({ RFValue: value => value }));
-jest.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 42, bottom: 30 }) }));
+jest.mock("react-native-safe-area-context", () => ({ SafeAreaProvider: ({ children }) => children, SafeAreaView: require("react-native").View, useSafeAreaInsets: () => ({ top: 42, bottom: 30 }) }));
 
 let tree;
 const detail = { messageId: "historical-answer", text: "使用步驟\n1\n雙手握穩手柄。\n2\n保持肩膊放鬆。\n\n從中醫學角度：配合呼吸。\n\n如果疼痛加劇，請停止。" };
@@ -36,7 +36,8 @@ test.each(["zh", "en"])("%s reader shows the entire original explanation in an i
   expect(text.props.numberOfLines).toBeUndefined();
   expect(StyleSheet.flatten(text.props.style)).toMatchObject({ fontSize: 18, lineHeight: 30 });
   const page = tree.root.findAllByType(View).find(node => node.props.accessibilityViewIsModal);
-  expect(StyleSheet.flatten(page.props.style)).toMatchObject({ paddingTop: 42, paddingBottom: 30 });
+  expect(page.props.edges).toEqual(["top", "right", "bottom", "left"]);
+  expect(StyleSheet.flatten(page.props.style).flex).toBe(1);
   const buttons = tree.root.findAllByType(TouchableOpacity);
   expect(buttons.map(node => node.props.testID)).toEqual(["assistant-reply-details-close", "assistant-reply-details-done"]);
   for (const button of buttons) {

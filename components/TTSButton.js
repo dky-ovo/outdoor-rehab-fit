@@ -9,10 +9,10 @@ import { RFValue } from "react-native-responsive-fontsize";
 import { trackTtsPlay } from "../utils/usage";
 import { ensurePlaybackAudioMode } from "../utils/audioMode";
 import { showAlert } from "../utils/alert";
+import { claimFacilityAudio } from "../utils/facilityAudioCoordination";
 
 const BALL_SIZE = 60;
 const EDGE_GAP = 14;
-let activeSpeechRun = null;
 
 /** iOS / Android Cantonese voice name hints */
 const CANTONESE_NAME_HINTS = [
@@ -96,6 +96,9 @@ async function resolveEnglishOptions() {
 const TTSButton = ({ text, locale, i18n, onPlay, onSpokenRange, inline = false }) => {
 	const focused = useIsFocused();
 	const runRef = useRef(null);
+	const mounted = useRef(true);
+	const currentInput = useRef({ text, locale, focused });
+	currentInput.current = { text, locale, focused };
 	const [speaking, setSpeaking] = useState(false);
 	const { width, height } = useWindowDimensions();
 	const position = useRef(new Animated.ValueXY({ x: EDGE_GAP, y: EDGE_GAP })).current;
@@ -103,11 +106,12 @@ const TTSButton = ({ text, locale, i18n, onPlay, onSpokenRange, inline = false }
 	const positioned = useRef(false);
 
 	useEffect(() => {
-		ensurePlaybackAudioMode();
+		mounted.current = true;
+		setSpeaking(false);
 		const stop = () => {
 			const run = runRef.current;
 			if (run) run.active = false;
-			if (run && activeSpeechRun === run) { activeSpeechRun = null; Speech.stop(); }
+			void run?.claim?.cancel().catch(() => {});
 			setSpeaking(false);
 		};
 		if (!focused) stop();
@@ -115,11 +119,12 @@ const TTSButton = ({ text, locale, i18n, onPlay, onSpokenRange, inline = false }
 		const visibility = () => { if (document.hidden) stop(); };
 		if (typeof document !== "undefined") document.addEventListener("visibilitychange", visibility);
 		return () => {
+			mounted.current = false;
 			subscription.remove();
 			if (typeof document !== "undefined") document.removeEventListener("visibilitychange", visibility);
 			const run = runRef.current;
 			if (run) run.active = false;
-			if (run && activeSpeechRun === run) { activeSpeechRun = null; Speech.stop(); }
+			void run?.claim?.cancel().catch(() => {});
 		};
 	}, [focused, text, locale]);
 
@@ -135,22 +140,25 @@ const TTSButton = ({ text, locale, i18n, onPlay, onSpokenRange, inline = false }
 	}, [height, position, width]);
 
 	const startOrStopSpeech = async () => {
-		if (speaking) {
-			if (runRef.current) runRef.current.active = false;
-			if (activeSpeechRun === runRef.current) activeSpeechRun = null;
-			await Speech.stop();
-			setSpeaking(false);
+		// A confirmation callback can outlive its screen or the displayed passage.
+		if (!mounted.current || !currentInput.current.focused || currentInput.current.text !== text || currentInput.current.locale !== locale || AppState.currentState === "background" || AppState.currentState === "inactive" || (typeof document !== "undefined" && document.hidden)) return;
+		if (runRef.current?.claim?.isCurrent()) {
+			const run = runRef.current;
+			run.active = false;
+			await run.claim.cancel().catch(() => {});
+			if (mounted.current && runRef.current === run) setSpeaking(false);
 			return;
 		}
 		const content = (text || "").trim();
 		if (!content || !focused) return;
-		if (activeSpeechRun) { activeSpeechRun.active = false; activeSpeechRun.stopUI(); }
-		const run = { active: true, stopUI: () => setSpeaking(false) };
-		runRef.current = run; activeSpeechRun = run;
-		const valid = () => run.active && activeSpeechRun === run && AppState.currentState !== "background" && AppState.currentState !== "inactive" && !(typeof document !== "undefined" && document.hidden);
-		const finish = () => { if (!run.active || activeSpeechRun !== run) return; run.active = false; activeSpeechRun = null; setSpeaking(false); };
+		const run = { active: true, claim: null };
+		runRef.current = run;
+		const valid = () => run.active && run.claim?.isCurrent() && mounted.current && AppState.currentState !== "background" && AppState.currentState !== "inactive" && !(typeof document !== "undefined" && document.hidden);
+		const finish = () => { if (!run.active || !run.claim?.isCurrent()) return; run.active = false; run.claim.release(); if (mounted.current) setSpeaking(false); };
 		try {
-			await Speech.stop();
+			run.claim = claimFacilityAudio("speech", () => { run.active = false; if (mounted.current) setSpeaking(false); });
+			await run.claim.ready;
+			if (!valid()) return;
 			await ensurePlaybackAudioMode();
 			if (!valid()) return;
 			setSpeaking(true);
@@ -187,7 +195,7 @@ const TTSButton = ({ text, locale, i18n, onPlay, onSpokenRange, inline = false }
 	};
 
 	const handlePress = () => {
-		if (speaking) {
+		if (runRef.current?.claim?.isCurrent()) {
 			startOrStopSpeech();
 			return;
 		}

@@ -50,12 +50,19 @@ server/data/
 .dsh-vision-router/
 workspace-artifacts/
 tmp/
+.tmp/
+.load-capacity-installer-test-*/
 output/
 figma-poster/
+
+# Local model training workspace and datasets (not application source)
+/models/
 
 # deployment build archives (keep deployment scripts/configuration)
 deploy/**/*.zip
 deploy/**/*.tar.gz
+deploy/**/*.tar.gz.*
+deploy/**/SHA256SUMS.*
 deploy/**/*-web-*/
 deploy/**/*-combined-*/
 *.apk

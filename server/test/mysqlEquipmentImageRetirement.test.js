@@ -303,3 +303,29 @@ test("media routes exclude permanent rows from bin, reject file restore/copy, an
   assert.equal((await call("post", "/api/admin/media/restore", { kind: "folder", id: "retired-folder" })).statusCode, 200);
   assert.ok(f.row().deleted_at); assert.ok(isPermanentlyRetiredMedia(f.row()));
 });
+
+test("MySQL application persists extension media and atomically creates, replays and disables test batches", async t => {
+ const f = fixture(t), secret = "synthetic-v12-mysql-executor-secret";
+ f.sqlite.exec("CREATE TABLE assistant_jobs (id TEXT PRIMARY KEY,user_id TEXT,status TEXT)");
+ const videoId = crypto.randomUUID(), videoUrl = `/api/media/${videoId}/${videoId}.mp4`;
+ f.sqlite.prepare("INSERT INTO media_files(id,url,name,mime_type,kind,category_id,source,storage_name,created_at,updated_at,__url_sha256) VALUES(?,?,?,'video/mp4','video','videos','upload',?,?,?,?)").run(videoId,videoUrl,"Exercise.mp4",`${videoId}.mp4`,now,now,digest(videoUrl));
+ const app = await createMysqlApp({ database:f.database,jwtSecret:secret,equipmentUploadDir:f.equipmentUploadDir,mediaUploadDir:f.mediaUploadDir,temporaryTestUsersEnabled:true });
+ const server = app.listen(0,"127.0.0.1"); await new Promise(resolve => server.once("listening",resolve));
+ t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await app.locals.imageRetirement.stop(); });
+ const token = signToken({id:"tester",profile_role:"staff"},secret);
+ const call = async (route, body, method="POST") => { const response = await fetch(`http://127.0.0.1:${server.address().port}${route}`,{method,headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},...(body ? {body:JSON.stringify(body)} : {})}); return {status:response.status,body:await response.json()}; };
+ const additionalVideos = [{id:"home",titleZh:"家居",titleEn:"Home",videoUrlZh:videoUrl,videoUrlEn:""}], teachingSections = [{id:"notes",titleZh:"提示",titleEn:"Tips",bodyZh:"練習",bodyEn:"Practice"}];
+ const saved = await call("/api/admin/equipment/9",{additionalVideos,teachingSections},"PUT"); assert.equal(saved.status,200); assert.deepEqual(saved.body.item.additionalVideos,additionalVideos);
+ assert.deepEqual((await call("/api/admin/equipment/9",{nameEn:"Legacy edit"},"PUT")).body.item.teachingSections,teachingSections);
+ assert.equal((await call(`/api/admin/media/${videoId}`,{archived:true},"PATCH")).status,409);
+ const body = {batchId:crypto.randomUUID(),passwords:Array.from({length:50},()=>`T_${crypto.randomBytes(24).toString("hex")}`)};
+ f.database.failCommit = "unknown"; const uncertain = await call("/api/admin/test-users",body); assert.equal(uncertain.status,500);
+ const created = await call("/api/admin/test-users",body); assert.equal(created.status,200); assert.equal(created.body.accounts.length,50);
+ const replay = await call("/api/admin/test-users",body); assert.equal(replay.status,200); assert.deepEqual(replay.body.accounts,created.body.accounts);
+ assert.equal(f.sqlite.prepare("SELECT COUNT(*) n FROM test_user_batches").get().n,1);
+ f.sqlite.prepare("INSERT INTO assistant_jobs(id,user_id,status) VALUES('pending-job',?,'queued'),('completed-job',?,'complete')").run(created.body.accounts[0].id,created.body.accounts[0].id);
+ const disabled = await call(`/api/admin/test-users/${body.batchId}/disable`,{confirmation:body.batchId}); assert.equal(disabled.status,200);
+ assert.equal(f.sqlite.prepare("SELECT COUNT(*) n FROM users WHERE deleted_at IS NOT NULL").get().n,50);
+ assert.ok(f.calls.some(sql=>sql.includes("test_user_batches WHERE id=? FOR UPDATE")));
+ assert.deepEqual(f.sqlite.prepare("SELECT id FROM assistant_jobs").all(),[{id:"completed-job"}]);
+});

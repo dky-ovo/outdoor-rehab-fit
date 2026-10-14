@@ -1,6 +1,6 @@
 import React from "react";
 import renderer, { act } from "react-test-renderer";
-import { Platform, TouchableOpacity } from "react-native";
+import { Platform, StyleSheet, TouchableOpacity } from "react-native";
 import { Stack, router } from "expo-router";
 import { StackActions, StackRouter, CommonActions } from "@react-navigation/routers";
 import { getReturnStackOptions } from "../../utils/stackNavigationOptions";
@@ -98,6 +98,16 @@ test("Favorites scales only the incoming detail; its list keeps a fixed size and
 
 test("web does not acquire an iOS transition", () => {
 	expect(getReturnStackOptions("web")).toEqual({});
+});
+
+test("chat home return remains labelled and has a 44-point touch target", async () => {
+	const tree = await mount(ChatLayout);
+	const button = screenOptions(tree, "index").headerLeft();
+	expect(StyleSheet.flatten(button.props.style)).toMatchObject({ minWidth: 44, minHeight: 44 });
+	expect(button.props.accessibilityRole).toBe("button");
+	expect(button.props.accessibilityLabel).toBe("back");
+	button.props.onPress();
+	expect(router.replace).toHaveBeenCalledWith("/(tabs)");
 });
 
 test("timer mode replacements keep their intentional animation:none and gesture protection", async () => {

@@ -37,7 +37,7 @@ export default function Outdoor() {
 		{ icon: require("@/assets/icons/outdoor/upper.png"), text: i18n.t("upper"), category: "upper" },
 		{ icon: require("@/assets/icons/outdoor/lower.png"), text: i18n.t("lower"), category: "lower" },
 		{ iconName: "shape-plus-outline", category: "alternative" },
-		{ iconName: "human-cane", text: appText(locale, "inline.facilityGuide.specialPopulation", {"zh":"特殊人群","en":"Special Population"}), category: "special_population", locked: true },
+		{ iconName: "human-cane", text: appText(locale, "inline.facilityGuide.specialPopulation", {"zh":"特殊人群","en":"Specific Populations"}), category: "special_population", locked: true },
 		{ iconName: "human-handsup", text: appText(locale, "inline.facilityGuide.chronicStrokeSurvivor", {"zh":"中風人士","en":"Chronic Stroke Survivor"}), category: "warmup", locked: true },
 	];
 	const buttons = [builtInButtons[0], ...categories.filter((category) => category.showInGuide).map((category) => ({

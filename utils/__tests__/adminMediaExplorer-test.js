@@ -2,10 +2,10 @@ import { buildExplorerPage, explorerError, explorerPermissions, explorerReferenc
 
 const video = { id: "video-1", kind: "video", name: "太极教学.mp4", url: "/api/media/1/2.mp4", source: "upload", mimeType: "video/mp4" };
 
-test("file management mutations require the separate permission; content picker can upload only", () => {
-	expect(explorerPermissions(["app_maintenance.equipment.manage"], { picker: true })).toEqual({ read: true, manage: false, upload: true, mutate: false, restore: false });
+test("file management mutations require the separate permission; content picker only selects existing files", () => {
+	expect(explorerPermissions(["app_maintenance.equipment.manage"], { picker: true })).toEqual({ read: true, manage: false, upload: false, mutate: false, restore: false });
 	expect(explorerPermissions(["app_maintenance.equipment.manage"])).toMatchObject({ read: true, upload: false, mutate: false });
-	expect(explorerPermissions(["app_maintenance.files.manage"], { picker: true })).toMatchObject({ upload: true, mutate: false });
+	expect(explorerPermissions(["app_maintenance.files.manage"], { picker: true })).toMatchObject({ upload: false, mutate: false });
 });
 test("busy and trash do not allow file creation, but trash allows authorized restore", () => {
 	expect(explorerPermissions(["app_maintenance.files.manage"], { busy: true })).toMatchObject({ upload: false, mutate: false, restore: false });

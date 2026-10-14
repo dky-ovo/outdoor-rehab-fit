@@ -56,3 +56,25 @@ test("deleting a locally pending record removes its pending upload and accepts n
 	expect(await deleteSession("3")).toEqual([]);
 	expect(await getUserJson("exerciseSessionsPendingSync", [])).toEqual([]);
 });
+
+test('one rejected offline session does not hide records downloaded from another device', async () => {
+	const invalid = { ...original, id: 'offline-invalid', journal: 'kept locally' };
+	const remote = { ...original, id: 'from-phone', date: '2026-10-06T01:00:00Z' };
+	await saveSession(invalid);
+	getServerSessions.mockResolvedValue({ sessions: [remote] });
+	const failure = Object.assign(new Error('invalidSession'), { status: 400, code: 'invalidSession' });
+	saveServerSession.mockRejectedValue(failure);
+	await expect(getSessions('token', { strict: true })).rejects.toBe(failure);
+	expect(await getSessions()).toEqual([remote, invalid]);
+	expect(await getUserJson('exerciseSessionsPendingSync', [])).toEqual(['offline-invalid']);
+});
+
+test('a partially successful first migration acknowledges only uploaded sessions and retains other edits', async () => {
+	const failed = { ...original, id: 'failed' }, uploaded = { ...original, id: 'uploaded' };
+	await setUserJson('exerciseSessions', [failed, uploaded]);
+	getServerSessions.mockResolvedValue({ sessions: [] });
+	saveServerSession.mockImplementation(async (_token, value) => { if(value.id==='failed') throw Error('invalid'); return {session:value}; });
+	await expect(getSessions('token', {strict:true})).rejects.toThrow('invalid');
+	expect((await getSessions()).map(item=>item.id).sort()).toEqual(['failed','uploaded']);
+	expect(await getUserJson('exerciseSessionsPendingSync', [])).toEqual(['failed']);
+});

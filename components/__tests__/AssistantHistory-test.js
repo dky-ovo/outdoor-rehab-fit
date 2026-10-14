@@ -1,6 +1,6 @@
 import React from "react";
 import renderer, { act } from "react-test-renderer";
-import { FlatList, Text, TextInput, TouchableOpacity } from "react-native";
+import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import AiChatbox from "../../app/(tabs)/chat";
@@ -8,7 +8,7 @@ import { getEquipmentCatalog, sendAssistantMessage } from "../../utils/api";
 import { LocaleContext } from "../../contexts/LocaleContext";
 import { equipmentTranslations } from "../../constants/Equipments";
 import { withEquipmentTcmReply } from '../../utils/assistantTcm';
-import { formatEquipmentInstructionSteps } from "../../utils/equipmentInstructions";
+import { renderAssistantFaq, retrieveAssistantFaq } from "../../server/src/assistantFaqKnowledge";
 import { currentAssistantConversation, mockCurrentAssistantConversation, persistedCurrentAssistantMessages } from "../../scripts/test-helpers/assistantConversationFixtures";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -29,7 +29,7 @@ jest.mock("../../utils/api", () => { const sendAssistantMessage = jest.fn(); ret
 jest.mock("../../hooks/useAndroidBackTarget", () => ({ useAndroidBackTarget: jest.fn() }));
 jest.mock("../../hooks/useKeyboardInset", () => ({ useKeyboardInset: () => ({ inset: 0, visible: false }) }));
 jest.mock("@react-navigation/elements", () => ({ useHeaderHeight: () => 48 }));
-jest.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ bottom: 0 }) }));
+jest.mock("react-native-safe-area-context", () => ({ SafeAreaProvider: ({ children }) => children, SafeAreaView: require("react-native").View, useSafeAreaInsets: () => ({ bottom: 0 }) }));
 jest.mock("react-native-responsive-fontsize", () => ({ RFValue: (value) => value }));
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null, MaterialCommunityIcons: () => null }));
 jest.mock("expo-image-picker", () => ({}));
@@ -46,11 +46,48 @@ beforeEach(() => {
 });
 afterEach(async () => { if (tree) await act(async () => tree.unmount()); tree = null; });
 const mount = async () => act(async () => { tree = renderer.create(<AiChatbox />); });
+
+test("iOS uses one keyboard adjustment at the native header and lets enlarged toolbar labels wrap", async () => {
+	const originalPlatform = Platform.OS;
+	try {
+		Platform.OS = "ios";
+		await mount();
+		const keyboard = tree.root.findByType(KeyboardAvoidingView);
+		expect(keyboard.props.behavior).toBe("padding");
+		expect(keyboard.props.keyboardVerticalOffset).toBe(48);
+		expect(tree.root.findByType(FlatList).props.automaticallyAdjustKeyboardInsets).not.toBe(true);
+		const toolbar = tree.root.findAllByType(View).find(node => {
+			const style = StyleSheet.flatten(node.props.style);
+			return style?.flexDirection === "row" && style?.flexWrap === "wrap";
+		});
+		expect(toolbar).toBeTruthy();
+		for (const testID of ["assistant-new-conversation", "assistant-conversation-history"]) {
+			const button = toolbar.findAllByType(TouchableOpacity).find(node => node.props.testID === testID);
+			expect(StyleSheet.flatten(button.props.style)).toMatchObject({ minHeight: 48, maxWidth: "100%", flexShrink: 1 });
+			expect(StyleSheet.flatten(button.findByType(Text).props.style).flexShrink).toBe(1);
+		}
+	} finally {
+		if (tree) await act(async () => tree.unmount());
+		tree = null;
+		Platform.OS = originalPlatform;
+	}
+});
 const send = async (query) => {
 	await act(async () => tree.root.findByType(TextInput).props.onChangeText(query));
 	const buttons = tree.root.findAllByType(TouchableOpacity);
 	await act(async () => buttons[buttons.length - 1].props.onPress());
 };
+
+test("a knowledge answer shows ordinary reply text and no internal source badge", async () => {
+  const question = "每星期應該運動多久？";
+  const answer = renderAssistantFaq(retrieveAssistantFaq(question), [], "zh", { message: question });
+  expect(answer).toBeTruthy();
+  sendAssistantMessage.mockResolvedValue(answer);
+  await mount();
+  await send(question);
+  expect(visibleTexts().join("\n")).not.toMatch(/項目常見問題|Project FAQ|現有 FAQ/);
+  expect(replyNode(displayed().at(-1).id).props.children).toContain("150");
+});
 // The inverted visual list is newest-first; assertions below concern the
 // chronological conversation used by persistence and the assistant API.
 const displayed = () => [...tree.root.findByType(FlatList).props.data].reverse();
@@ -79,8 +116,10 @@ const toggleExplanation = async (id) => {
 const detailsText = () => tree.root.findAllByType(Text).find(node => node.props.testID === "assistant-reply-details-text")?.props.children;
 const closeExplanation = async () => act(async () => tree.root.findAllByType(TouchableOpacity).find(node => node.props.testID === "assistant-reply-details-close").props.onPress());
 const expectDetailInvitation = (preview, locale) => {
-	expect(preview).toContain(locale === "en" ? "View details" : "查看詳細說明");
-	expect(preview).toContain(locale === "en" ? "equipment card" : "下方器材");
+	// A separate accessible button opens details. The answer itself no longer
+	// repeats that navigation instruction after every reply.
+	expect(preview).not.toContain(locale === "en" ? "View details" : "查看詳細說明");
+	expect(preview).not.toContain(locale === "en" ? "equipment card" : "可點擊");
 	expect(preview).not.toMatch(/For example:|例如：/);
 };
 const expectFirstEquipmentExplanation = (preview, answer, locale) => {
@@ -250,7 +289,7 @@ test.each([
 		expect(cardText(answer.id, recommendation.id)).not.toContain(recommendation.evidence.quote);
 	}
 	await toggleExplanation(answer.id);
-	expect(detailsText()).toContain(locale === "en" ? "not a diagnosis or confirmation of suitability" : "也不是診斷或治療建議");
+	expect(detailsText()).toContain(locale === "en" ? "This does not mean it is suitable for your pain" : "有疼痛不代表適合使用");
 	for (const card of answer.recommendations) {
 		const equipment = entries.find((item) => String(item.id) === card.id);
 		expect(card.evidence.field).toBe("ptTip");
@@ -322,7 +361,7 @@ test.each([
 test.each(["zh", "en"])("%s shows verified TCM in the reply before the compact facility card", async (locale) => {
 	mockCurrentAssistantConversation(AsyncStorage, restoredCard());
 	await mountCatalog(tcmCatalog(locale), locale);
-	const title = locale === "en" ? "From a TCM perspective" : "從中醫學角度";
+	const title = locale === "en" ? "TCM background" : "中醫小知識";
 	const reply = replyNode("tcm-ai");
 	expect(reply.props.children).toContain(title);
 	expectNoSourceWrapping(reply.props.children);
@@ -386,7 +425,7 @@ test.each([
 	await mountCatalog(entries, locale);
 	await send(query);
 	const answer = displayed().at(-1);
-	const expectedSteps = formatEquipmentInstructionSteps(entries.find(item => item.id === 0).details, locale);
+	const expectedSteps = entries.find(item => item.id === 0).details;
 	expect(answer.action).toBe("equipment_local");
 	expect(replyNode(answer.id).props.children).toContain(expectedSteps);
 	expect(expandButton(answer.id)).toBeUndefined();
@@ -516,7 +555,7 @@ test.each([
 	expectNoSourceWrapping(reply.props.children);
 	expectNoSourceWrapping(visibleTexts().join("\n"));
 	// Presentation changes must not rewrite the authoritative response data.
-	expect(answer.reply).toContain(locale === "en" ? "According to the APP Facility Guide" : "根據APP設施教學");
+	expect(answer.reply).toContain(locale === "en" ? "Please ask a healthcare professional before trying it" : "請先找醫護人員評估");
 	expect(answer.recommendations.some((recommendation) => !preview.includes(recommendation.evidence.quote))).toBe(true);
 	for (const recommendation of answer.recommendations) {
 		const facility = entries.find((item) => String(item.id) === recommendation.id);
@@ -535,10 +574,10 @@ test.each([
 	}
 	expect(expandButton(answer.id).findAllByType(Text).map(node => node.props.children)).toContain(locale === "en" ? "View details" : "查看詳細說明");
 	await toggleExplanation(answer.id);
-	expect(detailsText()).toContain(locale === "en" ? "not a diagnosis or confirmation of suitability" : "也不是診斷或治療建議");
-	expect(detailsText()).toContain(locale === "en" ? "Please read the full precautions" : "請查看設施教學的完整注意事項");
+	expect(detailsText()).toContain(locale === "en" ? "This does not mean it is suitable for your pain" : "有疼痛不代表適合使用");
+	expect(detailsText()).toContain(locale === "en" ? "not treatment advice" : "不能代替診治");
 	if (locale === "zh") {
-		expect(detailsText()).toContain("以上說明僅供參考，並非針對症狀的使用建議。請查看設施教學的完整注意事項。");
+		expect(detailsText()).toContain("這些是中醫的一般說明，不能代替診治。有痛楚時，請先找醫護人員評估。");
 		expect(detailsText()).not.toContain("以上中醫說明");
 	}
 	for (const recommendation of answer.recommendations) {
@@ -579,10 +618,12 @@ test.each(["zh", "en"])("%s consecutive legacy recommendations vary naturally an
 		for (const item of last.recommendations) expect(detailsText()).toContain(item.evidence.quote);
 		await closeExplanation();
 		for (const [id, preview] of previews) expect(rowPreview(id)).toBe(preview);
-		const saved = AsyncStorage.setItem.mock.calls.at(-1)[1];
+		// Job completion also writes its outbox. Restore the conversation key,
+		// not whichever unrelated storage write happened to finish last.
+		const [savedKey, saved] = [...AsyncStorage.setItem.mock.calls].reverse().find(([key]) => key.startsWith("@outdoor_fit_ai_conversations_v2:"));
 		expect(saved).not.toContain("introVariant");
 		await act(async () => tree.unmount()); tree = null;
-		AsyncStorage.getItem.mockResolvedValue(saved);
+		AsyncStorage.getItem.mockImplementation(async key => key === savedKey ? saved : null);
 		await mountCatalog(entries, locale);
 		for (const [id, preview] of previews) expect(rowPreview(id)).toBe(preview);
 		expect(sendAssistantMessage).toHaveBeenCalledTimes(6);

@@ -17,8 +17,8 @@ import { AuthContext } from "../../contexts/AuthContext";
 import { Tabs, router, Redirect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const renderHomeBackButton = () => (
-	<TouchableOpacity onPress={() => router.replace("/(tabs)")} style={{ paddingHorizontal: 8 }}>
+const renderHomeBackButton = (label: string) => (
+	<TouchableOpacity accessibilityRole="button" accessibilityLabel={label} onPress={() => router.replace("/(tabs)")} style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 }}>
 		<Ionicons name="chevron-back" size={RFValue(18)} color={"#000"} />
 	</TouchableOpacity>
 );
@@ -86,7 +86,7 @@ export default function TabLayout() {
 					headerTitle: i18n.t("otherTab"),
 					tabBarIcon: ({ color }) => <MaterialIcons size={32} name="apps" color={color} />,
 					headerShown: true,
-					headerLeft: renderHomeBackButton,
+					headerLeft: () => renderHomeBackButton(i18n.t("back")),
 				}}
 			/>
 			<Tabs.Screen
@@ -102,6 +102,7 @@ export default function TabLayout() {
 			/>
 			<Tabs.Screen name="risk" options={{ href: null }} />
 			<Tabs.Screen name="outdoor" options={{ href: null }} />
+			<Tabs.Screen name="exercise-videos" options={{ href: null, headerShown: true, title: i18n.t("exerciseVideos"), headerLeft: () => renderHomeBackButton(i18n.t("back")) }} />
 			<Tabs.Screen name="location" options={{ href: null }} />
 			<Tabs.Screen name="research" options={{ href: null }} />
 			<Tabs.Screen name="activity-advice" options={{ href: null }} />

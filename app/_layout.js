@@ -1,14 +1,13 @@
 import AssistantJobSync from "../components/AssistantJobSync";
 import AccountDataSync from '../components/AccountDataSync';
-import BookmarkSync from "../components/BookmarkSync";
 import { DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
-import { useContext, useEffect } from "react";
-import { View } from "react-native";
+import { useContext, useEffect, useState } from "react";
+import { Platform, View } from "react-native";
 import "react-native-reanimated";
 import { LocaleProvider } from "@/contexts/LocaleContext";
 import { AuthProvider, AuthContext } from "@/contexts/AuthContext";
@@ -21,13 +20,33 @@ import AppAlertHost from "@/components/AppAlertHost";
 import CountdownNotificationObserver from "@/components/CountdownNotificationObserver";
 import LearningProgressSync from "@/components/LearningProgressSync";
 import EquipmentOfflineSync from "@/components/EquipmentOfflineSync";
+import { APP_ICON_FONTS } from "@/utils/appIconFonts";
 
-// Captures touches for usage activity; idle time no longer signs users out.
+// Only direct interaction renews the 90-minute idle window. Network responses,
+// animation, timer ticks and programmatic scrolling must not keep a login alive.
 function ActivityTracker({ children }) {
 	const { recordActivity } = useContext(AuthContext);
+	useEffect(() => {
+		if (Platform.OS !== "web" || typeof document === "undefined") return undefined;
+		const activity = event => {
+			if (!event.isTrusted || document.visibilityState === "hidden") return;
+			if (event.type === "pointermove" && !event.buttons) return;
+			recordActivity();
+		};
+		const events = ["pointerdown", "pointermove", "keydown", "input", "wheel"];
+		for (const name of events) document.addEventListener(name, activity, { capture: true, passive: true });
+		return () => { for (const name of events) document.removeEventListener(name, activity, true); };
+	}, [recordActivity]);
 	return <ResearchInteractionTracker>{(trackResearchTap) => (
 		<View
 			style={{ flex: 1 }}
+			{...(Platform.OS === "web" ? {} : {
+				// TextInput events bubble through native views, including software
+				// keyboard editing while no new touch reaches the app's content area.
+				onChangeCapture: recordActivity,
+				onKeyPressCapture: recordActivity,
+				onTouchMoveCapture: recordActivity,
+			})}
 			onStartShouldSetResponderCapture={(event) => {
 				recordActivity();
 				return trackResearchTap(event);
@@ -48,10 +67,24 @@ function runStartupTask(label, task) {
 runStartupTask("Unable to hold splash screen", () => SplashScreen.preventAutoHideAsync());
 
 export default function RootLayout() {
-	const [loaded, fontError] = useFonts({
+	// Register the actual icon families before native screens mount. Otherwise
+	// each icon starts loading its font only after the first screen is visible.
+	// Web has its own non-blocking font readiness/fallback implementation.
+	const web = Platform.OS === "web";
+	const [iconsLoaded, iconError] = useFonts(web ? {} : APP_ICON_FONTS);
+	const [, fontError] = useFonts(web ? {} : {
 		SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
 	});
-	const ready = loaded || !!fontError;
+	const [fontWaitExpired, setFontWaitExpired] = useState(false);
+	const ready = web || iconsLoaded || !!iconError || fontWaitExpired;
+	useEffect(() => {
+		if (web || iconsLoaded || iconError) return;
+		// A missing asset or stalled font service must never trap the user on
+		// the splash. Expo's native icon component stays empty until loaded;
+		// let late fonts finish without remounting screens or hiding them again.
+		const timer = setTimeout(() => setFontWaitExpired(true), 1500);
+		return () => clearTimeout(timer);
+	}, [web, iconsLoaded, iconError]);
 
 	useEffect(() => {
 		runStartupTask("Unable to set system background", () => SystemUI.setBackgroundColorAsync("#FFFFFF"));
@@ -63,6 +96,9 @@ export default function RootLayout() {
 	useEffect(() => {
 		if (fontError) console.warn("Unable to load optional display font; using system fallback", fontError);
 	}, [fontError]);
+	useEffect(() => {
+		if (iconError) console.warn("Unable to preload icon fonts; continuing startup", iconError);
+	}, [iconError]);
 
 	if (!ready) {
 		return null;
@@ -89,7 +125,6 @@ export default function RootLayout() {
 							<Stack.Screen name="firstquestionnaire" options={{ title: "PAR-Q", gestureEnabled: false, headerBackVisible: false }} />
 							<Stack.Screen name="+not-found" />
 						</Stack>
-					</ActivityTracker>
 					<AppUpdateOverlay />
 					<FloatingSessionTimer />
 					<AppAlertHost />
@@ -97,9 +132,9 @@ export default function RootLayout() {
 					<LearningProgressSync />
 					<AssistantJobSync />
 					<AccountDataSync />
-					<BookmarkSync />
 					<EquipmentOfflineSync />
 					<StatusBar style="dark" backgroundColor="#FFFFFF" />
+					</ActivityTracker>
 				</ThemeProvider>
 				</ActiveSessionProvider>
 			</AuthProvider>

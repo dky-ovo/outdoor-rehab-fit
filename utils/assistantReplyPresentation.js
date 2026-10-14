@@ -1,3 +1,5 @@
+import { ASSISTANT_FAQ_ENTRIES, ASSISTANT_FAQ_POLICY, renderAssistantFaq } from "../server/src/assistantFaqKnowledge";
+import { assistantGuideExplanation } from "../server/src/assistantContentPolicy";
 import { formatAssistantDisplayText } from "./assistantDisplayText";
 import { equipmentTcmExcerpt, withEquipmentTcmReply } from "./assistantTcm";
 
@@ -7,7 +9,7 @@ import { equipmentTcmExcerpt, withEquipmentTcmReply } from "./assistantTcm";
 // of motion"). Actual instructions, negations and conditions remain intact.
 const SAFETY_OR_LIMIT = /注意|提醒|切勿|不要|避免|不建議|不建议|不適合|不适合|禁忌|禁止|不能|不可|無法|无法|沒有|没有|未必|不一定|無助|无助|不會|不会|不應|不应|諮詢|咨询|停止|醫護|医护|醫生|医生|評估|评估|疼痛加|痛楚加|劇痛|剧痛|風險|风险|危險|危险|受傷|受伤|僅|仅|只適|只适|只有|必須|必须|如果|倘若|條件|条件|先由|前請|前请|控制(?:力度|幅度)|保持在|過度|过度|\b(?:caution|warning|precaution|avoid|never|do not|don't|cannot|can't|not|no evidence|contraindicat\w*|stop|consult|unless|insufficient|unproven|only|if|provided|must|before|should|within|without|risk|danger|injur\w*|severe|worsen\w*|assess\w*|medical|healthcare)\b/i;
 const INSTRUCTIONS = /使用步驟|使用步骤|操作步驟|操作步骤|\b(?:instructions|steps?\s*\d|how to use)\b|(?:^|\n)\s*\d+[.、．)]?\s*\n/i;
-const INDEPENDENT = new Set(["equipment_local", "equipment_image", "image_confirmation", "facility", "auth_error", "error"]);
+const INDEPENDENT = new Set(["faq", "equipment_local", "equipment_image", "image_confirmation", "facility", "auth_error", "error"]);
 const LATER_QUALIFIER = /切勿|不要|避免|不能|不可|無法|无法|未必|不一定|無助|无助|不會|不会|不應|不应|只適|只适|只有|僅|仅|必須|必须|如果|倘若|條件|条件|(?:如|若)不[適适]|停止|諮詢|咨询|評估|评估|醫護|医护|禁忌|警告|注意|\b(?:not|never|avoid|cannot|can't|only|if|unless|provided|must|for people|for patients|for individuals|stop|consult|assess\w*|medical|healthcare|caution|warning|precaution|contraindicat\w*)\b/i;
 const PART_LABELS = { knee: ["膝部", "knee"], ankle: ["腳踝", "ankle"], calf: ["小腿", "calf"], hip: ["髖部", "hip"], foot: ["足部", "foot"], shoulder: ["肩部", "shoulder"], elbow: ["手肘", "elbow"], wrist: ["手腕", "wrist"], neck: ["頸部", "neck"], back: ["腰背", "back"] };
 
@@ -20,6 +22,10 @@ function isKnownIntroduction(message, locale) {
       ? `According to the APP Facility Guide, the following equipment descriptions explicitly discuss ${label} discomfort. Here are the original passages and their stated conditions. They are information for reference, not a diagnosis or confirmation of suitability for your symptoms; please have a healthcare professional assess suitability before use.`
       : `根據APP設施教學，以下器材的說明有明確提及${label}疼痛或不適。以下列出相應原文及原文所述的適用情況，方便您查閱。這些資料並不代表已判斷器材適合您的症狀，也不是診斷或治療建議；使用前請先由醫護人員評估。`;
     if (base === expected) return true;
+    const current = en
+      ? `You can learn about the equipment below for your ${label} question. This does not mean it is suitable for your pain. Please ask a healthcare professional before trying it; stop if it makes the pain worse.`
+      : `關於您提到的${label}，可以先了解下方器材。有疼痛不代表適合使用，請先找醫護人員評估；若做動作時更痛，就要停止。`;
+    if (base === current) return true;
   }
   return base === (en
     ? "I selected these reference items from the in-app Facility Guide categories. Please read the guide and start gently."
@@ -99,25 +105,25 @@ function conversationalRecommendation(message, explanation, cards, fullText, loc
       "我們可以先從下方的器材教學了解更多。",
     ])[variant];
   }
-  const more = cards.length > 1;
-  const cta = (en ? [
-    `To learn more${more ? " about the other equipment" : ""}, tap “View details”, or tap an equipment card below to open its guide.`,
-    "Tap “View details” for the full explanations, or open a guide from an equipment card below.",
-    "For more information, open “View details”; the equipment cards below also take you to the guides.",
-  ] : [
-    `想了解${more ? "其他器材" : "更多"}，可點擊「查看詳細說明」，或點擊下方器材查看教學。`,
-    "完整解釋放在「查看詳細說明」；也可以點擊下方器材，查看使用教學。",
-    "如想進一步了解，請點擊「查看詳細說明」，或開啟下方器材的教學。",
-  ])[variant % 3];
+  // The accessible details button and equipment cards already provide these
+  // actions. Keep the reply focused on the answer instead of repeating a
+  // navigation instruction after every response.
   return { variant, text: [
     explanation ? `${intro}\n${explanation.quote}` : intro,
     explanation ? shortTcmExplanation(explanation.item, fullText, locale) : "",
-    cta,
+    // The new short source introduction includes a stop/assessment condition.
+    // Keep that entire known condition visible even when its intro varies.
+    message.equipmentReplyBase?.startsWith(en ? "You can learn about the equipment below" : "關於您提到的")
+      ? (en ? "This does not mean it is suitable for your pain. Please ask a healthcare professional before trying it; stop if it makes the pain worse."
+        : "有疼痛不代表適合使用，請先找醫護人員評估；若做動作時更痛，就要停止。") : "",
   ].filter(Boolean).join("\n\n") };
 }
 
 export function assistantReplyPresentation(message, equipmentCards = [], locale = "zh", replyIndex = 0) {
   const raw = message?.text || message?.reply || "";
+  if (message?.provider === "bailian" && message?.responsePolicy === "bailian-chat-raw-v1") {
+    return { fullText: raw, previewText: raw, canExpand: false };
+  }
   if (message?.sender !== "ai") return { fullText: raw, previewText: raw, canExpand: false };
   const cards = Array.isArray(equipmentCards) ? equipmentCards : [];
   const protectedPassages = cards.flatMap(item => [item.evidence?.quote, item.tcmExcerpt?.quote,
@@ -135,7 +141,7 @@ export function assistantReplyPresentation(message, equipmentCards = [], locale 
     const reason = format(item.reason).trim();
     const quote = item.evidence?.quote;
     if (!reason || fullText.includes(reason) ||
-      ["點擊進入設施教學，查看完整說明、圖片和動作示範。", "Open the Facility Guide for complete instructions and pictures."].includes(reason) ||
+      ["點擊進入設施教學，查看完整說明、圖片和動作示範。", "點擊進入設施教學，查看完整說明和注意事項。", "開啟設施教學，查看完整說明及注意事項。", "開啟現有設施教學及注意事項。", "Open the current Facility Guide and its precautions.", "Open the Facility Guide for complete instructions and pictures.", "Open the Facility Guide for complete instructions and precautions."].includes(reason) ||
       (quote && fullText.includes(quote) && item.reason.includes(quote) && !SAFETY_OR_LIMIT.test(item.reason.replace(quote, "")))) continue;
     const paragraph = `${item.name}\n${reason}`;
     if (!additionalReasons.includes(paragraph)) additionalReasons.push(paragraph);
@@ -143,7 +149,21 @@ export function assistantReplyPresentation(message, equipmentCards = [], locale 
   if (additionalReasons.length) fullText = [fullText, ...additionalReasons].filter(Boolean).join("\n\n");
 
   const unchanged = () => ({ fullText, previewText: fullText, canExpand: false });
-  if (blocked || INDEPENDENT.has(message.action) || message.tcmInReply || !cards.length ||
+  if (!blocked && message.evidencePolicy === ASSISTANT_FAQ_POLICY && message.action === "faq") {
+    // Rebuild the same reviewed answer from current guide cards. A saved policy
+    // marker cannot hide arbitrary prose or move its cautions into a modal.
+    const entry = ASSISTANT_FAQ_ENTRIES.find(item => item.id === message.focus);
+    const verified = renderAssistantFaq(entry, cards, locale);
+    if (!verified || verified.reply !== raw || !verified.faqReplyBase || verified.reply === verified.faqReplyBase) return unchanged();
+    const short = cards.map(item => ({ item, note: assistantGuideExplanation(item, locale, {
+      careTips: Boolean(entry.careTips), maximum: locale === "en" ? 700 : 180,
+    }) })).find(({ note }) => note && verified.reply.includes(note.text));
+    const previewText = [format(verified.faqReplyBase),
+      short ? `${short.item.name} — ${short.note.label}\n${format(short.note.text)}` : "",
+    ].filter(Boolean).join("\n\n");
+    return { fullText, previewText, canExpand: true };
+  }
+  if (blocked || INDEPENDENT.has(message.action) || message.tcmInReply || message.guideContentDirect || !cards.length ||
     message.equipmentReplyVersion !== "app-equipment-prose-v1" ||
     typeof message.equipmentReplyBase !== "string" || INSTRUCTIONS.test(raw)) return unchanged();
   // A stored/model-provided version marker alone is not sufficient. Require

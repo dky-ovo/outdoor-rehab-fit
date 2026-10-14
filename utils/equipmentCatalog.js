@@ -1,4 +1,5 @@
 import { resolveApiAssetUrl } from "./api";
+import { Platform } from "react-native";
 
 export const EQUIPMENT_IMAGE_PLACEHOLDER = require("../assets/icons/outdoor.png");
 
@@ -39,9 +40,32 @@ function normalizedEquipmentName(value, locale) {
 
 export function equipmentVideoForLocale(item, locale = "zh", baseYoutubeKey = "") {
 	const localized = Boolean(item.videoLocalesEnabled || item.videoUrlZh || item.videoUrlEn);
-	return localized
+	const video = localized
 		? { videoUrl: (locale === "en" ? item.videoUrlEn : item.videoUrlZh) || "", youtubeKey: "" }
 		: { videoUrl: item.videoUrl || "", youtubeKey: item.youtubeKey || baseYoutubeKey };
+	if (Platform.OS !== "web") return video;
+	const playback = localized ? (locale === "en" ? item.videoPlaybackUrlEn : item.videoPlaybackUrlZh) : item.videoPlaybackUrl;
+	const original = video.videoUrl;
+	if (original && playback) video.videoUrl = playback;
+	// Public delivery URLs can point to a new encoding/CDN while the underlying
+	// teaching file remains the same. Keep its original learning identity.
+	const identity = (localized ? (locale === "en" ? item.videoIdentityUrlEn : item.videoIdentityUrlZh) : item.videoIdentityUrl) || (playback && original);
+	const duration = localized ? (locale === "en" ? item.videoIdentityDurationSecondsEn : item.videoIdentityDurationSecondsZh) : item.videoIdentityDurationSeconds;
+	return identity && video.videoUrl ? { ...video, videoIdentityUrl: identity,
+		...(Number.isFinite(duration) && duration > 0 ? { videoIdentityDurationSeconds: duration } : {}) } : video;
+}
+
+export function equipmentExtensionsForLocale(item, locale = "zh") {
+  return {
+    additionalVideos: (Array.isArray(item.additionalVideos) ? item.additionalVideos : []).map(entry => {
+      const original = (locale === "en" ? entry.videoUrlEn : entry.videoUrlZh) || "";
+      const playback = Platform.OS === "web" && original ? (locale === "en" ? entry.videoPlaybackUrlEn : entry.videoPlaybackUrlZh) : "";
+      const videoIdentityUrl = Platform.OS === "web" ? ((locale === "en" ? entry.videoIdentityUrlEn : entry.videoIdentityUrlZh) || (playback && original)) : "";
+      const duration = locale === "en" ? entry.videoIdentityDurationSecondsEn : entry.videoIdentityDurationSecondsZh;
+      return { id: entry.id, title: (locale === "en" ? entry.titleEn : entry.titleZh) || "", videoUrl: playback || original, ...(videoIdentityUrl ? { videoIdentityUrl } : {}), ...(videoIdentityUrl && Number.isFinite(duration) && duration > 0 ? { videoIdentityDurationSeconds: duration } : {}) };
+    }).filter(entry => entry.videoUrl),
+    teachingSections: (Array.isArray(item.teachingSections) ? item.teachingSections : []).map(entry => ({ id: entry.id, title: (locale === "en" ? entry.titleEn : entry.titleZh) || "", body: (locale === "en" ? entry.bodyEn : entry.bodyZh) || "" })).filter(entry => entry.title && entry.body),
+  };
 }
 
 export function mergeEquipmentCatalog(baseItems, overrides, locale = "zh", { imageCatalogReady = true } = {}) {
@@ -65,6 +89,7 @@ export function mergeEquipmentCatalog(baseItems, overrides, locale = "zh", { ima
 			icon: image || base.icon, pic: image || base.pic, horizontalPic: image || base.horizontalPic,
 			gifLeftUrl: override.gifLeftUrl || "", gifRightUrl: override.gifRightUrl || "",
 			...equipmentVideoForLocale(override, locale, base.youtubeKey),
+			...equipmentExtensionsForLocale(override, locale),
 			details: (locale === "en" ? override.detailsEn : override.detailsZh) || base.details,
 			kinesiologyTip: (locale === "en" ? override.kinesiologyEn : override.kinesiologyZh) || base.kinesiologyTip,
 			ptTip: (locale === "en" ? override.ptTipEn : override.ptTipZh) || base.ptTip,
@@ -85,6 +110,7 @@ export function mergeEquipmentCatalog(baseItems, overrides, locale = "zh", { ima
 			icon: item.imageUrl, pic: item.imageUrl, horizontalPic: item.imageUrl,
 			gifLeftUrl: item.gifLeftUrl || "", gifRightUrl: item.gifRightUrl || "",
 			...equipmentVideoForLocale(item, locale),
+			...equipmentExtensionsForLocale(item, locale),
 			fallbackIcon: null, fallbackHorizontalPic: null,
 			details: locale === "en" ? item.detailsEn : item.detailsZh,
 			kinesiologyTip: locale === "en" ? item.kinesiologyEn : item.kinesiologyZh,

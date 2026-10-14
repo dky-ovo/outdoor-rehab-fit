@@ -48,26 +48,36 @@ const SmartGoal = () => {
 	const [editing, setEditing] = useState(null);
 	const [savingEdit, setSavingEdit] = useState(false);
 	const savingEditRef = useRef(false);
+	const focusedRef = useRef(false);
+	const loadVersionRef = useRef(0);
 	const changeGoals = async (change) => {
 		try {
 			await change();
 			await load();
 			return true;
 		} catch {
-			showAlert(i18n.t("warning"), i18n.t("serverError"));
+			if (focusedRef.current) showAlert(i18n.t("warning"), i18n.t("serverError"));
 			return false;
 		}
 	};
 
 	const load = useCallback(async () => {
-		const state = await getGoalState();
-		setCurrentGoals(getCurrentWeekSmartGoals(state));
-		setPastGoals(getPastWeekSmartGoals(state));
-	}, []);
+		const version = ++loadVersionRef.current;
+		try {
+			const state = await getGoalState();
+			if (!focusedRef.current || version !== loadVersionRef.current) return;
+			setCurrentGoals(getCurrentWeekSmartGoals(state));
+			setPastGoals(getPastWeekSmartGoals(state));
+		} catch {
+			if (focusedRef.current && version === loadVersionRef.current) showAlert(i18n.t("warning"), i18n.t("serverError"));
+		}
+	}, [i18n]);
 
 	useFocusEffect(
 		useCallback(() => {
-			load();
+			focusedRef.current = true;
+			void load();
+			return () => { focusedRef.current = false; loadVersionRef.current += 1; };
 		}, [load, accountRevision])
 	);
 

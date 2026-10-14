@@ -10,6 +10,7 @@ import { LocaleContext } from "../../../contexts/LocaleContext";
 import { getVolunteerParticipantUsage } from "../../../utils/api";
 import { useUsageBack } from "../../../hooks/useUsageBack";
 import UsageMetricCards from "../../../components/UsageMetricCards";
+import { formatParticipantWeek, groupParticipantWeeks, hasParticipantData } from "../../../utils/participantWeeks";
 import { ParticipantLearningEntry } from "../../../components/ParticipantLearningProgress";
 
 const fieldLabels = locale => ({
@@ -18,7 +19,7 @@ const fieldLabels = locale => ({
 	mode: appText(locale, "inline.participantDay.exerciseLocation", { zh: "運動地點", en: "Exercise location" }),
 	emotion: appText(locale, "inline.participantDay.exerciseMood", { zh: "運動心情", en: "Exercise mood" }),
 	rpe: appText(locale, "inline.participantDay.perceivedExertion", { zh: "自覺竭力程度", en: "Perceived exertion" }),
-	journal: appText(locale, "inline.participantDay.problemsDuringExercise", { zh: "運動期間遇到的問題", en: "Problems during exercise" }),
+	journal: appText(locale, "inline.participantDay.problemsDuringExercise", { zh: "感受/遇上的問題", en: "Feelings / problems encountered" }),
 	exercises: appText(locale, "inline.participantDay.outdoorEquipmentUsed", { zh: "曾經使用的戶外設施", en: "Outdoor equipment used" }),
 	types: appText(locale, "inline.participantDay.exerciseTypes", { zh: "運動類型", en: "Exercise types" }),
 });
@@ -31,7 +32,7 @@ function minutesLabel(seconds, locale) {
 function dateTimeLabel(value, locale) {
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return String(value || "-");
-	return date.toLocaleString(locale === "zh" ? "zh-HK" : "en-GB", { dateStyle: "medium", timeStyle: "short" });
+	return date.toLocaleString(locale === "zh" ? "zh-HK" : "en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Hong_Kong" });
 }
 
 function SessionSnapshot({ session, locale, muted = false }) {
@@ -47,29 +48,33 @@ function SessionSnapshot({ session, locale, muted = false }) {
 }
 
 export default function ParticipantUsageDay() {
-	const { participantId: rawParticipantId, date: rawDate, view } = useLocalSearchParams();
+	const { participantId: rawParticipantId, date: rawDate, weekStart: rawWeekStart, returnWeek: rawReturnWeek, view } = useLocalSearchParams();
 	const participantId = String((Array.isArray(rawParticipantId) ? rawParticipantId[0] : rawParticipantId) || "");
 	const date = String((Array.isArray(rawDate) ? rawDate[0] : rawDate) || "");
+	const weekStart = String((Array.isArray(rawWeekStart) ? rawWeekStart[0] : rawWeekStart) || "");
 	const dataView = (Array.isArray(view) ? view[0] : view) === "exercise" ? "exercise" : "usage";
-	const target = useMemo(() => ({ pathname: "/participant-usage/detail", params: { participantId, view: dataView } }), [dataView, participantId]);
+	const returnWeek = String((Array.isArray(rawReturnWeek) ? rawReturnWeek[0] : rawReturnWeek) || "");
+	const target = useMemo(() => returnWeek ? ({ pathname: "/participant-usage/day", params: { participantId, weekStart: returnWeek, view: dataView } }) : ({ pathname: "/participant-usage/detail", params: { participantId, view: dataView } }), [dataView, participantId, returnWeek]);
 	const back = useUsageBack(target, true);
 	const { user } = useContext(AuthContext); const { i18n, locale } = useContext(LocaleContext); const insets = useSafeAreaInsets();
+	const periodLabel = weekStart ? formatParticipantWeek(weekStart, locale) : date;
 	const [result, setResult] = useState(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(false);
 	const [expandedHistory, setExpandedHistory] = useState({});
 	const labels = fieldLabels(locale);
-	const scope = JSON.stringify([user?.token, participantId, date]);
+	const scope = JSON.stringify([user?.token, participantId, date, weekStart]);
 	const [loadedScope, setLoadedScope] = useState(null);
 	useFocusEffect(useCallback(() => {
 		let active = true; setLoadedScope(scope); setLoading(true); setError(false); setResult(null); setExpandedHistory({});
 		if (!user?.token || !participantId) { setLoading(false); setError(true); return () => { active = false; }; }
 		getVolunteerParticipantUsage(user?.token, participantId).then((value) => active && setResult(value)).catch(() => active && setError(true)).finally(() => active && setLoading(false));
 		return () => { active = false; };
-	}, [participantId, date, user?.token, scope]));
-	const day = result?.days?.find((item) => item.date === date);
+	}, [participantId, date, weekStart, user?.token, scope]));
+	const day = weekStart ? groupParticipantWeeks(result?.days || []).find(item => item.start === weekStart) : result?.days?.find((item) => item.date === date);
 	const rows = day ? [
 		{ icon: "log-in", labelKey: "appStarts", value: day.appSessions, color: "#007BFF" },
 		{ icon: "eye", labelKey: "screenViews", value: day.screenViews, color: "#E9A23B" },
 		{ icon: "volume-high", labelKey: "usageAudioPlays", value: day.audioPlays, color: "#9B59B6" },
+		{ icon: "videocam", labelKey: "usageVideoPlays", value: day.videoPlays, color: "#9B59B6" },
 		{ icon: "leaf", labelKey: "usageOutdoorSessions", value: day.outdoorSessions, color: "#27AE60" },
 		{ icon: "home", labelKey: "usageHomeSessions", value: day.homeSessions, color: "#3498DB" },
 		{ icon: "fitness", labelKey: "exerciseSessions", value: day.exerciseSessions, color: "#840B1C" },
@@ -77,13 +82,13 @@ export default function ParticipantUsageDay() {
 		{ icon: "analytics", labelKey: "researchActivities", value: day.researchEvents, color: "#2E8B57" },
 	] : [];
 	return <View style={styles.page}>
-		<Stack.Screen options={{ title: String(date || i18n.t(dataView === "exercise" ? "dailyExerciseData" : "dailyUsage")), headerLeft: () => <TouchableOpacity onPress={back} style={{ padding: 8 }}><Ionicons name="chevron-back" size={24} /></TouchableOpacity> }} />
+		<Stack.Screen options={{ title: weekStart ? i18n.t(dataView === "exercise" ? "weeklyExerciseData" : "weeklyUsage") : String(date || i18n.t(dataView === "exercise" ? "dailyExerciseData" : "dailyUsage")), headerLeft: () => <TouchableOpacity onPress={back} style={{ padding: 8 }}><Ionicons name="chevron-back" size={24} /></TouchableOpacity> }} />
 		{loading || loadedScope !== scope ? <ActivityIndicator style={{ marginTop: 40 }} color="#840B1C" /> : <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 24 }}>
-			{result?.participant && <Text style={styles.title}>{result.participant.name} · {date}</Text>}
-			{dataView === "usage" && result?.participant && <ParticipantLearningEntry locale={locale} daily onPress={() => router.push({ pathname: "/participant-usage/learning", params: { participantId, date, view: dataView } })} />}
+			{result?.participant && <Text style={styles.title}>{result.participant.name} · {periodLabel}</Text>}
+			{!weekStart && dataView === "usage" && result?.participant && <ParticipantLearningEntry locale={locale} daily onPress={() => router.push({ pathname: "/participant-usage/learning", params: { participantId, date, view: dataView, ...(returnWeek ? { returnWeek } : {}) } })} />}
 			{day ? <>{dataView === "usage" && <UsageMetricCards rows={rows.filter((row) => !["usageOutdoorSessions", "usageHomeSessions", "exerciseSessions", "exerciseMinutes"].includes(row.labelKey))} i18n={i18n} />}
 				{dataView === "exercise" && <><UsageMetricCards rows={rows.filter((row) => ["usageOutdoorSessions", "usageHomeSessions", "exerciseSessions", "exerciseMinutes"].includes(row.labelKey))} i18n={i18n} />
-				<Text style={styles.sectionTitle}>{appText(locale, "inline.participantDay.exerciseRecords", {"zh":"當日運動記錄","en":"Exercise records"})}</Text>
+				<Text style={styles.sectionTitle}>{weekStart ? i18n.t("weeklyExerciseRecords") : appText(locale, "inline.participantDay.exerciseRecords", {"zh":"當日運動記錄","en":"Exercise records"})}</Text>
 				{(day.sessions || []).map((session, index) => {
 					const expanded = Boolean(expandedHistory[session.id]);
 					return <View key={session.id || index} style={styles.sessionCard}>
@@ -95,6 +100,7 @@ export default function ParticipantUsageDay() {
 						</>}
 					</View>;
 				})}</>}
+				{weekStart && dataView === "usage" && <><Text style={styles.sectionTitle}>{i18n.t("dailyUsageBreakdown")}</Text>{day.days.filter(item => hasParticipantData(item, "usage")).map(item => <TouchableOpacity key={item.date} style={styles.historyButton} onPress={() => router.push({ pathname: "/participant-usage/day", params: { participantId, date: item.date, view: dataView, returnWeek: weekStart } })}><Ionicons name="calendar-outline" size={20} color="#840B1C" /><Text style={styles.historyButtonText}>{item.date}</Text><Ionicons name="chevron-forward" size={20} color="#840B1C" /></TouchableOpacity>)}</>}
 			</> : <Text>{i18n.t(error ? "aiChatError" : dataView === "exercise" ? "noExerciseData" : "noDailyUsage")}</Text>}
 		</ScrollView>}
 	</View>;

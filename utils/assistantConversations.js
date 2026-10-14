@@ -16,10 +16,12 @@ export function createAssistantSessionId() {
 
 function fail(code) { return Object.assign(new Error(code), { code }); }
 function scope(options) {
-  const { owner, locale, authSessionId } = options || {};
+  const { owner, locale, authSessionId, provider = 'deepseek' } = options || {};
   if (typeof owner !== "string" || !owner.trim() || owner.length > 256 || !["zh", "en"].includes(locale) ||
-    typeof authSessionId !== "string" || !authSessionId.trim() || authSessionId.length > 160) throw fail("assistantConversationScopeRequired");
-  return { owner, locale, authSessionId, key: `${ASSISTANT_CONVERSATIONS_PREFIX}${encodeURIComponent(owner)}:${locale}` };
+    typeof authSessionId !== "string" || !authSessionId.trim() || authSessionId.length > 160 || !['deepseek', 'bailian'].includes(provider)) throw fail("assistantConversationScopeRequired");
+  // Preserve every existing DeepSeek key and journal. A new provider must never
+  // import the legacy archive, including on a fresh device or after sign-out.
+  return { owner, locale, authSessionId, provider, key: `${ASSISTANT_CONVERSATIONS_PREFIX}${encodeURIComponent(owner)}:${provider === 'deepseek' ? '' : provider + ':'}${locale}` };
 }
 
 function serialized(key, operation) {
@@ -30,21 +32,24 @@ function serialized(key, operation) {
   return pending;
 }
 
-const MESSAGE_FIELDS = ["text", "reply", "action", "focus", "source", "knowledgeSource", "evidencePolicy", "equipmentReplyVersion", "equipmentReplyBase", "model", "confirmationAnswered"];
-const BOOLEAN_FIELDS = ["confirmationRequired", "recommendationsFinal", "deepSeekUsed", "tcmInReply", "retiredImage"];
+const MESSAGE_FIELDS = ["text", "reply", "action", "focus", "source", "knowledgeSource", "evidencePolicy", "equipmentReplyVersion", "equipmentReplyBase", "model", "provider", "responsePolicy", "errorCode", "confirmationAnswered"];
+function checkMessagesProvider(messages, provider) {
+  if (Array.isArray(messages) && messages.some(message => message?.provider != null && message.provider !== provider)) throw fail('assistantProviderMismatch');
+}
+const BOOLEAN_FIELDS = ["confirmationRequired", "recommendationsFinal", "deepSeekUsed", "tcmInReply", "guideContentDirect", "retiredImage"];
 function excerpt(value) {
   if (!value || typeof value.field !== "string" || typeof value.quote !== "string") return undefined;
   return { field: value.field, quote: value.quote,
     ...(Array.isArray(value.targets) ? { targets: value.targets.filter(item => typeof item === "string") } : {}) };
 }
-function cleanMessages(messages, textOnly = false) {
+function cleanMessages(messages, textOnly = false, provider = 'deepseek') {
   if (!Array.isArray(messages)) throw fail("assistantConversationInvalidMessages");
   const seen = new Set();
   return messages.filter(item => item && typeof item === "object" && typeof item.id === "string" && item.id !== "welcome" &&
     ["user", "ai"].includes(item.sender) && [item.text, item.reply].some(value => typeof value === "string" && value.trim())).slice(-MAX_ASSISTANT_MESSAGES).flatMap(item => {
     if (seen.has(item.id)) return [];
     seen.add(item.id);
-    const clean = { id: item.id, sender: item.sender };
+    const clean = { id: item.id, sender: item.sender, ...(provider === 'bailian' ? { provider } : {}) };
     const retiredImage = Boolean(item.retiredImage || item.imageUri || item.imageData || /^u-img-|^a-img-|^a-confirm-/.test(item.id) || ["equipment_image", "image_confirmation"].includes(item.action));
     for (const field of textOnly || retiredImage ? ["text", "reply"] : MESSAGE_FIELDS) if (typeof item[field] === "string") clean[field] = item[field];
     if (retiredImage) return [{ ...clean, retiredImage: true, action: "retired_image", recommendations: [] }];
@@ -73,6 +78,7 @@ async function readArchive(identity) {
   if (raw != null) {
     try { archive = JSON.parse(raw); } catch { throw fail("assistantConversationStorageCorrupt"); }
     if (archive?.version !== 2 || archive.owner !== identity.owner || archive.locale !== identity.locale ||
+      (archive.provider || 'deepseek') !== identity.provider ||
       !Array.isArray(archive.conversations) || typeof archive.legacyChecked !== "boolean") throw fail("assistantConversationStorageCorrupt");
     const ids = new Set();
     for (const item of archive.conversations) {
@@ -80,9 +86,10 @@ async function readArchive(identity) {
         typeof item.createdAt !== "string" || typeof item.updatedAt !== "string" || typeof item.archived !== "boolean" ||
         typeof item.legacy !== "boolean" || !Array.isArray(item.messages)) throw fail("assistantConversationStorageCorrupt");
       ids.add(item.id);
-      item.messages = cleanMessages(item.messages, item.legacy);
+      checkMessagesProvider(item.messages, identity.provider);
+      item.messages = cleanMessages(item.messages, item.legacy, identity.provider);
     }
-  } else archive = { version: 2, owner: identity.owner, locale: identity.locale, legacyChecked: false, conversations: [] };
+  } else archive = { version: 2, owner: identity.owner, locale: identity.locale, provider: identity.provider, legacyChecked: identity.provider !== 'deepseek', conversations: [] };
   let changed = false;
   if (!archive.legacyChecked) {
     // A failed legacy read/parse must not mark migration complete or overwrite
@@ -122,7 +129,7 @@ function historySnapshots(archive, excludedId) {
       // Current-format answers need their vetted metadata to recheck edited
       // guide passages and include card-only cautions in the full reader.
       // Legacy migration intentionally remains text-only.
-      createdAt: item.createdAt, updatedAt: item.updatedAt, messages: cleanMessages(item.messages, item.legacy), readOnly: true, legacy: item.legacy,
+      createdAt: item.createdAt, updatedAt: item.updatedAt, messages: cleanMessages(item.messages, item.legacy, archive.provider), readOnly: true, legacy: item.legacy,
     }));
 }
 async function writeArchive(identity, archive, active) {
@@ -196,6 +203,32 @@ export function listAssistantConversations(options) {
   });
 }
 
+// Locale scopes the current composer, not account ownership. History readers
+// show both collections so the same account sees its conversations even when
+// web and phone use different display languages. Prefix IDs only in this view;
+// sourceId remains the exact ID used by the journal and deletion API.
+export async function listAccountAssistantConversations({ owner, exclude, provider = 'deepseek' } = {}) {
+  const histories = await Promise.all(['zh', 'en'].map(locale => {
+    const identity = scope({ owner, locale, provider, authSessionId: 'history-read-only' });
+    return serialized(identity.key, async () => {
+      const { archive } = await readArchive(identity);
+      const excludedId = exclude?.locale === locale && (exclude.provider || 'deepseek') === provider ? exclude.conversationId : undefined;
+      return historySnapshots(archive, excludedId).map(item => ({
+        ...item, id: `${provider === 'deepseek' ? '' : provider + ':'}${locale}:${item.id}`, sourceId: item.id, locale, provider,
+        canDelete: !isLiveConversation(archive.conversations.find(value => value.id === item.id)),
+      }));
+    });
+  }));
+  return { history: histories.flat().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id)) };
+}
+
+export async function clearAccountAssistantConversationHistory({ owner, authSessionId, provider = 'deepseek' } = {}) {
+  // Preserve every still-active composer, including one in the other language.
+  // Each archive keeps its durable tombstones in the same local write.
+  for (const locale of ['zh', 'en']) await clearAssistantConversationHistory({ owner, locale, authSessionId, provider });
+  return listAccountAssistantConversations({ owner, provider });
+}
+
 export function loadAssistantConversations(options) {
   const identity = scope(options);
   return serialized(identity.key, async () => {
@@ -214,16 +247,17 @@ export function loadAssistantConversations(options) {
 
 export function storeAssistantConversation(options) {
   const identity = scope(options);
+  checkMessagesProvider(options.messages, identity.provider);
   // Capture the caller's snapshot now, not after an earlier storage write ends.
   const conversationId = options.conversationId;
-  const messages = cleanMessages(options.messages);
+  const messages = cleanMessages(options.messages, false, identity.provider);
   return serialized(identity.key, async () => {
     const { archive } = await readArchive(identity);
     const active = activeConversation(archive, identity.authSessionId);
     if (!active || active.id !== conversationId) throw fail("assistantConversationChanged");
     // A page snapshot may predate a background result committed by the task
     // reconciler. Preserve those messages instead of erasing them on re-render.
-    const next = cleanMessages([...messages, ...active.messages.filter(item => item.id.startsWith('job-') && !messages.some(x => x.id === item.id))]);
+    const next = cleanMessages([...messages, ...active.messages.filter(item => item.id.startsWith('job-') && !messages.some(x => x.id === item.id))], false, identity.provider);
     if (JSON.stringify(next) === JSON.stringify(active.messages)) return snapshot(archive, active);
     active.messages = next;
     active.updatedAt = new Date().toISOString();
@@ -236,11 +270,12 @@ export function storeAssistantConversation(options) {
 // again, or starting a different chat. Deleted conversations are never recreated.
 export function appendAssistantJobMessages(options) {
   const identity = scope(options);
+  checkMessagesProvider(options.messages, identity.provider);
   return serialized(identity.key, async () => {
     const { archive } = await readArchive(identity);
     const target = archive.conversations.find(item => item.id === options.conversationId);
     if (!target) return false;
-    const next = cleanMessages([...target.messages, ...options.messages]);
+    const next = cleanMessages([...target.messages, ...options.messages], false, identity.provider);
     if (JSON.stringify(next) === JSON.stringify(target.messages)) return true;
     target.messages = next;
     target.updatedAt = new Date().toISOString();
@@ -263,32 +298,49 @@ export function startNewAssistantConversation(options) {
 
 function cloudConversations(archive) {
   return Object.fromEntries(archive.conversations.filter(item => item.messages.length).map(item => [item.id, {
-    createdAt: item.createdAt, updatedAt: item.updatedAt, legacy: item.legacy, messages: cleanMessages(item.messages, item.legacy),
+    ...(archive.provider === 'bailian' ? { provider: archive.provider } : {}),
+    createdAt: item.createdAt, updatedAt: item.updatedAt, legacy: item.legacy, messages: cleanMessages(item.messages, item.legacy, archive.provider),
   }]));
 }
 
-export async function synchronizeAssistantConversations({ owner, locale, token, send, isCurrent = () => true }) {
-  const identity = scope({ owner, locale, authSessionId: 'cloud-sync' });
+export async function synchronizeAssistantConversations({ owner, locale, provider = 'deepseek', token, send, isCurrent = () => true }) {
+  const identity = scope({ owner, locale, provider, authSessionId: 'cloud-sync' });
   if (!isCurrent()) return;
   const outgoing = await serialized(identity.key, async () => {
     if (!isCurrent()) return null;
     const { archive } = await readArchive(identity), documents = cloudConversations(archive);
     archive.cloud = updateJournal(archive.cloud, documents);
     await AsyncStorage.setItem(identity.key, JSON.stringify(archive));
-    return { collection: `assistant_${locale}`, cursor: archive.cloud.cursor, changes: journalBatch(archive.cloud, documents) };
+    return { collection: `assistant_${provider === 'bailian' ? 'bailian_' : ''}${locale}`, cursor: archive.cloud.cursor, changes: journalBatch(archive.cloud, documents) };
   });
   if (!outgoing || !isCurrent()) return;
-  const result = await send(token, outgoing);
+  let result, uploadError;
+  try { result = await send(token, outgoing); }
+  catch (error) {
+    // A rejected old/oversized local dialogue must not hide every conversation
+    // completed on another device. Pull independently, retain the unsent local
+    // journal and still report pending rather than pretending uploads succeeded.
+    const rejected = error?.status === 400 && error?.code === 'invalidAccountData'
+      || error?.status === 409 && error?.code === 'accountHistoryFull' || error?.status === 413;
+    if (!rejected || !outgoing.changes.length || !isCurrent()) throw error;
+    uploadError = error;
+    result = await send(token, { ...outgoing, changes: [] });
+  }
   if (!isCurrent()) return;
+  for (const record of [...(result.records || []), ...(result.acknowledged || []).map(item => item.record)]) {
+    if (!record?.value) continue;
+    if (record.value.provider != null && record.value.provider !== provider) throw fail('assistantProviderMismatch');
+    checkMessagesProvider(record.value.messages, provider);
+  }
   let pending = false;
   await serialized(identity.key, async () => {
     if (!isCurrent()) return;
     const { archive } = await readArchive(identity);
-    const merged = reconcileJournal(archive.cloud, result, outgoing.changes, cloudConversations(archive));
+    const merged = reconcileJournal(archive.cloud, result, uploadError ? [] : outgoing.changes, cloudConversations(archive));
     const old = new Map(archive.conversations.map(item => [item.id, item]));
     const conversations = Object.entries(merged.documents).map(([id, value]) => ({
       id, authSessionId: old.get(id)?.authSessionId || 'cloud-history', archived: old.get(id)?.archived ?? true,
-      createdAt: value.createdAt, updatedAt: value.updatedAt, legacy: Boolean(value.legacy), messages: cleanMessages(value.messages, value.legacy),
+      createdAt: value.createdAt, updatedAt: value.updatedAt, legacy: Boolean(value.legacy), messages: cleanMessages(value.messages, value.legacy, provider),
     }));
     // Keep this device's empty current conversation. Remote history never
     // takes over its composer, pending question or speech playback.
@@ -302,5 +354,6 @@ export async function synchronizeAssistantConversations({ owner, locale, token, 
     await AsyncStorage.setItem(identity.key, JSON.stringify(archive));
     if (changed) notifyAccountData(owner, 'assistant', true);
   });
+  if (uploadError) throw uploadError;
   return result.more || pending;
 }

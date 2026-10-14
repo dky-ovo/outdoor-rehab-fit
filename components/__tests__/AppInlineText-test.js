@@ -12,7 +12,7 @@ import { appText, setAppTextOverrides } from '../../utils/appText';
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-responsive-fontsize', () => ({ RFValue: value => value }));
-jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 20, bottom: 12 }) }));
+jest.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: ({ children }) => children, SafeAreaView: require("react-native").View, useSafeAreaInsets: () => ({ top: 20, bottom: 12 }) }));
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 
 // These are actual rendered pages/components, not retired microphone/photo UI.

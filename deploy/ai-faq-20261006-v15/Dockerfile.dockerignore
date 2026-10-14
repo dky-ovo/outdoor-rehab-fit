@@ -1,0 +1,6 @@
+*
+!server/
+!server/src/
+!server/src/assistantFaqKnowledge.js
+!server/src/assistantFaq.js
+!server/src/accountContinuity.js

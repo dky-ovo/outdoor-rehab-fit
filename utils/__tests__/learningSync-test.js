@@ -72,6 +72,34 @@ test("concurrent flushes are single flight and batches are at most twenty record
 	expect(pending).toHaveBeenCalledTimes(1); expect(send.mock.calls.map((call) => call[1].length)).toEqual([20, 20, 5]);
 	expect(acknowledge).toHaveBeenCalledTimes(3);
 });
+
+test("separate root and learning workers share one account outbox upload", async () => {
+	await range(); let release; let entered;
+	const started = new Promise(resolve => { entered = resolve; });
+	const send = jest.fn(() => new Promise(resolve => { release = resolve; entered(); }));
+	const first = worker(send), second = worker(send);
+	const pending = first.flush(); await started;
+	const shared = second.flush();
+	expect(shared).toBe(pending);
+	expect(send).toHaveBeenCalledTimes(1);
+	release({ ok: true }); await Promise.all([pending, shared]);
+	expect(await getPendingLearningRecords(mockOwner)).toEqual([]);
+	await range(75, 90);
+	const later = jest.fn().mockResolvedValue({ ok: true });
+	await worker(later).flush();
+	expect(later).toHaveBeenCalledTimes(1);
+});
+
+test("failed shared uploads release the flight and retain evidence for a later worker", async () => {
+	await range();
+	const failed = jest.fn().mockRejectedValue({ status: 503 });
+	await worker(failed).flush();
+	expect(await getPendingLearningRecords(mockOwner)).toHaveLength(1);
+	const recovered = jest.fn().mockResolvedValue({ ok: true });
+	await worker(recovered).flush();
+	expect(await getPendingLearningRecords(mockOwner)).toEqual([]);
+	expect(recovered).toHaveBeenCalledTimes(1);
+});
 test("an invalid historical item is retained without blocking other valid items", async () => {
 	await range(0, 75, { equipmentId: "bad" }); await range();
 	const send = jest.fn(async (_, records) => { if (records.some((record) => record.equipmentId === "bad")) throw { status: 400 }; return { ok: true }; });

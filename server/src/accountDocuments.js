@@ -1,6 +1,7 @@
 // Account-owned documents. Every writer locks the same user row; cursors and
 // tombstones survive retries, simultaneous devices and interrupted responses.
-const collections = new Set(['assistant_zh', 'assistant_en', 'goals', 'usage', 'preferences']);
+const collections = new Set(['assistant_zh', 'assistant_en', 'assistant_bailian_zh', 'assistant_bailian_en', 'goals', 'usage', 'preferences']);
+const assistantProvider = collection => collection.startsWith('assistant_bailian_') ? 'bailian' : 'deepseek';
 const idOK = value => typeof value === 'string' && /^[A-Za-z0-9_:-]{1,256}$/.test(value) && !['__proto__','prototype','constructor'].includes(value);
 const operationOK = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(value);
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
@@ -11,11 +12,14 @@ function invalid() { return Object.assign(new Error('invalidAccountData'), { sta
 function validateValue(collection, id, value) {
   if (!object(value) || JSON.stringify(value).length > 400000) throw invalid();
   if (collection.startsWith('assistant_')) {
+    const provider = assistantProvider(collection);
+    if (value.provider != null && value.provider !== provider) throw invalid();
     if (!Array.isArray(value.messages) || value.messages.length > 500 || !Number.isFinite(Date.parse(value.createdAt)) || !Number.isFinite(Date.parse(value.updatedAt))) throw invalid();
     const seen = new Set();
     for (const message of value.messages) {
       if (!object(message) || !idOK(message.id) || seen.has(message.id) || !['user','ai'].includes(message.sender)
-        || ![message.text, message.reply].some(x => typeof x === 'string' && x.trim()) || message.imageData || message.imageUri) throw invalid();
+        || ![message.text, message.reply].some(x => typeof x === 'string' && x.trim()) || message.imageData || message.imageUri
+        || message.provider != null && message.provider !== provider) throw invalid();
       seen.add(message.id);
     }
   } else if (collection === 'goals') {
@@ -85,7 +89,23 @@ export function createAccountDocuments(database) {
       return database.transaction(async tx => {
         if (!await tx.get('SELECT id FROM users WHERE id = ? AND deleted_at IS NULL FOR UPDATE', [userId])) return null;
         const acknowledged = [];
-        for (const change of changes) acknowledged.push({ operationId: change.operationId, record: await write(tx, userId, collection, change) });
+        for (const change of changes) {
+          const record = await write(tx, userId, collection, change);
+          acknowledged.push({ operationId: change.operationId, record });
+          if (record.deleted && collection.startsWith('assistant_')) {
+            // Cancelling one provider's history must not touch another provider,
+            // even when imported conversation IDs happen to coincide.
+            const pending = await tx.all("SELECT * FROM assistant_jobs WHERE user_id = ? AND status IN ('queued', 'running')", [userId]);
+            for (const job of pending) {
+              const request = parse(job.request_json);
+              const provider = request?.runtimeSnapshot?.provider || 'deepseek';
+              if (provider === assistantProvider(collection) && request?.conversation?.id === change.id
+                && request.conversation.locale === collection.slice(-2)) {
+                await tx.run("DELETE FROM assistant_jobs WHERE id = ? AND user_id = ? AND status IN ('queued', 'running')", [job.id, userId]);
+              }
+            }
+          }
+        }
         const rows = await tx.all('SELECT * FROM account_documents WHERE user_id = ? AND collection = ? AND revision > ? ORDER BY revision LIMIT 21', [userId, collection, cursor]);
         const page = rows.slice(0, 20).map(publicRow);
         return { acknowledged, records: page, cursor: page.at(-1)?.version ?? cursor, more: rows.length > 20 };
@@ -96,11 +116,15 @@ export function createAccountDocuments(database) {
     async recordJob(tx, userId, jobId, request, message) {
       const meta = request.conversation;
       if (!meta || !idOK(meta.id) || !['zh','en'].includes(meta.locale) || !idOK(meta.userMessageId)) return;
+      const provider = request.runtimeSnapshot?.provider || 'deepseek';
+      if (!['deepseek', 'bailian'].includes(provider) || meta.provider != null && meta.provider !== provider
+        || message?.provider != null && message.provider !== provider) throw invalid();
       const now = new Date().toISOString();
-      const messages = [{ id: meta.userMessageId, sender: 'user', text: request.message }];
-      if (message) messages.push({ ...message, id: `${jobId}-answer`, sender: 'ai' });
-      await write(tx, userId, `assistant_${meta.locale}`, { id: meta.id, deleted: false, version: null,
-        operationId: `${jobId}-${message ? 'answer' : 'question'}`, value: { createdAt: meta.createdAt || now, updatedAt: now, legacy: false, messages } });
+      const messages = [{ id: meta.userMessageId, sender: 'user', text: request.message, provider }];
+      if (message) messages.push({ ...message, provider, id: `${jobId}-answer`, sender: 'ai' });
+      const collection = provider === 'bailian' ? `assistant_bailian_${meta.locale}` : `assistant_${meta.locale}`;
+      await write(tx, userId, collection, { id: meta.id, deleted: false, version: null,
+        operationId: `${jobId}-${message ? 'answer' : 'question'}`, value: { provider, createdAt: meta.createdAt || now, updatedAt: now, legacy: false, messages } });
     },
   };
 }

@@ -38,6 +38,24 @@ async function updateProps(patch) {
 beforeEach(() => { jest.clearAllMocks(); });
 afterEach(async () => { if (tree) await act(async () => tree.unmount()); tree = null; });
 
+test("appended videos retain their identity and language while sections retain unsaved edits", async () => {
+  await mount(); await press("equipment-editor-tab-media");
+  await press("equipment-editor-add-video"); await press("equipment-editor-add-video");
+  const [first, second] = draft.additionalVideos;
+  expect(first.id).not.toBe(second.id);
+  const fields = tree.root.findAllByType(AdminMediaField);
+  await act(async () => fields[5].props.onChange("/api/media/a/a.mp4"));
+  expect(draft.additionalVideos.map(item => item.id)).toEqual([first.id, second.id]);
+  expect(draft.additionalVideos[0]).toMatchObject({ videoUrlZh: "/api/media/a/a.mp4", videoUrlEn: "" });
+  await press("equipment-editor-tab-teaching"); await press("equipment-editor-add-section");
+  const section = draft.teachingSections[0];
+  await change(`${section.id}-titleZh`, "家居練習"); await change(`${section.id}-bodyEn`, "At home");
+  await press("equipment-editor-teaching-details"); await press(`equipment-editor-teaching-${section.id}`);
+  expect(input(`${section.id}-titleZh`).props.value).toBe("家居練習");
+  expect(draft.teachingSections[0].bodyEn).toBe("At home");
+  await press("equipment-editor-close"); expect(button("equipment-editor-discard")).toBeTruthy();
+});
+
 test("a closed editor renders no modal and opening starts with basic information", async () => {
   await mount({}, null);
   expect(tree.root.findAllByType(Modal)).toHaveLength(0);

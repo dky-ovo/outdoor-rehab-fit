@@ -14,7 +14,7 @@ const YOUTUBE = "abcdefghijk";
 async function fixture(run) {
 	const database = createDatabase(":memory:");
 	const now = new Date().toISOString(); const tokens = {};
-	for (const [index, [id, permission, active]] of [["equipment", "app_maintenance.equipment.manage", 1], ["files", "app_maintenance.files.manage", 1], ["inactive", "app_maintenance.equipment.manage", 0], ["ordinary", null, 1]].entries()) {
+	for (const [index, [id, permission, active]] of [["equipment", "app_maintenance.equipment.manage", 1], ["files", "app_maintenance.files.manage", 1], ["inactive", "app_maintenance.equipment.manage", 0], ["ordinary", null, 1], ["home", "app_maintenance.home.manage", 1]].entries()) {
 		database.prepare("INSERT INTO users (id,name,phone,profile_role,password_salt,password_hash,created_at,updated_at) VALUES (?,?,?,'staff','unused','unused',?,?)").run(id,id,`+8526999000${index}`,now,now);
 		if (permission) database.prepare("INSERT INTO admin_accounts (user_id,system_role,permissions_json,is_active,created_at,updated_at) VALUES (?,'operator',?,?,?,?)").run(id,JSON.stringify([permission]),active,now,now);
 		tokens[id] = signToken({ id, profile_role: "staff" }, SECRET);
@@ -114,4 +114,56 @@ test("file-only staff, ordinary users, inactive accounts and anonymous callers c
 	}
 	assert.equal(database.prepare("SELECT COUNT(*) AS n FROM app_equipment_items WHERE is_custom=1").get().n,0);
 	assert.equal(database.prepare("SELECT video_localized FROM app_equipment_items WHERE id='0'").get().video_localized,0);
+}));
+
+const extraVideo = (id, url = EN_NEW) => ({ id, titleZh: "家居替代動作", titleEn: "Home alternative", videoUrlZh: url, videoUrlEn: "" });
+test("additional videos and custom teaching sections persist in append order and survive legacy edits", async () => fixture(async ({ create, update, publicItem, database }) => {
+ const additionalVideos = [extraVideo("first"), extraVideo("second", EN)];
+ const teachingSections = [{ id: "home-tips", titleZh: "家居練習", titleEn: "Home practice", bodyZh: "坐姿練習", bodyEn: "Seated practice" }];
+ const result = await create({ additionalVideos, teachingSections }); assert.equal(result.status, 201);
+ const id = result.data.item.id;
+ assert.deepEqual(result.data.item.additionalVideos, additionalVideos);
+ assert.deepEqual((await publicItem(id)).teachingSections, teachingSections);
+ assert.equal((await update(id, { nameEn: "Legacy client edit" })).status, 200);
+ assert.deepEqual((await publicItem(id)).additionalVideos, additionalVideos);
+ assert.deepEqual(JSON.parse(database.prepare("SELECT teaching_sections_json FROM app_equipment_items WHERE id=?").get(id).teaching_sections_json), teachingSections);
+ assert.equal((await update(id, { additionalVideos: [], teachingSections: [] })).status, 200);
+ assert.deepEqual((await publicItem(id)).additionalVideos, []);
+}));
+
+test("additional media reject wrong/missing/archived/private files and malformed lists without partial writes", async () => fixture(async ({ create, update, database }) => {
+ const created = await create({ additionalVideos: [extraVideo("first")] }); const id = created.data.item.id;
+ const before = database.prepare("SELECT * FROM app_equipment_items WHERE id=?").get(id);
+ for (const url of ["https://example.org/external.mp4", "/api/media/image/image.mp4", "/api/media/archived/archived.mp4", "/api/media/deleted/deleted.mp4", "/api/media/document/document.mp4", "/api/media/missing/missing.mp4"]) {
+  assert.equal((await update(id, { nameEn: "Must not save", additionalVideos: [extraVideo("bad", url)] })).status, 400);
+  assert.deepEqual(database.prepare("SELECT * FROM app_equipment_items WHERE id=?").get(id), before);
+ }
+ for (const additionalVideos of [null, {}, [extraVideo("duplicate"), extraVideo("duplicate")], Array.from({ length: 41 }, (_, i) => extraVideo(`v${i}`)), [extraVideo("empty", "")]]) assert.equal((await update(id, { additionalVideos })).status, 400);
+ assert.equal((await update(id, { teachingSections: [{ id: "bad", titleZh: "", titleEn: "", bodyZh: "", bodyEn: "" }] })).status, 400);
+}));
+
+test("files referenced only by additional equipment videos cannot be archived or deleted", async () => fixture(async ({ create, update, request }) => {
+ const result = await create({ additionalVideos: [extraVideo("home")] }); assert.equal(result.status, 201);
+ const media = await request("/api/admin/media?kind=video", { actor: "files" });
+ assert.equal(media.status, 200); assert.equal(media.data.items.find(item => item.id === "video-en-new").isReferenced, true);
+ assert.equal((await request("/api/admin/media/video-en-new", { method: "PATCH", actor: "files", body: { archived: true } })).status, 409);
+ assert.equal((await request("/api/admin/media/delete", { method: "POST", actor: "files", body: { items: [{ id: "video-en-new", kind: "file" }] } })).status, 409);
+ assert.equal((await update(result.data.item.id, { additionalVideos: [] })).status, 200);
+ const cleared = await request("/api/admin/media?kind=video", { actor: "files" }); assert.equal(cleared.data.items.find(item => item.id === "video-en-new").isReferenced, false);
+}));
+
+test("Exercise Videos uses stored video CRUD, publication filtering and content permissions", async () => fixture(async ({ request }) => {
+ const add = (body = {}, actor = "home") => request("/api/admin/content", { method: "POST", actor, body: { pageKey: "exercise_videos", contentType: "video", title: "Warm-up", value: EN_NEW, sortOrder: 2, ...body } });
+ for (const [actor, status] of [["equipment", 403], ["files", 403], ["ordinary", 403], [null, 401]]) assert.equal((await add({}, actor)).status, status);
+ for (const value of [LEGACY, YOUTUBE, "/api/media/missing/missing.mp4", "/api/media/archived/archived.mp4", "/api/media/document/document.mp4"]) assert.equal((await add({ value })).status, 400);
+ assert.equal((await add({ contentType: "text" })).status, 400);
+ const draft = await add({ isActive: false }); assert.equal(draft.status, 201);
+ const published = await request("/api/content?pageKey=exercise_videos", { actor: null }); assert.deepEqual(published.data.items, []);
+ const id = draft.data.id;
+ assert.equal((await request(`/api/admin/content/${id}`, { method: "PATCH", actor: "home", body: { isActive: true } })).status, 200);
+ assert.equal((await add({ title: "First", value: EN, sortOrder: 1 })).status, 201);
+ assert.deepEqual((await request("/api/content?pageKey=exercise_videos", { actor: null })).data.items.map(item => item.title), ["First", "Warm-up"]);
+ assert.equal((await request("/api/admin/media/video-en-new", { method: "PATCH", actor: "files", body: { archived: true } })).status, 409);
+ assert.equal((await request(`/api/admin/content/${id}`, { method: "DELETE", actor: "home" })).status, 200);
+ assert.deepEqual((await request("/api/content?pageKey=exercise_videos", { actor: null })).data.items.map(item => item.title), ["First"]);
 }));

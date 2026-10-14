@@ -1,6 +1,6 @@
 // Login / guest auth adapted from outdoor-rehab-fit-1 (phone/email registration)
-// Idle time does not sign users out. Explicit logout and server-side token
-// validation/revocation remain independent security boundaries.
+// Local sessions expire after 90 minutes without user interaction. Background
+// network work is not activity and remains independent of server-side jobs.
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppState } from "react-native";
@@ -8,6 +8,7 @@ import { router } from "expo-router";
 import {
 	AUTH_ROLES,
 	AUTH_STORAGE_KEY,
+	AUTH_INACTIVITY_LIMIT_MS,
 	MIN_PASSWORD_LENGTH,
 	isValidEmail,
 } from "../constants/auth";
@@ -116,6 +117,23 @@ export function AuthProvider({ children }) {
 		}
 		return cleanup.then(() => version === sessionVersionRef.current);
 	}, [queueSessionWrite]);
+	const expireIdleSession = useCallback(() => {
+		if (!userRef.current || Date.now() - lastActivityRef.current < AUTH_INACTIVITY_LIMIT_MS) return false;
+		// clearSession detaches auth synchronously before its queued disk cleanup.
+		// A first touch after suspension therefore cannot revive an expired login.
+		void clearSession().catch(error => console.error("Error clearing idle auth session", error));
+		return true;
+	}, [clearSession]);
+	const persistActivity = useCallback(() => {
+		const version = sessionVersionRef.current;
+		return queueSessionWrite(async () => {
+			const latest = userRef.current;
+			if (!latest || version !== sessionVersionRef.current) return;
+			const lastActivity = lastActivityRef.current;
+			await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ ...latest, lastActivity }));
+			if (version === sessionVersionRef.current) lastPersistedActivityRef.current = lastActivity;
+		});
+	}, [queueSessionWrite]);
 	useEffect(() => {
 		mountedRef.current = true;
 		const unsubscribe = subscribeAccountDeleted(scope => {
@@ -157,7 +175,15 @@ export function AuthProvider({ children }) {
 					// Server validation runs independently below, so a slow or offline API
 					// cannot hold the loading screen or the local session write queue.
 					if (!active || version !== sessionVersionRef.current) return;
-					const lastActivity = session.lastActivity || Date.now();
+					const now = Date.now(), storedActivity = Number(session.lastActivity);
+					const lastActivity = Number.isFinite(storedActivity) && storedActivity > 0 ? Math.min(now, storedActivity) : now;
+					if (now - lastActivity >= AUTH_INACTIVITY_LIMIT_MS) {
+						// This restore already owns the write queue: enqueue cleanup without
+						// awaiting it, or the queue would wait for itself forever.
+						void clearSession().catch(() => {});
+						return;
+					}
+					if (session.lastActivity !== lastActivity) { session.lastActivity = lastActivity; needsPersistence = true; }
 					await ensureUserFolder(session);
 					if (session.role !== AUTH_ROLES.GUEST && !session.loginEventRecordedAt) {
 						await ensureFirstLoginEvent();
@@ -166,6 +192,7 @@ export function AuthProvider({ children }) {
 					}
 					if (needsPersistence) await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
 					if (!active || version !== sessionVersionRef.current) return;
+					if (Date.now() - lastActivity >= AUTH_INACTIVITY_LIMIT_MS) { void clearSession().catch(() => {}); return; }
 					userRef.current = session;
 					bindAccount(session);
 					setUser(session);
@@ -184,11 +211,28 @@ export function AuthProvider({ children }) {
 	}, [queueSessionWrite, clearSession, bindAccount]);
 
 	useEffect(() => {
+		if (!user) return undefined;
+		let timer, active = true;
+		const check = () => {
+			clearTimeout(timer);
+			if (!active || !userRef.current || expireIdleSession()) return;
+			const remaining = AUTH_INACTIVITY_LIMIT_MS - (Date.now() - lastActivityRef.current);
+			timer = setTimeout(check, Math.max(1, remaining));
+		};
+		check();
+		const listener = AppState.addEventListener("change", state => {
+			if (state === "active") check();
+			else if (!expireIdleSession()) void persistActivity().catch(() => {});
+		});
+		return () => { active = false; clearTimeout(timer); listener?.remove(); };
+	}, [Boolean(user), user?.assistantSessionId, expireIdleSession, persistActivity]);
+
+	useEffect(() => {
 		if (!user?.token || user.role !== AUTH_ROLES.USER) return undefined;
 		const scope = accountScopeRef.current;
 		let active = true, checking = false;
 		const check = async (foreground = false) => {
-			if (!active || checking || (!foreground && AppState.currentState && AppState.currentState !== "active")) return;
+			if (!active || checking || !userRef.current || expireIdleSession() || (!foreground && AppState.currentState && AppState.currentState !== "active")) return;
 			checking = true;
 			const captured = userRef.current;
 			try {
@@ -223,10 +267,11 @@ export function AuthProvider({ children }) {
 		const timer = setInterval(check, 30000);
 		const listener = AppState.addEventListener("change", state => { if (state === "active") void check(true); });
 		return () => { active = false; clearInterval(timer); listener?.remove(); };
-	}, [user?.token, user?.assistantSessionId, user?.role, clearSession]);
+	}, [user?.token, user?.assistantSessionId, user?.role, clearSession, expireIdleSession]);
 
 	const persistSession = (session, { recordLogin = false, explicitLogin = false, version = sessionVersionRef.current } = {}) => queueSessionWrite(async () => {
 		if (version !== sessionVersionRef.current) return false;
+		if (!explicitLogin && expireIdleSession()) return false;
 		if (!session) {
 			await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
 			await clearCurrentOwner();
@@ -235,7 +280,7 @@ export function AuthProvider({ children }) {
 			return true;
 		}
 		const sessionActivity = Number(session.lastActivity);
-		const lastActivity = Math.max(
+		const lastActivity = explicitLogin ? Date.now() : Math.max(
 			Number.isFinite(sessionActivity) ? sessionActivity : 0,
 			Number(lastActivityRef.current) || 0,
 		) || Date.now();
@@ -249,6 +294,7 @@ export function AuthProvider({ children }) {
 		// Logout/account switching may happen while storage is still writing.
 		// Their queued cleanup runs next; an older response must not restore UI auth.
 		if (version !== sessionVersionRef.current) return false;
+		if (!explicitLogin && expireIdleSession()) return false;
 		if (explicitLogin) await AsyncStorage.removeItem(AUTH_SIGNED_OUT_KEY);
 		if (version !== sessionVersionRef.current) return false;
 		lastActivityRef.current = lastActivity;
@@ -375,6 +421,7 @@ export function AuthProvider({ children }) {
 	}, [clearSession]);
 
 	const updateProfile = useCallback(async (updates) => {
+		if (expireIdleSession()) return { success: false, error: "unauthorized" };
 		const currentUser = userRef.current;
 		const version = sessionVersionRef.current;
 		if (!currentUser?.token || currentUser.role !== AUTH_ROLES.USER) {
@@ -389,6 +436,7 @@ export function AuthProvider({ children }) {
 				loginAt: currentUser.loginAt,
 				loginEventRecordedAt: currentUser.loginEventRecordedAt,
 				assistantSessionId: currentUser.assistantSessionId,
+				lastActivity: currentUser.lastActivity,
 			};
 			if (!await persistSession(updatedSession, { version })) return { success: false, error: "sessionChanged" };
 			return { success: true, user: updatedSession };
@@ -413,22 +461,18 @@ export function AuthProvider({ children }) {
 
 	const recordActivity = useCallback(() => {
 		const now = Date.now();
-		lastActivityRef.current = now;
 		const current = userRef.current;
-		if (!current || now - lastPersistedActivityRef.current < 10_000) return;
+		if (!current || expireIdleSession() || (AppState.currentState && AppState.currentState !== "active")) return false;
+		lastActivityRef.current = now;
 		const withActivity = { ...current, lastActivity: now };
 		userRef.current = withActivity;
+		if (now - lastPersistedActivityRef.current < 10_000) return true;
 		lastPersistedActivityRef.current = now;
-		const version = sessionVersionRef.current;
-		queueSessionWrite(async () => {
-			if (version !== sessionVersionRef.current) return;
-			const latest = userRef.current;
-			if (!latest) return;
-			await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ ...latest, lastActivity: Math.max(now, latest.lastActivity || 0) }));
-		}).catch((error) => {
+		persistActivity().catch((error) => {
 			console.error("Error persisting auth activity", error);
 		});
-	}, [queueSessionWrite]);
+		return true;
+	}, [expireIdleSession, persistActivity]);
 
 	const isGuest = user?.role === AUTH_ROLES.GUEST;
 	const isUser = user?.role === AUTH_ROLES.USER;

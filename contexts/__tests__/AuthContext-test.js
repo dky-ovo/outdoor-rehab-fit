@@ -36,25 +36,26 @@ beforeEach(async () => {
 });
 afterEach(async () => { await act(async () => tree.unmount()); });
 
-test("a stored authenticated session survives several days of inactivity", async () => {
+test("a stored authenticated session expires after ninety minutes without activity", async () => {
 	await act(async () => tree.unmount());
 	AsyncStorage.__data.set(AUTH_STORAGE_KEY, JSON.stringify({ ...account, lastActivity: Date.now() - 7 * 24 * 60 * 60 * 1000 }));
 	await act(async () => { tree = renderer.create(<AuthProvider><Probe /></AuthProvider>); });
-	expect(auth.user.id).toBe(account.id);
-	expect(auth.user.token).toBe("old-token");
-	expect(AsyncStorage.__data.has(AUTH_STORAGE_KEY)).toBe(true);
+	expect(auth.user).toBeNull();
+	expect(AsyncStorage.__data.has(AUTH_STORAGE_KEY)).toBe(false);
 });
 
-test("remaining idle past ninety minutes does not invoke logout", async () => {
+test("remaining idle past ninety minutes invokes logout", async () => {
+	await act(async () => tree.unmount());
 	jest.useFakeTimers();
 	try {
+		await act(async () => { tree = renderer.create(<AuthProvider><Probe /></AuthProvider>); });
 		await act(async () => { jest.advanceTimersByTime(2 * 60 * 60 * 1000); });
-		expect(auth.user.id).toBe(account.id);
-		expect(AsyncStorage.__data.has(AUTH_STORAGE_KEY)).toBe(true);
+		expect(auth.user).toBeNull();
+		expect(AsyncStorage.__data.has(AUTH_STORAGE_KEY)).toBe(false);
 	} finally { jest.useRealTimers(); }
 });
 
-test("removing idle logout does not restore registered sessions missing a server token", async () => {
+test("registered sessions missing a server token cannot be restored", async () => {
 	await act(async () => tree.unmount());
 	AsyncStorage.__data.set(AUTH_STORAGE_KEY, JSON.stringify({ ...account, token: "", lastActivity: Date.now() }));
 	await act(async () => { tree = renderer.create(<AuthProvider><Probe /></AuthProvider>); });

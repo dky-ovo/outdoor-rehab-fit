@@ -208,7 +208,7 @@ export const equipmentPageTranslations = {
 		tip2: "Tips from Physiotherapists",
 		tip3: "Tips from Occupational Therapists",
 		tcmPerspective: "Traditional Chinese Medicine Perspective",
-		tip4: "Companion",
+		tip4: "Tips for Exercise Companions",
 	},
 	zh: {
 		tip1: "運動學專家的專業介紹",

@@ -47,6 +47,7 @@ test("creates the complete application database schema", () => {
 		"schema_migrations",
 		"sms_verifications",
 		"system_logs",
+		"test_user_batches",
 		"users",
 		"volunteer_participants",
 	]);

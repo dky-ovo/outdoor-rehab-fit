@@ -1,0 +1,469 @@
+{
+  "scope": "Saved synthetic live test questions only; local endpoint replay is not a live provider or content approval test.",
+  "sourceSha256": {
+    "workspace-artifacts/ai-faq-zh-hk-retest-20261007-v18/cases.json": "723c0f6e873a73d013872a53a18f70815e5378dfd9e9ae10f898d8437a1595d0",
+    "workspace-artifacts/ai-faq-account-retest-20261007-v18/extra-cases.json": "1e2ea0078239743ce1847acd02ff94fa0a34f52be1047345cc5b623c82b8b44d"
+  },
+  "cases": [
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-01-standard",
+      "question": "我彎腰時有輕微腰痛，應該使用扭腰機嗎？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-01",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-02-standard",
+      "question": "醫生提醒我要預防跌倒，練習平衡會有危險嗎？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-02",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-03-standard",
+      "question": "我的雙腿較無力，容易跌倒，有哪些較安全的戶外運動？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-03",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-04-standard",
+      "question": "每星期應運動多少天，每次多久？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-04",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-05-standard",
+      "question": "夏天和冬天應選甚麼時段在戶外運動？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-05",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-06-standard",
+      "question": "我剛吃完午餐，現在適合運動，還是應該等一會？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-06",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-07-standard",
+      "question": "可以根據我上星期的運動紀錄，幫我調整下星期的目標嗎？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-07",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-08-standard",
+      "question": "我陪母親到公園鍛煉上肢力量，她沒有經驗，我應如何協助她？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-08",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-09-standard",
+      "question": "我的膝蓋有點痛，想試扭腰機，轉動時應注意甚麼？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-09",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-10-standard",
+      "question": "我的膝蓋痛，但沒有腰痛，可以介紹相關器材嗎？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-10",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-11-standard",
+      "question": "我的膝蓋和腰都痛，可以使用扭腰機嗎？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-11",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-12-standard",
+      "question": "我的手腕痛，站立式臂伏撐是否合適，還是應避免雙手承重？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-12",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-13-standard",
+      "question": "我使用扭腰機時胸口痛，而且呼吸困難，可以繼續嗎？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-13",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-14-standard",
+      "question": "請提供外部網站連結，解釋下背痛可以使用哪些器材。",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-14",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-15-standard",
+      "question": "我有足底筋膜炎，可以參考哪些戶外器材教學？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-15",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-16-standard",
+      "question": "我有肩周炎，可以參考哪些戶外器材？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-16",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-17-standard",
+      "question": "我最近傷了頸部，仍想鍛煉下肢，可以使用單車器材嗎？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-17",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-18-standard",
+      "question": "小腿伸展器的角度不夠，感覺拉不到，可以如何調整或用甚麼替代？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-18",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-19-standard",
+      "question": "拉繩器應如何使用，每次應拉多少次？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-19",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-20-standard",
+      "question": "我在哪裏查看運動紀錄，以及如何分享給別人？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-20",
+      "variant": "standard_zh_hk"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "context-symptom-01",
+      "question": "我有腰痛，想了解相關的戶外器材。",
+      "locale": "zh",
+      "kind": "context",
+      "variant": "standard_zh_hk",
+      "conversationGroup": "symptom-correction",
+      "turn": 1,
+      "priorCaseId": null
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "context-symptom-02",
+      "question": "我講清楚啲，其實冇腰痛，係膝頭哥痛。咁應該睇邊啲器材？",
+      "locale": "zh",
+      "kind": "context",
+      "variant": "cantonese",
+      "conversationGroup": "symptom-correction",
+      "turn": 2,
+      "priorCaseId": "context-symptom-01"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-01-cantonese",
+      "question": "我彎低身嗰陣條腰有少少痛，仲用唔用得扭腰機呀？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-01",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-02-cantonese",
+      "question": "醫生叫我要小心跌親，咁練平衡會唔會好危險㗎？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-02",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-03-cantonese",
+      "question": "我對腳冇乜力，好易跌親，有咩戶外運動安全啲呀？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-03",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-04-cantonese",
+      "question": "一個禮拜做幾多日運動好呀？每次做幾耐？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-04",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-05-cantonese",
+      "question": "夏天同冬天，咩時間出去做運動好啲呀？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-05",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-06-cantonese",
+      "question": "我啱啱食完晏，而家做運動得唔得，定係等陣先好呀？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-06",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-07-cantonese",
+      "question": "可唔可以睇返我上個禮拜啲運動紀錄，幫我改下個禮拜嘅目標呀？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-07",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-08-cantonese",
+      "question": "我陪阿媽去公園練手臂，佢未玩過啲器材，我應該點幫佢呀？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-08",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-09-cantonese",
+      "question": "我膝頭哥有啲痛，想試吓扭腰機，轉嗰陣有咩要留神呀？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-09",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-10-cantonese",
+      "question": "我係膝頭哥痛，條腰冇痛㗎，有咩器材可以睇吓呀？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-10",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-11-cantonese",
+      "question": "我膝頭哥同條腰都痛，咁仲用唔用得扭腰機呀？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-11",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-12-cantonese",
+      "question": "我隻手腕痛，企喺度做掌上壓得唔得，定係唔好用手撐住個身呀？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-12",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-13-cantonese",
+      "question": "我用扭腰機嗰陣心口痛，仲抖唔到氣，咁可唔可以繼續呀？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-13",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-14-cantonese",
+      "question": "俾條外面網站嘅link我，睇吓腰背痛可以玩邊啲器材。",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-14",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-15-cantonese",
+      "question": "我有足底筋膜炎，有邊啲戶外器材教學啱我參考呀？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-15",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-16-cantonese",
+      "question": "我有五十肩，公園有邊啲器材可以睇吓呀？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-16",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-17-cantonese",
+      "question": "我最近整親條頸，但都想練吓對腳，踩公園架單車得唔得呀？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-17",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-18-cantonese",
+      "question": "個小腿伸展器唔夠斜，我拉唔到喎，可以點調整，或者用咩代替呀？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-18",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-19-cantonese",
+      "question": "個拉繩器應該點玩呀？一次要拉幾多下？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-19",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "pair-20-cantonese",
+      "question": "我啲運動紀錄喺邊度睇呀？又點樣send畀人睇呢？",
+      "locale": "zh",
+      "kind": "paired",
+      "pairId": "pair-20",
+      "variant": "cantonese"
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "context-carer-01",
+      "question": "我想陪母親到公園鍛煉上肢力量，使用器材時應注意甚麼？",
+      "locale": "zh",
+      "kind": "context",
+      "variant": "standard_zh_hk",
+      "conversationGroup": "carer-followup",
+      "turn": 1,
+      "priorCaseId": null
+    },
+    {
+      "sourceGroup": "zh-hk",
+      "id": "context-carer-02",
+      "question": "如果佢拉嘅時候覺得痛，我應該叫佢點做？",
+      "locale": "zh",
+      "kind": "context",
+      "variant": "cantonese",
+      "conversationGroup": "carer-followup",
+      "turn": 2,
+      "priorCaseId": "context-carer-01"
+    },
+    {
+      "sourceGroup": "extra",
+      "id": "extra-01",
+      "question": "I just finished lunch. Is now a good time to work out, or should I wait?",
+      "locale": "en",
+      "kind": "additional"
+    },
+    {
+      "sourceGroup": "extra",
+      "id": "extra-02",
+      "question": "I'm taking my mum to the park to strengthen her upper limbs. What should I watch for while helping her?",
+      "locale": "en",
+      "kind": "additional"
+    },
+    {
+      "sourceGroup": "extra",
+      "id": "extra-03",
+      "question": "膝頭哥有啲痛，想試扭腰機，轉嘅時候有咩要留神？",
+      "locale": "zh",
+      "kind": "additional"
+    },
+    {
+      "sourceGroup": "extra",
+      "id": "extra-04",
+      "question": "Can you show me a gentle machine for sore knees? I do not have back pain.",
+      "locale": "en",
+      "kind": "additional"
+    },
+    {
+      "sourceGroup": "extra",
+      "id": "extra-05",
+      "question": "我膝盖和腰都痛，想知道可不可以用扭腰机。",
+      "locale": "zh",
+      "kind": "additional"
+    },
+    {
+      "sourceGroup": "extra",
+      "id": "extra-06",
+      "question": "我用扭腰機時胸口痛，還有點呼吸困難，可以繼續嗎？",
+      "locale": "zh",
+      "kind": "additional"
+    },
+    {
+      "sourceGroup": "extra",
+      "id": "extra-07",
+      "question": "给我一个外部网站链接，解释下背痛能练哪些器械。",
+      "locale": "zh",
+      "kind": "additional"
+    },
+    {
+      "sourceGroup": "extra",
+      "id": "extra-08",
+      "question": "My wrist hurts. Would standing push-ups help, or should I avoid putting weight through my hands?",
+      "locale": "en",
+      "kind": "additional"
+    }
+  ]
+}

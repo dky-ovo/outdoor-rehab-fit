@@ -8,8 +8,8 @@ import { equipmentTranslations } from "../../constants/Equipments";
 const longQuote = "這段專業說明介紹肩膊的活動，並詳細解釋伸展時肌肉與關節的活動方式，供讀者了解相關的運動背景。";
 const tcmQuote = "這項活動與經絡的運行相關。中醫說明提到氣血流動。";
 const equipment = (changes = {}) => ({ id: 0, name: "測試設施", ptTip: longQuote, tcmEnabled: true, tcmTip: tcmQuote, ...changes });
-const invitation = "想了解更多，可點擊「查看詳細說明」，或點擊下方器材查看教學。";
 const intro = name => `我了解您想查詢肩部方面的資料。建議先了解「${name}」：`;
+const safetyNotice = "有疼痛不代表適合使用，請先找醫護人員評估；若做動作時更痛，就要停止。";
 function example(changes = {}, messageChanges = {}) {
   const item = equipment(changes);
   const known = symptomGuideAnswer("肩周炎有什麼器材可以參考？", equipmentTranslations.zh.equipmentList);
@@ -25,14 +25,25 @@ test("a natural acknowledgement, professional explanation and same-facility TCM 
   const view = assistantReplyPresentation(message, cards);
   expect(view.canExpand).toBe(true);
   expect(view.fullText).toContain(longQuote);
-  expect(view.previewText).toBe(`${intro("測試設施")}\n${longQuote}\n\n從中醫學角度：這項活動與經絡的運行相關。\n\n${invitation}`);
+  expect(view.previewText).toBe(`${intro("測試設施")}\n${longQuote}\n\n從中醫學角度：這項活動與經絡的運行相關。\n\n${safetyNotice}`);
   expect(view.fullText).toContain(tcmQuote);
-  expect(view.fullText).toContain("使用前請先由醫護人員評估");
+  expect(view.fullText).toContain(safetyNotice);
   expect(view.previewText).not.toContain("中醫說明提到氣血流動。");
   expect(view.previewText).not.toMatch(/例如|首選|已判斷|推薦您使用/);
   expect(view.previewText).not.toContain("僅供參考"); // The fixed notice remains in the chat UI.
   expect(view.fullText).not.toMatch(/APP原文|APP的中醫/);
   expect(JSON.stringify({ message, cards })).toBe(saved);
+});
+
+test("legacy answer formatting never changes a user's words or the stored answer", () => {
+  const raw = "這些是現有 FAQ 的使用注意，不能確認器材適合您的情況；持續疼痛應先由醫護評估。";
+  const answer = { sender: "ai", reply: raw };
+  const before = JSON.stringify(answer);
+  const view = assistantReplyPresentation(answer);
+  expect(view.fullText).not.toContain("FAQ");
+  expect(view.fullText).toContain("不能確認器材適合您的情況；持續疼痛應先由醫護評估。");
+  expect(assistantReplyPresentation({ sender: "user", text: raw }).fullText).toBe(raw);
+  expect(JSON.stringify(answer)).toBe(before);
 });
 
 test.each([
@@ -52,10 +63,10 @@ test.each([
   expect(view.previewText).toContain(cards[0].name);
   expect(view.previewText).toContain(cards[0].evidence.quote);
   expect(view.previewText).toContain(locale === "en" ? "From a traditional Chinese medicine perspective:" : "從中醫學角度：");
-  expect(view.previewText).toContain(locale === "en" ? "View details" : "查看詳細說明");
+  expect(view.previewText).not.toContain(locale === "en" ? "View details" : "查看詳細說明");
   expect(view.previewText).not.toMatch(/For example:|例如：|APP原文/);
   expect(view.previewText.split(locale === "en" ? "From a traditional Chinese medicine perspective:" : "從中醫學角度：")).toHaveLength(2);
-  expect(view.fullText).toContain(locale === "en" ? "not a diagnosis" : "不是診斷");
+  expect(view.fullText).toContain(locale === "en" ? "This does not mean it is suitable for your pain" : "有疼痛不代表適合使用");
   for (const item of cards) {
     expect(view.fullText).toContain(item.name);
     expect(view.fullText).toContain(item.evidence.quote);
@@ -84,7 +95,7 @@ test("a short explanation is not hidden behind an expansion control", () => {
 test("known recommendations show a complete short explanation and keep the detail entry", () => {
   const { message, cards } = example({ ptTip: "活動肩膊的簡短說明。", tcmEnabled: false });
   const view = assistantReplyPresentation(message, cards);
-  expect(view.previewText).toBe(`${intro("測試設施")}\n活動肩膊的簡短說明。\n\n${invitation}`);
+  expect(view.previewText).toBe(`${intro("測試設施")}\n活動肩膊的簡短說明。\n\n${safetyNotice}`);
   expect(view.canExpand).toBe(true);
   expect(view.fullText).toContain("活動肩膊的簡短說明。");
 });
@@ -124,7 +135,8 @@ test("a long TCM first sentence is never cut midway or replaced with an unqualif
 test("a later qualifying condition prevents selecting the first TCM sentence", () => {
   const { message, cards } = example({ tcmTip: "這項活动與氣血流動相關。只有特定情況適用。" });
   const view = assistantReplyPresentation(message, cards);
-  expect(view.previewText).not.toContain("中醫小知識");
+  expect(view.previewText).toContain("這項活动與氣血流動相關。只有特定情況適用。");
+  expect(view.previewText).not.toContain("從中醫學角度：");
   expect(view.fullText).toContain("只有特定情況適用。");
   expect(view.canExpand).toBe(false);
 });
@@ -201,7 +213,7 @@ test("TCM-only evidence keeps a detail invitation instead of substituting unrela
   const message = withEquipmentTcmReply({ ...initial, recommendations: [{ id: 0, evidence: { field: "tcmTip", quote: tcmQuote } }] }, [item]);
   const cards = resolveEquipmentRecommendations(message.recommendations, [item]);
   const view = assistantReplyPresentation(message, cards);
-  expect(view.previewText).toBe(`我了解您想進一步認識相關器材。\n\n${invitation}`);
+  expect(view.previewText).toBe(`我了解您想進一步認識相關器材。\n\n${safetyNotice}`);
   expect(view.canExpand).toBe(true);
   expect(view.fullText).toContain(tcmQuote);
   expect(view.fullText).not.toContain(longQuote);
@@ -287,7 +299,7 @@ test.each(["zh", "en"])("%s usage instructions are kept complete", locale => {
   expect(message.action).toBe("equipment_local");
   expect(view.canExpand).toBe(false);
   expect(view.previewText).toBe(view.fullText);
-  expect(view.fullText).toContain(locale === "en" ? "\n5\n" : "\n11\n");
+  expect(view.fullText).toContain(catalog.find(item => String(item.id) === "0").details);
   expect(view.fullText).toContain(message.equipmentReplyBase);
 });
 

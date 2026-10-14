@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import { API_BASE_URL, ApiError } from "./api";
 
 export const EQUIPMENT_DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -7,16 +6,6 @@ export function validateEquipmentDocumentFile(file) {
 	if (!file || !/\.docx$/i.test(file.name || "") || file.name.length > 200 || /[\\/\u0000-\u001f]/.test(file.name)) throw new Error("请选择标准 .docx 文件，不支持 .doc、PDF 或其他格式。");
 	if (!Number.isFinite(file.size) || file.size <= 0 || file.size > EQUIPMENT_DOCX_MAX_BYTES) throw new Error("DOCX 文件必须大于 0 且不超过 12 MB。");
 	return file;
-}
-export function pickEquipmentDocument() {
-	if (Platform.OS !== "web" || typeof document === "undefined") throw new Error("请使用电脑浏览器导入 Word 文档。");
-	return new Promise((resolve) => {
-		const input = document.createElement("input"); input.type = "file"; input.accept = `.docx,${EQUIPMENT_DOCX_MIME}`; input.style.display = "none";
-		let done = false; let timer;
-		const finish = () => { if (done) return; done = true; clearTimeout(timer); window.removeEventListener("focus", focus); const file = input.files?.[0] || null; input.remove(); resolve(file); };
-		const focus = () => { timer = setTimeout(finish, 1200); };
-		input.onchange = finish; input.oncancel = finish; window.addEventListener("focus", focus, { once: true }); document.body.appendChild(input); input.click();
-	});
 }
 const messages = {
 	importConflict: "预览后后台内容已被修改。本次未更新，请重新预览并核对。", importPreviewExpired: "导入预览已过期，请重新选择文档。", importPreviewNotFound: "找不到该导入预览，请重新选择文档。", importAlreadyConfirmed: "该预览已确认，不能改变确认内容。请查看导入记录。", importPreviewHasErrors: "文档有未解决错误，不能导入。", invalidImportSelection: "字段选择无效，请重新预览后选择。", invalidImportConfirmation: "请选择需要更新的字段后确认。", tooManyImportPreviews: "当前预览过多，请等待旧预览过期后重试。", invalidDocxName: "请选择标准 .docx 文件。", invalidDocx: "文件不是有效的 Word DOCX 文档。", invalidDocxXml: "Word 正文格式错误，请另存为标准 DOCX 后重试。", unsafeDocx: "文件含不安全内容或超过解压限制，未导入。", unsafeDocxXml: "不支持外部实体或文档类型声明。", unsafeDocxField: "请移除动态域或公式后再导入。", unsupportedDocxObjects: "请移除嵌入对象、外部文档或公式后再导入。", docxTooLarge: "Word 正文超出处理上限，请缩小文档后重试。", importAuditNotFound: "没有找到该导入记录。",
@@ -51,6 +40,10 @@ async function importRequest(path, token, { body, headers = {}, signal, method =
 export function previewAdminEquipmentDocument(token, file, { signal } = {}) {
 	validateEquipmentDocumentFile(file);
 	return importRequest("preview", token, { body: file, headers: { "Content-Type": EQUIPMENT_DOCX_MIME, "X-Document-Name": encodeURIComponent(file.name) }, signal, timeoutMs: 30000, validate: validPreview });
+}
+export function previewStoredAdminEquipmentDocument(token, mediaId, { signal } = {}) {
+	if (typeof mediaId !== "string" || !/^[a-zA-Z0-9-]{1,100}$/.test(mediaId)) throw new Error("请选择文件存储中的 Word 文档。");
+	return importRequest("preview-stored", token, { body: JSON.stringify({ mediaId }), headers: { "Content-Type": "application/json" }, signal, timeoutMs: 30000, validate: validPreview });
 }
 export function confirmAdminEquipmentDocument(token, { previewId, selections, idempotencyKey }, { signal } = {}) {
 	return importRequest("confirm", token, { body: JSON.stringify({ previewId, selections, idempotencyKey }), headers: { "Content-Type": "application/json" }, signal, validate: validResult });

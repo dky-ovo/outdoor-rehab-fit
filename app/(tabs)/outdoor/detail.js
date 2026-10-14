@@ -21,6 +21,9 @@ import { getCachedEquipmentCatalog, loadCachedEquipmentCatalog, getEquipmentCata
 import EquipmentImage from "../../../components/EquipmentImage";
 import ManagedContent from "../../../components/ManagedContent";
 import MediaVideo from "../../../components/MediaVideo";
+import AdditionalEquipmentVideo from "../../../components/AdditionalEquipmentVideo";
+import EquipmentIndoorVideos from "../../../components/EquipmentIndoorVideos";
+import DeferredDetailMedia from "../../../components/DeferredDetailMedia";
 import useVideoPlaybackEvents from "../../../hooks/useVideoPlaybackEvents";
 import { equipmentImageSource, mergeEquipmentCatalog } from "../../../utils/equipmentCatalog";
 import { equipmentInstructionParts } from "../../../utils/equipmentInstructions";
@@ -223,30 +226,32 @@ const Detail = ({ onFavoriteBack } = {}) => {
 				{hasDisplayContent(item.careTip) ? <Collapsible title={i18n.t("tip4")} key={`${item.id}:${locale}:careTip`} headerAction={sectionSpeaker("careTip")}>
 					<LearningReadContent section="careTip"><ThemedText style={styles.text}>{item.careTip}</ThemedText></LearningReadContent>
 				</Collapsible> : null}
+				{(item.teachingSections || []).map(section => <Collapsible key={`${item.id}:${locale}:${section.id}`} title={section.title} headerAction={<TTSButton text={section.body} locale={locale} i18n={i18n} inline />}><ThemedText style={styles.text}>{section.body}</ThemedText></Collapsible>)}
 			</View>
 			{hasPracticeContent ? <View style={styles.section}>
 				<ThemedText style={styles.text}>{i18n.t("outdoorPractice")}</ThemedText>
 				{firstGif && secondGif ? <View style={styles.gifContainer}>
-					<TouchableOpacity style={styles.gifButton} disabled={!secondaryContentReady} onPress={() => openModal(firstGif)}>
-						{secondaryContentReady ? <EquipmentImage source={firstGif} imageKey={`${item.id}:left`} style={styles.gif} /> : <View testID="equipment-left-gif-placeholder" style={styles.gif} />}
-					</TouchableOpacity>
-					<TouchableOpacity style={styles.gifButton} disabled={!secondaryContentReady} onPress={() => openModal(secondGif)}>
-						{secondaryContentReady ? <EquipmentImage source={secondGif} imageKey={`${item.id}:right`} style={styles.gif} /> : <View testID="equipment-right-gif-placeholder" style={styles.gif} />}
-					</TouchableOpacity>
+					<View style={styles.gifButton}>
+						{secondaryContentReady ? <DeferredDetailMedia key={`${item.id}:left`} locale={locale} minHeight={120}><TouchableOpacity onPress={() => openModal(firstGif)}><EquipmentImage source={firstGif} imageKey={`${item.id}:left`} style={styles.gif} /></TouchableOpacity></DeferredDetailMedia> : <View testID="equipment-left-gif-placeholder" style={styles.gif} />}
+					</View>
+					<View style={styles.gifButton}>
+						{secondaryContentReady ? <DeferredDetailMedia key={`${item.id}:right`} locale={locale} minHeight={120}><TouchableOpacity onPress={() => openModal(secondGif)}><EquipmentImage source={secondGif} imageKey={`${item.id}:right`} style={styles.gif} /></TouchableOpacity></DeferredDetailMedia> : <View testID="equipment-right-gif-placeholder" style={styles.gif} />}
+					</View>
 				</View> : null}
 				{hasDisplayContent(item.details) ? <Collapsible title={i18n.t("useTips")} key={`${item.id}:${locale}:details`} headerAction={sectionSpeaker("details")}>
 					<LearningReadContent section="details"><StructuredInstructions text={item.details} i18n={i18n} /></LearningReadContent>
 				</Collapsible> : null}
 			</View> : null}
+			<EquipmentIndoorVideos equipmentId={item.id} locale={locale} user={user} enabled={secondaryContentReady && hasFullAccess && !unavailable} style={styles.section} />
 			{audioFile ? <View style={styles.section}>
 				<ThemedText style={styles.text}>{i18n.t("audioTitle")}</ThemedText>
 				<View style={styles.section}>
 					{hasFullAccess ? (
-						secondaryContentReady ? <AudioPlayer key={`${item.id}:${locale}:${user?.id || "guest"}`}
+						secondaryContentReady ? <DeferredDetailMedia key={`${item.id}:${locale}:${user?.id || "guest"}`} locale={locale} minHeight={180} label={locale === "en" ? "Load audio guidance" : "載入語音教學"}><AudioPlayer key={`${item.id}:${locale}:${user?.id || "guest"}`}
 							audioFile={audioFile}
 							onPlayStart={handleAudioPlay}
 							onPlaybackSample={learning.audio}
-						/> : <View testID="equipment-audio-placeholder" style={{ height: 180 }} />
+							/></DeferredDetailMedia> : <View testID="equipment-audio-placeholder" style={{ height: 180 }} />
 					) : (
 						<TouchableOpacity style={styles.lockedBox} onPress={promptLogin}>
 							<Ionicons name="lock-closed" size={RFValue(28)} color="#999" />
@@ -270,7 +275,8 @@ const Detail = ({ onFavoriteBack } = {}) => {
 					</TouchableOpacity>
 				)}
 			</View> : null}
-			{secondaryContentReady && <ManagedContent pageKey="outdoor.detail" />}
+			{videoCatalogReady && secondaryContentReady && (item.additionalVideos || []).map((video, index) => <AdditionalEquipmentVideo key={`${item.id}:${locale}:${video.id}:${user?.id || "guest"}`} video={video} equipmentId={item.id} locale={locale} user={user} index={index} style={styles.section} />)}
+			{secondaryContentReady && <DeferredDetailMedia key={`${item.id}:${locale}:managed`} locale={locale}><ManagedContent pageKey="outdoor.detail" /></DeferredDetailMedia>}
 		</ScrollView>
 		</View>
 		</LearningReadContext.Provider>

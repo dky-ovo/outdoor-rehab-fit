@@ -8,6 +8,7 @@ import { AuthContext } from "../../../contexts/AuthContext";
 import { LocaleContext } from "../../../contexts/LocaleContext";
 import { getVolunteerParticipantUsage } from "../../../utils/api";
 import { useUsageBack } from "../../../hooks/useUsageBack";
+import { formatParticipantWeek, groupParticipantWeeks } from "../../../utils/participantWeeks";
 import { ParticipantLearningEntry } from "../../../components/ParticipantLearningProgress";
 
 export default function ParticipantUsageDates() {
@@ -27,20 +28,18 @@ export default function ParticipantUsageDates() {
 		getVolunteerParticipantUsage(user?.token, participantId).then((result) => { if (active) { setParticipant(result.participant); setDays(result.days || []); } }).catch(() => active && setError(i18n.t("aiChatError"))).finally(() => active && setLoading(false));
 		return () => { active = false; };
 	}, [i18n, participantId, user?.token, scope]));
-	const visibleDays = days.filter((item) => dataView === "exercise"
-		? Number(item.exerciseSessions || 0) > 0
-		: Number(item.appSessions || 0) + Number(item.researchEvents || 0) + Number(item.screenViews || 0) + Number(item.audioPlays || 0) + Number(item.videoPlays || 0) + Number(item.facilityLearningCount || 0) > 0);
+	const visibleWeeks = groupParticipantWeeks(days, dataView);
 	return <View style={styles.page}>
-		<Stack.Screen options={{ title: i18n.t(dataView === "exercise" ? "dailyExerciseData" : "dailyUsage"), headerLeft: () => <TouchableOpacity onPress={back} style={{ padding: 8 }}><Ionicons name="chevron-back" size={24} color="#111" /></TouchableOpacity> }} />
+		<Stack.Screen options={{ title: i18n.t(dataView === "exercise" ? "weeklyExerciseData" : "weeklyUsage"), headerLeft: () => <TouchableOpacity onPress={back} style={{ padding: 8 }}><Ionicons name="chevron-back" size={24} color="#111" /></TouchableOpacity> }} />
 		{loading || loadedScope !== scope ? <View style={styles.center}><ActivityIndicator size="large" color="#840B1C" /></View> : <>
 		{participant && <View style={styles.person}><Ionicons name="person-circle" size={48} color="#840B1C" /><View style={{ flex: 1 }}><Text style={styles.personName}>{participant.name}</Text><Text style={styles.personPhone}>{participant.phone}</Text></View></View>}
 		{!!error && <Text style={styles.empty}>{error}</Text>}
 		{dataView === "usage" && participant && <ParticipantLearningEntry locale={locale} onPress={() => router.push({ pathname: "/participant-usage/learning", params: { participantId, view: dataView } })} />}
 		<Text style={styles.hint}>{i18n.t(dataView === "exercise" ? "participantExerciseDatesHint" : "participantUsageDatesHint")}</Text>
-		<FlatList data={visibleDays} keyExtractor={(item) => item.date} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }} ListEmptyComponent={!error && <Text style={styles.empty}>{i18n.t(dataView === "exercise" ? "noExerciseData" : "noDailyUsage")}</Text>} renderItem={({ item }) => (
-			<TouchableOpacity accessibilityRole="button" style={styles.dayCard} onPress={() => router.push({ pathname: "/participant-usage/day", params: { participantId, date: item.date, view: dataView } })}>
+		<FlatList data={visibleWeeks} keyExtractor={(item) => item.start} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }} ListEmptyComponent={!error && <Text style={styles.empty}>{i18n.t(dataView === "exercise" ? "noExerciseData" : "noDailyUsage")}</Text>} renderItem={({ item }) => (
+			<TouchableOpacity accessibilityRole="button" style={styles.dayCard} onPress={() => router.push({ pathname: "/participant-usage/day", params: { participantId, weekStart: item.start, view: dataView } })}>
 				<Ionicons name="calendar-outline" size={28} color="#840B1C" />
-				<Text style={styles.date}>{new Date(item.date + "T12:00:00").toLocaleDateString(locale === "zh" ? "zh-HK" : "en-GB", { year: "numeric", month: "long", day: "numeric", weekday: "short" })}</Text>
+				<Text style={styles.date}>{formatParticipantWeek(item.start, locale)}</Text>
 				<Ionicons name="chevron-forward" size={23} color="#777" />
 			</TouchableOpacity>
 		)} />

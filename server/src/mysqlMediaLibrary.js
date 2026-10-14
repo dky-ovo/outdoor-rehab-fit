@@ -1,3 +1,4 @@
+import { additionalEquipmentVideoUrls } from "./equipmentExtensions.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -5,6 +6,7 @@ import { MEDIA_LIMITS, safeMediaUrl, safeDirectVideoUrl, mediaSignatureMatches, 
 import { revalidateAdmin } from "./adminAuthorization.js";
 import { createMysqlMediaFileOperations, mediaTransaction, lockMysqlMediaNamespace, mediaRoute, mediaFail, mediaWrite, commitUnknown, normalizeMediaRow } from "./mysqlMediaFileOperations.js";
 import { isPermanentlyRetiredMedia, retirementStatus } from "./mysqlEquipmentImageRetirement.js";
+import { createPublicVideoDelivery } from "./publicVideoDelivery.js";
 export { MEDIA_LIMITS, safeMediaUrl, safeDirectVideoUrl, mediaSignatureMatches, validStorageName };
 
 const TYPES = {
@@ -13,7 +15,7 @@ const TYPES = {
 };
 const READ_PERMISSIONS = ["app_maintenance.files.manage", "app_maintenance.equipment.manage", "app_maintenance.home.manage"];
 const MANAGE = "app_maintenance.files.manage";
-const EQUIPMENT_FIELDS = ["image_url", "gif_left_url", "gif_right_url", "video_url", "youtube_key", "video_url_zh", "video_url_en"];
+const EQUIPMENT_FIELDS = ["image_url", "gif_left_url", "gif_right_url", "video_url", "youtube_key", "video_url_zh", "video_url_en", "additional_videos_json"];
 const cleanName = value => String(value || "").replace(/[\u0000-\u001f\u007f/\\]/g, " ").trim().slice(0, 200);
 const asciiLower = value => String(value).replace(/[A-Z]/g, character => character.toLowerCase());
 const integer = (value, fallback, maximum) => Number.isInteger(Number(value)) && Number(value) > 0 ? Math.min(Number(value), maximum) : fallback;
@@ -21,11 +23,12 @@ const textCompare = (a, b) => Buffer.compare(Buffer.from(String(a ?? ""), "utf8"
 
 // Registration is intentionally read-only. Existing imported metadata and seed
 // ledgers are authoritative: no startup scans, INSERT defaults or seed replay.
-export async function registerMediaLibrary({ app, database, mediaUploadDir, equipmentUploadDir, mediaSeedDir, requirePermission, requireAnyPermission, writeSystemLog }) {
+export async function registerMediaLibrary({ app, database, mediaUploadDir, equipmentUploadDir, mediaSeedDir, mediaVideoDeliveryRoot, mediaVideoDeliveryManifest, mediaVideoCdnOrigin, requirePermission, requireAnyPermission, writeSystemLog }) {
   if (database?.dialect !== "mysql") mediaFail("mediaMysqlRequired", 500);
   if (!await database.get("SELECT id FROM media_categories WHERE id=?", ["other"])) mediaFail("mediaNamespaceUnavailable", 503);
   const readPermission = requireAnyPermission(...READ_PERMISSIONS), managePermission = requirePermission(MANAGE);
   const storageRoot = path.resolve(mediaUploadDir);
+  const videoDelivery = createPublicVideoDelivery({ storageRoot, derivativeRoot: mediaVideoDeliveryRoot && path.join(mediaVideoDeliveryRoot, "derivatives"), manifestPath: mediaVideoDeliveryManifest, cdnOrigin: mediaVideoCdnOrigin });
   const operations = createMysqlMediaFileOperations({ database, storageRoot, maxFolderDepth: MEDIA_LIMITS.maxFolderDepth });
   const { folderTrail, descendants } = operations;
   let activeUploads = 0;
@@ -36,6 +39,7 @@ export async function registerMediaLibrary({ app, database, mediaUploadDir, equi
     // Identifiers are a fixed source-schema allowlist, never HTTP input.
     for (const row of await database.all(`SELECT ${EQUIPMENT_FIELDS.join(",")} FROM app_equipment_items`)) {
       for (const field of EQUIPMENT_FIELDS) if (row[field]) used.add(row[field]);
+      for (const url of additionalEquipmentVideoUrls(row.additional_videos_json)) used.add(url);
       if (/^[A-Za-z0-9_-]{11}$/.test(row.youtube_key)) used.add(`https://www.youtube.com/watch?v=${row.youtube_key}`);
     }
     for (const row of await database.all("SELECT value FROM content_items WHERE content_type='video'")) {
@@ -60,26 +64,30 @@ export async function registerMediaLibrary({ app, database, mediaUploadDir, equi
   const insertFile = async row => mediaWrite(await database.run("INSERT INTO media_files(id,url,name,mime_type,kind,size_bytes,category_id,source,storage_name,sha256,created_by,created_at,updated_at,folder_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
     [row.id, row.url, row.name, row.mimeType, row.kind, row.size, row.categoryId, row.source, row.storageName, row.sha256, row.createdBy, row.createdAt, row.updatedAt, row.folderId || ""]));
 
-  const serveStoredFile = (request, response, value, download = false) => {
+  const serveStoredFile = (request, response, value, download = false, rendition = null) => {
     const row = normalizeMediaRow(value);
     if (!row || row.deleted_at || isPermanentlyRetiredMedia(row) || !/^[a-f0-9-]+\.(?:png|jpg|gif|webp|mp4|mov|webm|bin)$/.test(row.storage_name)) return response.status(404).json({ error: "mediaNotFound" });
-    const filePath = path.join(storageRoot, row.storage_name);
+    const filePath = rendition?.filePath || path.join(storageRoot, row.storage_name);
     try {
       if (fs.lstatSync(storageRoot).isSymbolicLink() || !fs.lstatSync(filePath).isFile() || fs.lstatSync(filePath).isSymbolicLink()) return response.status(404).json({ error: "mediaNotFound" });
     } catch { return response.status(404).json({ error: "mediaNotFound" }); }
     response.set({ "Content-Type": row.kind === "file" ? "application/octet-stream" : row.mime_type, "X-Content-Type-Options": "nosniff",
-      "Content-Security-Policy": "default-src 'none'; sandbox", "Cache-Control": row.kind === "file" ? "private, no-store" : "public, max-age=2592000, immutable" });
+      "Content-Security-Policy": "default-src 'none'; sandbox", "Cache-Control": download || row.kind === "file" ? "private, no-store" : rendition ? "public, max-age=3600, s-maxage=3600" : "public, max-age=2592000, immutable" });
+    if (rendition) response.set("Content-Type", "video/mp4");
     if (row.kind === "file" || download) response.set("Content-Disposition", `attachment; filename="download"; filename*=UTF-8''${encodeURIComponent(row.name).replace(/['()*]/g, character => `%${character.charCodeAt(0).toString(16).toUpperCase()}`)}`);
     else response.set("Content-Disposition", "inline");
     return response.sendFile(filePath, { acceptRanges: true, dotfiles: "deny" }, error => {
       if (!error || response.headersSent) return;
-      if (error.status === 416) { response.set("Content-Range", `bytes */${row.size_bytes}`); response.status(416).end(); }
+      if (error.status === 416) { response.set("Content-Range", `bytes */${rendition?.sizeBytes || row.size_bytes}`); response.status(416).end(); }
       else response.status(error.status === 404 ? 404 : 500).json({ error: "mediaUnavailable" });
     });
   };
   app.get("/api/media/:id/:fileName", mediaRoute(async (request, response) => {
     const row = await database.get("SELECT * FROM media_files WHERE id=? AND source='upload'", [request.params.id]);
-    if (!row || row.kind === "file" || row.storage_name !== request.params.fileName) return response.status(404).json({ error: "mediaNotFound" });
+    if (!row || row.kind === "file" || row.deleted_at || isPermanentlyRetiredMedia(row)) return response.status(404).json({ error: "mediaNotFound" });
+    const rendition = videoDelivery.rendition(row);
+    if (rendition && request.params.fileName === rendition.fileName) return serveStoredFile(request, response, row, false, rendition);
+    if (row.storage_name !== request.params.fileName) return response.status(404).json({ error: "mediaNotFound" });
     return serveStoredFile(request, response, row);
   }));
   app.get("/api/admin/media-download/:id", readPermission, mediaRoute(async (request, response) => {
@@ -326,5 +334,5 @@ export async function registerMediaLibrary({ app, database, mediaUploadDir, equi
   };
   // Paths are intentionally unused for scanning: the restored catalogue is the source of truth.
   void equipmentUploadDir; void mediaSeedDir;
-  return { seedImport: null, registerLegacyImage };
+  return { seedImport: null, registerLegacyImage, videoDelivery };
 }

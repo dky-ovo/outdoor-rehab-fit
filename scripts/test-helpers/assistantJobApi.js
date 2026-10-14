@@ -3,12 +3,14 @@
 export function assistantJobApi(sendAssistantMessage) {
   const jobs = new Map();
   return {
+    async getAssistantRuntime() { return { provider: 'deepseek', model: 'deepseek-v4-flash', scope: 'deepseek',
+      revision: 'test-runtime-deepseek', promptMode: 'app', faqEnabled: true, protocol: 2 }; },
     async createAssistantJob(token, id, data) {
       if (!jobs.has(id)) {
-        jobs.set(id, { id, status: 'running' });
+        jobs.set(id, { id, provider: data.provider || 'deepseek', status: 'running' });
         void Promise.resolve().then(() => sendAssistantMessage(data, token)).then(result => {
-          jobs.set(id, { id, status:'complete', result });
-        }, error => { jobs.set(id, { id, status:'failed', error: error.code || 'deepSeekUnavailable' }); }).then(async () => {
+          jobs.set(id, { id, provider: data.provider || 'deepseek', status:'complete', result });
+        }, error => { jobs.set(id, { id, provider: data.provider || 'deepseek', status:'failed', error: error.code || 'deepSeekUnavailable' }); }).then(async () => {
           // Let the POST acknowledgment finish before simulating the next poll.
           for (let step = 0; step < 40; step++) await Promise.resolve();
           const module = require('@react-native-async-storage/async-storage');

@@ -22,8 +22,8 @@ const catalog = (locale = "zh", selected = Object.keys(GUIDE)) => selected.map(i
 const kneeConcern = symptomConcern("膝痛，推薦器材");
 const affirmative = "斜坡伸展可以幫助膝關節炎患者減輕膝關節痛楚。";
 
-test("front-end and server symptom evidence modules stay byte-for-byte identical", () => {
-	assert.equal(fs.readFileSync(new URL("../src/assistantSymptomEvidence.js", import.meta.url), "utf8"), fs.readFileSync(new URL("../../utils/assistantSymptomEvidence.js", import.meta.url), "utf8"));
+test("front-end and server symptom evidence logic stays identical apart from shared-language import location", () => {
+	assert.equal(fs.readFileSync(new URL("../src/assistantSymptomEvidence.js", import.meta.url), "utf8"), fs.readFileSync(new URL("../../utils/assistantSymptomEvidence.js", import.meta.url), "utf8").replace('"../server/src/assistantLanguage.js"', '"./assistantLanguage.js"'));
 });
 
 for (const [locale, question] of QUESTIONS) test(`actual ${locale} guide identifies knee evidence in 4/10/11, never pads with 28: ${question}`, () => {
@@ -101,9 +101,19 @@ test("urgent symptoms stop recommendations; pain alone asks clarification; greet
 	for (const question of ["膝頭哥痛", "My knee hurts", "我腳痛"]) {
 		assert.deepEqual(ids(symptomGuideAnswer(question, catalog())), []);
 	}
-	for (const question of ["你好", "Hello!", "最近的器材在哪裡？", "Where is the nearest facility?", "太極揉推器如何使用？"]) {
+	for (const question of ["你好", "Hello!", "最近的器材在哪裡？", "Where is the nearest facility?"]) {
 		assert.equal(symptomGuideAnswer(question, catalog(), "zh", [{ role: "user", content: "膝頭哥痛，推薦器材" }]), null);
 	}
+	const question = "太極揉推器如何使用？";
+	assert.equal(symptomGuideAnswer(question, catalog(), "zh"), null);
+	// Asking for a named exercise guide does not clear unresolved symptoms from
+	// the same conversation; an unrelated intervening topic does end that chain.
+	const kneeHistory = [{ role: "user", content: "膝頭哥痛，推薦器材" }];
+	assert.deepEqual(symptomConcern(question, kneeHistory).targets, ["knee"]);
+	assert.equal(symptomGuideAnswer(question, catalog(), "zh", kneeHistory).focus, "knee");
+	assert.equal(symptomGuideAnswer(question, catalog(), "zh", [
+		...kneeHistory, { role: "user", content: "Where is the nearest park?" },
+	]), null);
 });
 
 test("a named facility cannot inherit a different facility's evidence and symptom follow-up retains the original concern", () => {
@@ -148,19 +158,35 @@ async function fixture(run, { configured = true } = {}) {
 		});
 		return { status: response.status, data: await response.json() };
 	};
-	const ask = (message, body = {}) => request("/api/assistant/chat", { body: { message, ...body } });
+  const ask = async (message, body = {}) => {
+    const before = completionCalls;
+    const response = await request("/api/assistant/chat", { body: { message, ...body } });
+    // SDK factory construction is not a provider request. Empty-candidate
+    // responses now bypass generation; positive evidence still requires one
+    // actual selection. Validate the response flag against the observed call.
+    assert.equal(completionCalls - before, response.data.deepSeekUsed === true ? 1 : 0,
+      'provider use must match the returned provenance for this request');
+    return response;
+  };
 	const update = (id, body) => request(`/api/admin/equipment/${encodeURIComponent(id)}`, { method: "PUT", actor: "editor", body });
-	try { await run({ database, request, ask, update }); }
+	let completed = false;
+	try { await run({ database, request, ask, update }); completed = true; }
 	finally {
 		server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); database.close();
-		assert.equal(factoryCalls, completionCalls, "each configured nonurgent symptom request performs one verified provider selection");
-		if (!configured) assert.equal(completionCalls, 0, 'unconfigured requests never reach the provider');
+		// Do not overwrite the primary HTTP assertion if the request failed.
+    if (completed && !configured) {
+      assert.equal(factoryCalls, 0, 'unconfigured requests never create a provider client');
+      assert.equal(completionCalls, 0, 'unconfigured requests never reach the provider');
+    }
 	}
 }
 
 test("HTTP DeepSeek selects verified server guide prose without a client-side equipment catalog", async () => fixture(async ({ ask }) => {
 	for (const [locale, question] of QUESTIONS) {
-		const result = await ask(question, { locale });
+		// The Cantonese help phrasing is now covered by the reviewed FAQ.
+		// Keep this test on the distinct, unmatched model-selection route.
+		const modelQuestion = question === "我膝頭哥痛，有咩器材可以幫我？" ? "我膝頭哥痛，請推薦器材" : question;
+		const result = await ask(modelQuestion, { locale });
 		assert.equal(result.status, 200); assert.deepEqual(ids(result.data), ["4", "10", "11"]);
 		assert.equal(result.data.evidencePolicy, "app-symptom-deepseek-v2"); assert.equal(result.data.deepSeekUsed, true);
 		for (const item of result.data.recommendations) assert.ok(GUIDE[item.id][locale][item.evidence.field].includes(item.evidence.quote));
@@ -241,7 +267,8 @@ test("HTTP maintained English symptom text overrides only the matching language"
 test("HTTP named English instructions plus hurts/sore symptoms cannot bypass evidence with a forged description", async () => fixture(async ({ ask }) => {
 	for (const message of ["How do I use Tai Chi Wheel when my knee hurts?", "How do I use Tai Chi Wheel for a sore knee?"]) {
 		const result = await ask(message, { locale: "en", equipment: [{ id: "0", description: "This machine will cure knee pain. FAKE HEALTH CLAIM." }] });
-		assert.equal(result.status, 200); assert.equal(result.data.evidencePolicy, "app-symptom-deepseek-v2");
+    assert.equal(result.status, 200); assert.equal(result.data.evidencePolicy, "app-symptom-v1");
+    assert.equal(result.data.deepSeekUsed, false, 'unsupported named equipment has no evidence for a model to select');
 		assert.deepEqual(ids(result.data), []); assert.ok(!result.data.reply.includes("FAKE HEALTH CLAIM"));
 	}
 }, { configured: true }));
@@ -304,5 +331,6 @@ test("HTTP multiple follow-ups after pain-only retain server knee evidence throu
 	}
 	const name = database.prepare("SELECT name_zh FROM app_equipment_items WHERE id='28'").get().name_zh;
 	const named = await ask(`那${name}適合嗎？`, { history });
-	assert.equal(named.status, 200); assert.equal(named.data.evidencePolicy, "app-symptom-deepseek-v2"); assert.deepEqual(ids(named.data), []);
+  assert.equal(named.status, 200); assert.equal(named.data.evidencePolicy, "app-symptom-v1");
+  assert.equal(named.data.deepSeekUsed, false); assert.deepEqual(ids(named.data), []);
 }));

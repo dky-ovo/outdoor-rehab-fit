@@ -133,7 +133,7 @@ test.each(["zh", "en"])("appends trustworthy %s TCM to the answer body and is st
   const before = JSON.stringify(answer), beforeCatalog = JSON.stringify(items);
   const result = withEquipmentTcmReply(answer, items, locale);
   expect(result.reply.startsWith(answer.reply)).toBe(true);
-  expect(result.reply).toContain(locale === "en" ? "From a TCM perspective (APP excerpt)" : "從中醫學角度（APP原文）");
+  expect(result.reply).toContain(locale === "en" ? "TCM background" : "中醫小知識");
   for (const id of ["19", "4"]) {
     const item = items.find(value => value.id === id), excerpt = equipmentTcmExcerpt(item, locale);
     expect(result.reply).toContain(`${item.name}\n`);
@@ -209,7 +209,7 @@ test.each([
 test("confirmed photo equipment may receive body prose without changing its confirmation state", () => {
   const answer = bodyAnswer(["19"], { confirmationRequired: true, confirmationAnswered: "yes" });
   const result = withEquipmentTcmReply(answer, namedCatalog("zh"));
-  expect(result.reply).toContain("從中醫學角度");
+  expect(result.reply).toContain("中醫小知識");
   expect(result.confirmationRequired).toBe(true);
   expect(result.confirmationAnswered).toBe("yes");
 });
@@ -273,8 +273,8 @@ test("does not append an identical trusted quotation already present in the orig
 
 test.each(["zh", "en"])("appends the existing %s TCM safety boundary once at the end, never to non-TCM replies", locale => {
   const items = namedCatalog(locale), note = locale === "en"
-    ? "This is TCM background from the APP, not advice to use this equipment for your symptoms. Please read the full precautions in the Facility Guide."
-    : "這是APP的中醫背景資料，並非針對症狀的使用建議。請查看設施教學的完整注意事項。";
+    ? "These are general TCM explanations, not treatment advice. If you have pain, ask a healthcare professional before exercising."
+    : "這些是中醫的一般說明，不能代替診治。有痛楚時，請先找醫護人員評估。";
   const result = withEquipmentTcmReply(bodyAnswer(["19", "4"]), items, locale);
   expect(result.reply.endsWith(note)).toBe(true);
   expect(result.reply.split(note)).toHaveLength(2);

@@ -1,4 +1,5 @@
 export const AUTH_STORAGE_KEY = "authSession";
+export const AUTH_INACTIVITY_LIMIT_MS = 90 * 60 * 1000;
 export const REGISTERED_USERS_KEY = "registeredUsers";
 export const PRESET_PASSWORD_KEY = "presetPasswordOverride";
 export const RESET_CODE_KEY = "passwordResetCode";

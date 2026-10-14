@@ -42,7 +42,7 @@ export function learningFlags(entry) {
 // revision. Historical evidence remains stored for returning to that revision.
 export function equipmentLearningCoverage(entry, item, locale) {
 	const textKey = `${locale}:text:${learningContentKey(JSON.stringify(learningTextSections(item)))}`;
-	const videoPrefix = `${locale}:${learningContentKey(item.videoUrl || item.youtubeKey)}:`;
+	const videoPrefix = `${locale}:${learningVideoKey(item)}:`;
 	const audioPrefix = `${locale}:audio:${item.id}:`;
 	return Object.fromEntries(fields.map((field) => [field, entry?.version === 2 ? Math.max(0, ...Object.entries(entry.evidence?.[field] || {}).map(([key, group]) => {
 		const current = field === "read" ? key === textKey : field === "watched" ? Boolean(item.videoUrl || item.youtubeKey) && key.startsWith(videoPrefix) : key === textKey || key.startsWith(audioPrefix);
@@ -60,6 +60,20 @@ export function learningContentKey(value) {
 	let hash = 2166136261;
 	for (let index = 0; index < text.length; index += 1) hash = Math.imul(hash ^ text.charCodeAt(index), 16777619);
 	return `${text.length}-${(hash >>> 0).toString(16)}`;
+}
+
+// Quality-only encoding and delivery-host changes must not create a new lesson
+// or orphan previous coverage. Older catalog responses keep their URL fallback.
+export function learningVideoKey(item = {}) {
+	return learningContentKey(item.videoIdentityUrl || item.videoUrl || item.youtubeKey);
+}
+
+export function learningVideoMetadata(item = {}, sample = {}) {
+	const seconds = item.videoIdentityDurationSeconds;
+	if (!item.videoIdentityUrl || !Number.isFinite(seconds) || seconds <= 0) return sample;
+	const durationMs = Math.max(1, Math.round(seconds * 1000));
+	return { ...sample, durationMs,
+		...(Number.isFinite(sample.positionMs) ? { positionMs: Math.max(0, Math.min(durationMs, sample.positionMs)) } : {}) };
 }
 
 async function readOwner(owner, strict = false) {

@@ -1,4 +1,5 @@
-import { symptomGuideCandidates } from "./assistantSymptomEvidence.js";
+import { createAssistantDeadline } from "./assistantDeadline.js";
+import { symptomGuideCandidates, symptomGuideAnswer } from "./assistantSymptomEvidence.js";
 import { withEquipmentTcmReply } from "./assistantTcm.js";
 
 export const SYMPTOM_RECOMMENDATION_POLICY = "app-symptom-deepseek-v2";
@@ -13,8 +14,8 @@ function introduction(style, candidates, concern, locale) {
 		? "Which part of your body is uncomfortable, such as the knee or calf? I can then find relevant equipment information."
 		: "請告訴我不適的部位，例如膝蓋或小腿，我便可幫您查找相關器材資料。";
 	if (!candidates.length) return en
-		? `I could not find a supported equipment explanation for this ${part} query. I will not substitute unrelated equipment. If pain persists or worsens, please seek professional assessment.`
-		: `目前未找到能支持這次${part}查詢的相關器材說明，因此不會加入不相關的器材。疼痛持續或加劇時，請尋求專業評估。`;
+		? `Please stop movements that make your ${part} hurt. I cannot tell which equipment is suitable for you from this description. If the pain continues or gets worse, ask a healthcare professional before trying equipment.`
+		: `先停止會令${part}更痛的動作。目前未能判斷哪款器材適合您；若痛楚持續或加劇，請先找醫護人員評估，再決定是否使用器材。`;
 	const first = candidates[0].name;
 	const intros = en ? {
 		direct: `For your ${part} query, I suggest learning about ${first}.`,
@@ -30,8 +31,8 @@ function introduction(style, candidates, concern, locale) {
 	// the article preview. Never chop conditions off a longer medical passage.
 	const explanation = [...firstQuote].length <= (en ? 350 : 100) ? firstQuote : "";
 	return [intros[style] || intros.direct, explanation, en
-		? "The explanations and equipment links are below. These are educational references, not a diagnosis or confirmation that exercise is suitable while in pain. Please seek professional assessment before use."
-		: "下方提供相關解釋及器材入口。這是資料查閱，不代表已判斷器材適合您的疼痛情況；使用前請先由醫護人員評估。"].filter(Boolean).join("\n\n");
+		? "You can tap the picture to learn more. This does not mean the equipment is suitable for your pain. Please ask a healthcare professional before trying it, and stop if it makes the pain worse."
+		: "可以點選器材圖片了解用法。有疼痛不代表適合使用這款器材，請先找醫護人員評估；若做動作時更痛，就要停止。"].filter(Boolean).join("\n\n");
 }
 
 function selectedEvidence(generated, approved) {
@@ -50,7 +51,7 @@ function selectedEvidence(generated, approved) {
 // DeepSeek selects and orders relevant, source-supported guides. Factual health
 // explanations remain the exact maintained passages, never model-invented cures,
 // dosage, procedures, or a category being mistaken for clinical suitability.
-export async function deepSeekSymptomRecommendations({ client, model, question, history, locale, concern, catalog, getCatalog, timeoutMs = 55000 }) {
+export async function deepSeekSymptomRecommendations({ client, model, question, history, locale, concern, catalog, getCatalog, timeoutMs = 55000, signal }) {
 	const candidates = symptomGuideCandidates(question, catalog, locale, history, { requireRequest: false }).slice(0, 30);
 	const publicEvidence = candidates.map(({ id, name, evidence, tcmExcerpt }) => ({ id, name, evidence, ...(tcmExcerpt ? { tcmExcerpt } : {}) }));
 	const context = {
@@ -66,17 +67,22 @@ export async function deepSeekSymptomRecommendations({ client, model, question, 
 		"When candidates are present, directly choose 1 to 3 of those relevant guides in useful order. This is a recommendation to read their information, NOT advice to exercise through pain. Do not withhold all guide links merely because onset or pain severity is unspecified; the APP includes the assessment caution. When no candidate is present, return an empty recommendations array; never choose an unrelated ID.",
 		"Return JSON only: {\"style\":\"direct\",\"recommendations\":[{\"id\":\"candidate id\",\"evidence\":{\"field\":\"exact candidate evidence field\",\"quote\":\"exact complete candidate evidence quote\"}}]}. style is direct, acknowledge, or follow_up. Copy each evidence quote exactly, retaining its conditions. The APP displays these verified explanations and guide links. Do not generate new medical prose or alter the quoted evidence."
 	].join("\n");
-	const controller = new AbortController();
-	let timer;
-	const deadline = new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(Object.assign(new Error("deepSeekUnavailable"), { code: "deepSeekUnavailable" })); }, timeoutMs); });
+	const deadline = createAssistantDeadline({ timeoutMs, signal });
 	try {
+		// No evidence to choose from: a provider cannot create missing evidence.
+		// Still honour cancellation and read the current catalog before replying.
+		if (!candidates.length) {
+			const currentCatalog = await deadline.run(() => getCatalog());
+			if (symptomGuideCandidates(question, currentCatalog, locale, history, { requireRequest: false }).length) throw Object.assign(new Error("assistantGuideChanged"), { code: "assistantGuideChanged" });
+			return symptomGuideAnswer(question, currentCatalog, locale, history);
+		}
 		for (let attempt = 0; attempt < 2; attempt++) {
-			const payload = await Promise.race([client.chat.completions.create({
-				model, thinking: { type: "enabled" }, reasoning_effort: "high", stream: false,
+			const payload = await deadline.run(() => client.chat.completions.create({
+				model, thinking: { type: "disabled" }, stream: false,
 				response_format: { type: "json_object" }, max_tokens: 4096,
 				messages: [{ role: "system", content: system }, { role: "user", content: JSON.stringify(context) },
 					...(attempt ? [{ role: "system", content: "The previous output did not satisfy the required JSON/evidence contract. Return 1-3 valid candidates when provided, or an empty array if none, with exact id/field/quote. Do not ask another clarification instead of providing eligible guide links." }] : [])],
-			}, { signal: controller.signal, maxRetries: 0 }), deadline]);
+			}, { signal: deadline.signal, maxRetries: 0 }));
 			let selected, generated;
 			try {
 				const choice = payload?.choices?.[0];
@@ -85,17 +91,18 @@ export async function deepSeekSymptomRecommendations({ client, model, question, 
 				generated = JSON.parse(raw);
 				selected = selectedEvidence(generated, candidates);
 			} catch { if (!attempt) continue; throw invalid(); }
-			const currentCatalog = await getCatalog();
+			const currentCatalog = await deadline.run(() => getCatalog());
 			const current = new Map(symptomGuideCandidates(question, currentCatalog, locale, history, { requireRequest: false }).map(item => [item.id, item]));
 			// An edit/unpublish during generation must not return stale explanation.
-			for (const item of selected) if (JSON.stringify(current.get(item.id)) !== JSON.stringify(item)) throw invalid();
+			for (const item of selected) if (JSON.stringify(current.get(item.id)) !== JSON.stringify(item)) throw Object.assign(new Error("assistantGuideChanged"), { code: "assistantGuideChanged" });
 			return withEquipmentTcmReply({
 				reply: introduction(STYLES.has(generated.style) ? generated.style : "direct", selected, concern, locale),
 				action: "equipment_evidence", focus: concern.targets.join(","), categories: [], recommendations: selected,
 				confirmationRequired: false, source: "app_content", knowledgeSource: "facility_guide",
-				evidencePolicy: SYMPTOM_RECOMMENDATION_POLICY, recommendationsFinal: true, deepSeekUsed: true, model,
+					evidencePolicy: SYMPTOM_RECOMMENDATION_POLICY, recommendationsFinal: true, deepSeekUsed: true, model,
+					...(concern.deniedConditions?.length ? { guideContentDirect: true } : {}),
 			}, currentCatalog, locale);
 		}
 		throw invalid();
-	} finally { clearTimeout(timer); }
+	} finally { deadline.close(); }
 }

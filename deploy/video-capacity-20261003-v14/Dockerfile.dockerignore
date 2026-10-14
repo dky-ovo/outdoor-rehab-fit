@@ -1,0 +1,9 @@
+*
+!server/
+!server/src/
+!server/src/app.js
+!server/src/appMysql.js
+!server/src/production.js
+!server/src/mediaLibrary.js
+!server/src/mysqlMediaLibrary.js
+!server/src/publicVideoDelivery.js

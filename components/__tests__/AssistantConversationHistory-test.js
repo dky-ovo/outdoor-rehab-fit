@@ -6,7 +6,7 @@ import AssistantConversationHistory from "../AssistantConversationHistory";
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("react-native-responsive-fontsize", () => ({ RFValue: value => value }));
-jest.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 42, bottom: 30 }) }));
+jest.mock("react-native-safe-area-context", () => ({ SafeAreaProvider: ({ children }) => children, SafeAreaView: require("react-native").View, useSafeAreaInsets: () => ({ top: 42, bottom: 30 }) }));
 const onClose = jest.fn();
 const onDelete = jest.fn();
 const onClearAll = jest.fn();
@@ -36,7 +36,8 @@ test.each(["zh", "en"])("%s history uses non-animated full-screen safe-area read
   await render({ locale });
   expect(tree.root.findByType(Modal).props).toMatchObject({ visible: true, presentationStyle: "fullScreen", animationType: "none" });
   const page = tree.root.findAllByType(View).find(item => item.props.accessibilityViewIsModal);
-  expect(StyleSheet.flatten(page.props.style)).toMatchObject({ paddingTop: 42, paddingBottom: 30 });
+  expect(page.props.edges).toEqual(["top", "right", "bottom", "left"]);
+  expect(StyleSheet.flatten(page.props.style).flex).toBe(1);
   expect(tree.root.findAllByType(Text).some(item => item.props.children === (locale === "en" ? "Conversation history (view only; not used in new conversations)" : "歷史對話（只供查看，不會用於新對話）"))).toBe(true);
   expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
   for (const button of tree.root.findAllByType(TouchableOpacity)) expect(StyleSheet.flatten(button.props.style).minHeight).toBeGreaterThanOrEqual(52);
@@ -100,9 +101,9 @@ test.each(["zh", "en"])("%s separate delete button opens one scoped confirmation
   expect(tree.root.findByType(ScrollView).props.testID).toBe("assistant-history-delete-confirmation");
   expect(allText()).not.toContain(longReply);
   expect(allText()).toContain(locale === "en" ? "Delete this conversation?" : "刪除這段歷史對話？");
-  expect(allText()).toContain(locale === "en" ? "this account and the current language on this device" : "此帳戶目前語言在這部裝置");
+  expect(allText()).toContain(locale === "en" ? "for this account and syncs the deletion to other devices when online" : "此帳戶的所選歷史對話，並在連線後同步至其他裝置");
   expect(allText()).toContain(locale === "en" ? "It cannot be undone" : "刪除後無法恢復");
-  expect(allText()).toContain(locale === "en" ? "Your current conversation, other accounts and other languages are not affected" : "不會影響目前的對話、其他帳戶或其他語言");
+  expect(allText()).toContain(locale === "en" ? "Active conversations, other history and other accounts are not affected" : "進行中的對話、其他歷史對話和其他帳戶不受影響");
   expect(onDelete).not.toHaveBeenCalled();
   await tap("assistant-history-delete-cancel");
   expect(tree.root.findByType(ScrollView).props.testID).toBe("assistant-history-list");
@@ -122,8 +123,9 @@ test("confirm only targets one historical ID and waits for parent-confirmed remo
 
 test.each(["zh", "en"])("%s clearing all history requires its own confirmation and resets when emptied", async locale => {
   await render({ locale }); await tap("assistant-history-clear-all");
-  expect(allText()).toContain(locale === "en" ? "Clear all previous conversations?" : "清空全部歷史對話？");
-  expect(allText()).toContain(locale === "en" ? "all history" : "全部歷史對話");
+  expect(allText()).toContain(locale === "en" ? "Clear the conversations in this history list?" : "清空此列表的歷史對話？");
+  expect(allText()).toContain(locale === "en" ? "conversations that can be deleted from this history list" : "本列表中可刪除的中英文歷史對話");
+  expect(allText()).toContain(locale === "en" ? "Active conversations, history outside this list and other accounts are not affected" : "進行中的對話、未列出的歷史對話和其他帳戶不受影響");
   expect(onClearAll).not.toHaveBeenCalled();
   await tap("assistant-history-delete-cancel"); expect(onClearAll).not.toHaveBeenCalled();
   await tap("assistant-history-clear-all"); await tap("assistant-history-delete-confirm");
@@ -132,6 +134,21 @@ test.each(["zh", "en"])("%s clearing all history requires its own confirmation a
   expect(tree.root.findByType(ScrollView).props.testID).toBe("assistant-history-list");
   expect(button("assistant-history-clear-all").props.disabled).toBe(true);
   await tap("assistant-history-clear-all"); expect(onClearAll).toHaveBeenCalledTimes(1);
+});
+
+test.each(['zh', 'en'])('%s history omits provider and model metadata without changing messages or deletion scope', async locale => {
+  const source = [{ ...conversations[1], provider: 'deepseek', messages: [{ id: 'answer', sender: 'ai', model: 'deepseek-v4-flash', reply: '完整回答。' }] }];
+  const before = JSON.stringify(source);
+  await render({ locale, providerLabel: 'DeepSeek / 阿里百煉', conversations: source });
+  expect(allText()).not.toMatch(/DeepSeek|百煉|Bailian|deepseek-v4-flash/);
+  expect(tree.root.findAllByProps({ testID: 'assistant-history-provider' })).toHaveLength(0);
+  await tap('assistant-history-open-newer');
+  expect(allText()).toContain('完整回答。'); expect(allText()).not.toContain('deepseek-v4-flash');
+  await tap('assistant-history-back'); await tap('assistant-history-clear-all');
+  expect(allText()).not.toMatch(/DeepSeek|百煉|Bailian|deepseek-v4-flash/);
+  expect(allText()).not.toContain(locale === 'en' ? 'all history in Chinese and English for this account' : '此帳戶中英文的全部歷史對話');
+  await tap('assistant-history-delete-confirm'); expect(onClearAll).toHaveBeenCalledWith();
+  expect(JSON.stringify(source)).toBe(before);
 });
 
 test("deleting disables destructive actions but still permits closing the history window", async () => {
@@ -184,4 +201,14 @@ test("deleting the selected conversation externally returns the detail reader to
   await render({ conversations: conversations.filter(item => item.id !== "newer") });
   expect(tree.root.findByType(ScrollView).props.testID).toBe("assistant-history-list");
   await render(); expect(tree.root.findByType(ScrollView).props.testID).toBe("assistant-history-list");
+});
+
+test('both language histories are readable while an active composer in the other language cannot be deleted', async () => {
+  await render({conversations:[{...conversations[0],id:'en:shared-id',locale:'en',canDelete:false},{...conversations[1],id:'zh:shared-id',locale:'zh',canDelete:true}]});
+  expect(button('assistant-history-delete-en:shared-id').props.disabled).toBe(true);
+  expect(button('assistant-history-delete-zh:shared-id').props.disabled).toBe(false);
+  await tap('assistant-history-delete-en:shared-id');
+  expect(tree.root.findByType(ScrollView).props.testID).toBe('assistant-history-list');
+  await tap('assistant-history-open-en:shared-id');
+  expect(tree.root.findByType(ScrollView).props.testID).toBe('assistant-history-messages');
 });

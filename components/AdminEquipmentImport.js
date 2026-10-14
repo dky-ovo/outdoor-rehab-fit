@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { confirmAdminEquipmentDocument, getAdminEquipmentImportAudit, getAdminEquipmentImportHistory, pickEquipmentDocument, previewAdminEquipmentDocument } from "../utils/adminEquipmentImportApi";
+import { confirmAdminEquipmentDocument, getAdminEquipmentImportAudit, getAdminEquipmentImportHistory, previewStoredAdminEquipmentDocument } from "../utils/adminEquipmentImportApi";
+import AdminMediaLibrary from "./AdminMediaLibrary";
 
 const PERMISSION = "app_maintenance.equipment.manage";
 const PAGE_SIZE = 5;
@@ -11,12 +12,13 @@ function Button({ title, onPress, disabled, primary = false, testID }) { return 
 export default function AdminEquipmentImport({ token, permissions = [], onImported, onAssistantDocument }) {
 	const allowed = permissions.includes(PERMISSION);
 	const [isOpen, setIsOpen] = useState(false); const dialogOpen = useRef(false);
+	const [choosing, setChoosing] = useState(false);
 	const [draft, setDraft] = useState(null); const [selected, setSelected] = useState([]); const [page, setPage] = useState(1);
 	const [busy, setBusy] = useState(false); const [confirming, setConfirming] = useState(false); const [error, setError] = useState(""); const [message, setMessage] = useState("");
 	const [history, setHistory] = useState(null); const [audit, setAudit] = useState(null); const [auditPage, setAuditPage] = useState(1);
 	const active = useRef(null); const current = useRef({ token, allowed }); current.current = { token, allowed };
 	const cancelActive = () => { const operation = active.current; active.current = null; operation?.controller.abort(); };
-	const resetSession = () => { cancelActive(); setDraft(null); setSelected([]); setPage(1); setConfirming(false); setBusy(false); setError(""); setMessage(""); setHistory(null); setAudit(null); setAuditPage(1); };
+	const resetSession = () => { cancelActive(); setChoosing(false); setDraft(null); setSelected([]); setPage(1); setConfirming(false); setBusy(false); setError(""); setMessage(""); setHistory(null); setAudit(null); setAuditPage(1); };
 	useEffect(() => { dialogOpen.current = false; setIsOpen(false); resetSession(); return () => { dialogOpen.current = false; cancelActive(); }; }, [token, allowed]);
 	const valid = (operation) => dialogOpen.current && active.current === operation && current.current.token === operation.token && current.current.allowed && !operation.controller.signal.aborted;
 	const start = (kind = "read") => { if (active.current || !dialogOpen.current || !token || !allowed) return null; const operation = { token, kind, controller: new AbortController() }; active.current = operation; setBusy(true); setError(""); setMessage(""); return operation; };
@@ -28,12 +30,13 @@ export default function AdminEquipmentImport({ token, permissions = [], onImport
 		if (["confirm", "assistant"].includes(active.current?.kind)) return;
 		dialogOpen.current = false; setIsOpen(false); resetSession();
 	};
-	const upload = async () => {
+	const previewStored = async (file) => {
 		const operation = start(); if (!operation) return;
 		try {
-			const file = await pickEquipmentDocument(); if (!file || !valid(operation)) return;
+			if (!file || !valid(operation)) return;
+			setChoosing(false);
 			setDraft(null); setSelected([]); setConfirming(false);
-			const result = await previewAdminEquipmentDocument(token, file, { signal: operation.controller.signal });
+			const result = await previewStoredAdminEquipmentDocument(token, file.id, { signal: operation.controller.signal });
 			if (!valid(operation)) return; setDraft(result); setPage(1);
 		} catch (failure) { if (valid(operation)) setError(failure.message || "无法预览文档。"); }
 		finally { finish(operation); }
@@ -91,7 +94,10 @@ export default function AdminEquipmentImport({ token, permissions = [], onImport
 				<ScrollView testID="equipment-import-scroll" style={styles.scroll} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
 		<Text style={styles.hint}>使用 Exercise Machine Code and Content V24 相同格式：编号及中英名称标题，下方为「栏目／Chinese／English」三栏表格。先预览对照，再选择字段确认导入；空白字段不清空旧内容。</Text>
 		<Text style={styles.hint}>关闭窗口会放弃尚未导入的预览与选择。</Text>
-		<View style={styles.row}><Button title="选择 Word 并预览" testID="equipment-import-upload" onPress={upload} disabled={!allowed || busy} primary /><Button title="查看导入记录及旧内容" disabled={!allowed || busy} onPress={() => loadHistory()} />{busy && <ActivityIndicator color="#840B1C" />}</View>
+		<Text style={styles.hint}>请先在「文件存储」上传 Word（.docx，最大 12 MB），再从文件存储选择并预览。</Text>
+		<View style={styles.row}><Button title="从文件存储选择 Word" testID="equipment-import-upload" onPress={() => setChoosing(true)} disabled={!allowed || busy || !permissions.includes("app_maintenance.files.manage")} primary /><Button title="查看导入记录及旧内容" disabled={!allowed || busy} onPress={() => loadHistory()} />{busy && <ActivityIndicator color="#840B1C" />}</View>
+		{!permissions.includes("app_maintenance.files.manage") && <Text style={styles.hint}>选择私人文档需要文件存储管理权限。</Text>}
+		{choosing && <View style={styles.entry}><Button title="取消选择" onPress={() => setChoosing(false)} /><AdminMediaLibrary token={token} permissions={permissions} kind="file" onSelect={previewStored} /></View>}
 		{!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}{!!message && <Text style={styles.success}>{message}</Text>}
 		{draft && <>
 			<Text style={styles.subheading}>{draft.fileName} · {draft.entries.length} 项设施</Text>

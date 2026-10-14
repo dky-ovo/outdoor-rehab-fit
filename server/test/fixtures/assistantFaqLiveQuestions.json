@@ -1,0 +1,260 @@
+[
+  {
+    "id": "faq-01",
+    "question": "我條腰彎曲嘅時候有少少痛，請問應唔應該做扭腰機？",
+    "locale": "zh",
+    "expectedFaq": "back-twister-pain"
+  },
+  {
+    "id": "faq-02",
+    "question": "醫生叫我要防跌倒啊，啲練平衡力嘅運動會唔會危險？",
+    "locale": "zh",
+    "expectedFaq": "balance-safety"
+  },
+  {
+    "id": "faq-03",
+    "question": "我想冇咁易跌親，練吓平衡力。我住彩雲邨嘅，請問可以做咩器械",
+    "locale": "zh",
+    "expectedFaq": "balance-near-home"
+  },
+  {
+    "id": "faq-04",
+    "question": "有冇一啲安全啲嘅運動？因為我隻腳冇乜力，容易跌親。",
+    "locale": "zh",
+    "expectedFaq": "weak-legs-falls"
+  },
+  {
+    "id": "faq-05",
+    "question": "一個禮拜做幾多日運動好？一次做幾耐好？",
+    "locale": "zh",
+    "expectedFaq": "weekly-activity"
+  },
+  {
+    "id": "faq-06",
+    "question": "幾時做運動最啱呀？",
+    "locale": "zh",
+    "expectedFaq": "exercise-weather"
+  },
+  {
+    "id": "faq-07",
+    "question": "做運動前應該隔幾耐食嘢？同埋食啲乜嘢嘢最好？",
+    "locale": "zh",
+    "expectedFaq": "food-before-exercise"
+  },
+  {
+    "id": "faq-08",
+    "question": "請幫我制定一個一星期戶外運動的方案，我希望可以提升下肢的力量。",
+    "locale": "zh",
+    "expectedFaq": "weekly-leg-plan"
+  },
+  {
+    "id": "faq-09",
+    "question": "根據我上個禮拜嘅運動表現，請幫我調整我下個禮拜嘅目標設定。",
+    "locale": "zh",
+    "expectedFaq": "personal-goals"
+  },
+  {
+    "id": "faq-10",
+    "question": "我想訓練腰部力量，但係我屋企附近公園無扭腰機，有無咩其他器材/動作可以取代?",
+    "locale": "zh",
+    "expectedFaq": "back-alternative"
+  },
+  {
+    "id": "faq-11",
+    "question": "我想拉下小腿嘅肌肉，不過我覺得嗰個小腿伸展唔夠斜，我拉唔到，我仲可以用咩器材，或者點調整動作？",
+    "locale": "zh",
+    "expectedFaq": "calf-stretch-alternative"
+  },
+  {
+    "id": "faq-12",
+    "question": "我想要器材可以同時訓練上肢與下肢，你會推薦哪幾個？",
+    "locale": "zh",
+    "expectedFaq": "whole-body-equipment"
+  },
+  {
+    "id": "faq-13",
+    "question": "我係一個新手，我想成身都練，不過我唔識用嗰啲好難，需要技術嘅器材，有啲咩係容易入門嘅器材推薦？",
+    "locale": "zh",
+    "expectedFaq": "beginner-equipment"
+  },
+  {
+    "id": "faq-14",
+    "question": "我最近整親條頸，不過我都係想練下肢，我可以用咩器材鍛煉而唔會影響到患處？",
+    "locale": "zh",
+    "expectedFaq": "neck-injury"
+  },
+  {
+    "id": "faq-15",
+    "question": "我是陪同者，我的家人希望鍛煉上肢力量，但是她在戶外運動方面沒有太多經驗，我應該如何幫助她？",
+    "locale": "zh",
+    "expectedFaq": "carer-upper-body"
+  },
+  {
+    "id": "faq-16",
+    "question": "我有肩周炎，有什麼戶外儀器可以幫助我？",
+    "locale": "zh",
+    "expectedFaq": "frozen-shoulder"
+  },
+  {
+    "id": "faq-17",
+    "question": "我有膝蓋痛，有什麼戶外儀器要避免/小心使用？",
+    "locale": "zh",
+    "expectedFaq": "knee-cautions"
+  },
+  {
+    "id": "faq-18",
+    "question": "我有膝蓋痛，有什麼儀器可以幫助我改善問題",
+    "locale": "zh",
+    "expectedFaq": "knee-mobility"
+  },
+  {
+    "id": "faq-19",
+    "question": "我有足底筋膜炎，有什麼儀器可以幫助我改善問題？",
+    "locale": "zh",
+    "expectedFaq": "plantar-fasciitis"
+  },
+  {
+    "id": "faq-20",
+    "question": "我有下腰背痛問題，有什麼儀器可以幫助我改善問題？有什麼戶外儀器要避免？",
+    "locale": "zh",
+    "expectedFaq": "back-pain"
+  },
+  {
+    "id": "faq-21",
+    "question": "我有手腕痛，有什麼儀器可以幫助我改善問題？有什麼要注意。",
+    "locale": "zh",
+    "expectedFaq": "wrist-pain"
+  },
+  {
+    "id": "faq-22",
+    "question": "我有手肘痛，有什麼儀器可以幫助我改善問題？有什麼要注意。",
+    "locale": "zh",
+    "expectedFaq": "elbow-pain"
+  },
+  {
+    "id": "faq-23",
+    "question": "做完運動後第二日，嗰手臂仲係有啲㾓，係咪正常㗎？",
+    "locale": "zh",
+    "expectedFaq": "scope-health"
+  },
+  {
+    "id": "faq-24",
+    "question": "我有高血壓，係咪唔做得太劇烈嘅運動啊？",
+    "locale": "zh",
+    "expectedFaq": "scope-health"
+  },
+  {
+    "id": "faq-25",
+    "question": "運動嗰陣點樣呼吸先啱呀？我好似好容易就chur晒大氣咁。",
+    "locale": "zh",
+    "expectedFaq": "scope-health"
+  },
+  {
+    "id": "faq-26",
+    "question": "啲示範影片喺邊度搵㗎？",
+    "locale": "zh",
+    "expectedFaq": "app-videos"
+  },
+  {
+    "id": "faq-27",
+    "question": "我個運動記錄喺邊度㗎？點樣send俾人睇㗎？",
+    "locale": "zh",
+    "expectedFaq": "app-records"
+  },
+  {
+    "id": "faq-28",
+    "question": "我做完一個設施之後，應該休息幾耐先可以做下一個？",
+    "locale": "zh",
+    "expectedFaq": "scope-health"
+  },
+  {
+    "id": "paraphrase-01",
+    "question": "我弯腰时腰有点痛，公园的扭腰机还适合我做吗？",
+    "locale": "zh",
+    "expectedFaq": "back-twister-pain"
+  },
+  {
+    "id": "paraphrase-02",
+    "question": "医生提醒我预防跌倒，练平衡会不会反而更容易摔？",
+    "locale": "zh",
+    "expectedFaq": "balance-safety"
+  },
+  {
+    "id": "paraphrase-03",
+    "question": "我住彩雲邨，想練平衡少啲跌親，附近一定有邊幾部機？",
+    "locale": "zh",
+    "expectedFaq": "balance-near-home"
+  },
+  {
+    "id": "paraphrase-04",
+    "question": "My legs are weak and I fall easily. Which outdoor exercise equipment is safer for me?",
+    "locale": "en",
+    "expectedFaq": "weak-legs-falls"
+  },
+  {
+    "id": "paraphrase-05",
+    "question": "長者一星期應該做幾多日運動，每次幾多分鐘？",
+    "locale": "zh",
+    "expectedFaq": "weekly-activity"
+  },
+  {
+    "id": "paraphrase-06",
+    "question": "夏天咁曬，我朝早定夜晚去公園做運動好啲呀？",
+    "locale": "zh",
+    "expectedFaq": "exercise-weather"
+  },
+  {
+    "id": "paraphrase-07",
+    "question": "How long should I wait after a meal before exercising, and what should I eat?",
+    "locale": "en",
+    "expectedFaq": "food-before-exercise"
+  },
+  {
+    "id": "paraphrase-08",
+    "question": "帮我排一个练腿力的七天户外器械计划，可以吗？",
+    "locale": "zh",
+    "expectedFaq": "weekly-leg-plan"
+  },
+  {
+    "id": "paraphrase-09",
+    "question": "Can you look at my exercise results from last week and change my goals for next week?",
+    "locale": "en",
+    "expectedFaq": "personal-goals"
+  },
+  {
+    "id": "paraphrase-10",
+    "question": "附近公園冇扭腰機，但我想鍛鍊腰背，有冇其他選擇？",
+    "locale": "zh",
+    "expectedFaq": "back-alternative"
+  },
+  {
+    "id": "paraphrase-11",
+    "question": "我啱啱整親條頸，淨係踩腳嗰啲機會唔會冇影響㗎？",
+    "locale": "zh",
+    "expectedFaq": "neck-injury"
+  },
+  {
+    "id": "paraphrase-12",
+    "question": "I am accompanying a family member who is new to outdoor exercise and wants stronger arms. How can I help?",
+    "locale": "en",
+    "expectedFaq": "carer-upper-body"
+  },
+  {
+    "id": "paraphrase-13",
+    "question": "膝盖痛，太极推手机、扭腰机和踏步机有哪些动作需要小心？",
+    "locale": "zh",
+    "expectedFaq": "knee-cautions"
+  },
+  {
+    "id": "paraphrase-14",
+    "question": "I have lower back pain. Which park machines might be relevant, and which should I avoid?",
+    "locale": "en",
+    "expectedFaq": "back-pain"
+  },
+  {
+    "id": "paraphrase-15",
+    "question": "我想搵返之前嘅運動紀錄同send俾屋企人，你幫我睇到同傳到嗎？",
+    "locale": "zh",
+    "expectedFaq": "app-records"
+  }
+]

@@ -7,6 +7,7 @@ function setup(t) {
   const sql = new DatabaseSync(':memory:');
   sql.exec(`CREATE TABLE users (id TEXT PRIMARY KEY, deleted_at TEXT);
     INSERT INTO users VALUES ('alice',NULL),('bob',NULL);
+    CREATE TABLE assistant_jobs (id TEXT PRIMARY KEY, user_id TEXT, status TEXT, request_json TEXT);
     CREATE TABLE account_documents (user_id TEXT, collection TEXT, record_id TEXT, value_json TEXT, deleted INTEGER, revision INTEGER, last_operation TEXT, PRIMARY KEY(user_id,collection,record_id));`);
   const statement = text => sql.prepare(text.replaceAll(' FOR UPDATE',''));
   const db = { get: async (s,v=[]) => statement(s).get(...v), all: async (s,v=[]) => statement(s).all(...v), run: async (s,v=[]) => statement(s).run(...v) };
@@ -72,4 +73,23 @@ test('server-completed result persists for another device even after job is gone
   assert.equal(row.value.messages[1].reply,'answer');
   await db.run("UPDATE users SET deleted_at='deleted' WHERE id='alice'");
   assert.equal(await sync('assistant_zh'),null);
+});
+
+test('provider collections isolate equal IDs, validation, tombstones and in-flight results', async t => {
+  const { db, store, sync } = setup(t);
+  for (const provider of ['deepseek', 'bailian']) {
+    const request = { message: provider, runtimeSnapshot: { provider }, conversation: { id: 'same-id', userMessageId: 'q', locale: 'zh', provider, createdAt: '2026-10-08T00:00:00Z' } };
+    await db.transaction(tx => store.recordJob(tx, 'alice', provider, request));
+    await db.run('INSERT INTO assistant_jobs VALUES (?, ?, ?, ?)', [provider, 'alice', 'running', JSON.stringify(request)]);
+  }
+  assert.equal((await sync('assistant_zh')).records[0].value.messages[0].text, 'deepseek');
+  assert.equal((await sync('assistant_bailian_zh')).records[0].value.messages[0].text, 'bailian');
+  await assert.rejects(sync('assistant_bailian_zh', [change('bad', { ...dialog('x'), provider: 'deepseek' })]), { code: 'invalidAccountData' });
+  await assert.rejects(sync('assistant_zh', [change('bad', { ...dialog('x'), messages: [{ id: 'x', sender: 'ai', reply: 'other', provider: 'bailian' }] })]), { code: 'invalidAccountData' });
+  await sync('assistant_bailian_zh', [{ ...change('same-id', null, 1, 'delete-bailian'), deleted: true }]);
+  assert.deepEqual((await db.all('SELECT id FROM assistant_jobs')).map(row => row.id), ['deepseek']);
+  const request = { message: 'late', runtimeSnapshot: { provider: 'bailian' }, conversation: { id: 'same-id', userMessageId: 'q', locale: 'zh' } };
+  await db.transaction(tx => store.recordJob(tx, 'alice', 'late', request, { reply: 'late answer', provider: 'bailian' }));
+  assert.equal((await sync('assistant_bailian_zh')).records[0].deleted, true);
+  assert.equal((await sync('assistant_zh')).records[0].deleted, false);
 });

@@ -1,10 +1,11 @@
 import React from "react";
 import renderer, { act } from "react-test-renderer";
-import { ActivityIndicator, FlatList, Modal, Platform, Text, TextInput, TouchableOpacity } from "react-native";
+import { ActivityIndicator, FlatList, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import AiChatbox from "../../app/(tabs)/chat";
+import AssistantKeyboardSpacer from "../AssistantKeyboardSpacer";
 import AssistantPhotoPreview from "../AssistantPhotoPreview";
 import { AuthContext } from "../../contexts/AuthContext";
 import { currentAssistantConversation, mockCurrentAssistantConversation, persistedCurrentAssistantMessages } from "../../scripts/test-helpers/assistantConversationFixtures";
@@ -49,7 +50,7 @@ jest.mock("../../utils/equipmentCatalog", () => ({ mergeEquipmentCatalog: base =
 jest.mock("../../hooks/useAndroidBackTarget", () => ({ useAndroidBackTarget: jest.fn() }));
 jest.mock("../../hooks/useKeyboardInset", () => ({ useKeyboardInset: () => mockKeyboard }));
 jest.mock("@react-navigation/elements", () => ({ useHeaderHeight: () => 48 }));
-jest.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
+jest.mock("react-native-safe-area-context", () => ({ SafeAreaProvider: ({ children }) => children, SafeAreaView: require("react-native").View, useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 jest.mock("react-native-responsive-fontsize", () => ({ RFValue: value => value }));
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null, MaterialCommunityIcons: () => null }));
 jest.mock("expo-image-picker", () => ({ launchCameraAsync: jest.fn(), launchImageLibraryAsync: jest.fn() }));
@@ -159,6 +160,9 @@ test("asynchronous restoration of 80 long messages starts at newest without meas
     sender: index % 2 === 0 ? "user" : "ai",
     ...(index % 2 === 0 ? { text: `問題 ${index}` } : { reply: `回答 ${index}：${"這是較長的APP設施說明。".repeat(120)}`, recommendations: [] }),
   }));
+  // The deferred read represents this disk value. A no-op restore need not
+  // write it again, so the persistence fixture must use the same baseline.
+  mockCurrentAssistantConversation(AsyncStorage, longHistory);
   AsyncStorage.getItem.mockReturnValue(restore.promise);
   await render();
   expect(tree.root.findAllByType(FlatList)).toHaveLength(0);
@@ -449,3 +453,22 @@ test("retired photo confirmations preserve plain history without actions or new 
   expect(sendAssistantMessage).not.toHaveBeenCalled();
 });
 jest.mock("expo-image", () => ({ Image: "CachedImage" }));
+
+
+test("Android native translation reserves oldest-message scroll space without moving toolbar or replacing history", async () => {
+  Platform.OS = "android";
+  await render();
+  const ids = data().map(item => item.id);
+  const frame = tree.root.findByType(AssistantKeyboardSpacer);
+  expect(frame.findByType(FlatList)).toBeDefined();
+  expect(list().props.removeClippedSubviews).toBe(false);
+  expect(frame.findAllByProps({ testID: "assistant-new-conversation" })).toHaveLength(0);
+  expect(frame.findByProps({ testID: "assistant-message-input" })).toBeDefined();
+  await act(async () => frame.props.onInsetChange(286));
+  expect(StyleSheet.flatten(list().props.contentContainerStyle).paddingBottom).toBe(301);
+  expect(list().props.inverted).toBe(true);
+  expect(data().map(item => item.id)).toEqual(ids);
+  await act(async () => frame.props.onInsetChange(0));
+  expect(StyleSheet.flatten(list().props.contentContainerStyle).paddingBottom).toBe(15);
+  expect(data().map(item => item.id)).toEqual(ids);
+});

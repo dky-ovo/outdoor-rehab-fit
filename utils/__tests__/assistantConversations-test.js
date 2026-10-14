@@ -1,7 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ASSISTANT_CONVERSATIONS_PREFIX, MAX_ASSISTANT_CONVERSATIONS, createAssistantSessionId,
   loadAssistantConversations, storeAssistantConversation, startNewAssistantConversation, listAssistantConversations,
-  deleteAssistantConversation, clearAssistantConversationHistory } from "../assistantConversations";
+  deleteAssistantConversation, clearAssistantConversationHistory, listAccountAssistantConversations,
+  clearAccountAssistantConversationHistory, synchronizeAssistantConversations } from "../assistantConversations";
 import { assistantMessagesForDisplay, resolveEquipmentRecommendations } from "../assistantEquipmentSearch";
 import { assistantReplyPresentation } from "../assistantReplyPresentation";
 import { withEquipmentTcmReply } from "../assistantTcm";
@@ -17,6 +18,43 @@ const question = (id, text = `Question ${id}`) => ({ id, sender: "user", text })
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 const archive = (conversations, value = identity) => ({ version: 2, owner: value.owner, locale: value.locale, legacyChecked: true, conversations });
 const conversation = (id, messages, authSessionId = identity.authSessionId) => ({ id, authSessionId, messages, legacy: false, archived: false, createdAt: "2026-09-22T00:00:00.000Z", updatedAt: "2026-09-22T00:00:00.000Z" });
+
+test('provider switching preserves independent local composers and never imports DeepSeek legacy into Bailian', async () => {
+  AsyncStorage.__data.set(legacyKey(identity), JSON.stringify([question('legacy', 'old DeepSeek only')]));
+  const ds = await loadAssistantConversations(identity);
+  await storeAssistantConversation({ ...identity, conversationId: ds.conversationId, messages: [question('ds')] });
+  const bailian = { ...identity, provider: 'bailian' };
+  const b = await loadAssistantConversations(bailian);
+  expect(b.messages).toEqual([]); expect(b.history).toEqual([]);
+  await storeAssistantConversation({ ...bailian, conversationId: b.conversationId, messages: [question('b'), { id: 'ba', sender: 'ai', reply: 'trained answer', provider: 'bailian', model: 'qwen', responsePolicy: 'provider_raw' }] });
+  const otherLocale = { ...bailian, locale: 'en' };
+  const en = await loadAssistantConversations(otherLocale);
+  await storeAssistantConversation({ ...otherLocale, conversationId: en.conversationId, messages: [question('en')] });
+  expect((await loadAssistantConversations(identity)).messages).toEqual([question('ds')]);
+  const history = (await listAccountAssistantConversations(bailian)).history;
+  expect(history).toHaveLength(2);
+  expect(history.every(item => item.provider === 'bailian' && item.id.startsWith('bailian:'))).toBe(true);
+  expect(history.flatMap(item => item.messages).some(message => message.id === 'legacy' || message.id === 'ds')).toBe(false);
+  expect(history.flatMap(item => item.messages).find(message => message.id === 'ba')).toMatchObject({ provider: 'bailian', model: 'qwen', responsePolicy: 'provider_raw' });
+  await startNewAssistantConversation(bailian); await startNewAssistantConversation(otherLocale);
+  await clearAccountAssistantConversationHistory(bailian);
+  expect((await listAccountAssistantConversations(bailian)).history).toEqual([]);
+  expect((await listAccountAssistantConversations(identity)).history).toHaveLength(2);
+});
+
+test('Bailian sync pulls only its own collection and rejects a foreign answer without clearing pending edits', async () => {
+  const b = { ...identity, provider: 'bailian' };
+  const current = await loadAssistantConversations(b);
+  await storeAssistantConversation({ ...b, conversationId: current.conversationId, messages: [question('local')] });
+  const send = jest.fn(async (_token, outgoing) => ({ acknowledged: [], cursor: 1, more: false, records: [{ id: 'remote', version: 1, deleted: false, value: { provider: 'deepseek', createdAt: '2026-10-08T00:00:00Z', updatedAt: '2026-10-08T00:00:00Z', messages: [question('foreign')] } }] }));
+  await expect(synchronizeAssistantConversations({ ...b, token: 'token', send })).rejects.toMatchObject({ code: 'assistantProviderMismatch' });
+  expect(send.mock.calls[0][1].collection).toBe('assistant_bailian_zh');
+  expect(send.mock.calls[0][1].changes).toHaveLength(1);
+  const retry = jest.fn(async (_token, outgoing) => ({ acknowledged: [], records: [], cursor: 0, more: false }));
+  await synchronizeAssistantConversations({ ...b, token: 'token', send: retry });
+  expect(retry.mock.calls[0][1].changes).toEqual(send.mock.calls[0][1].changes);
+  expect((await loadAssistantConversations(b)).messages.map(message => message.id)).toEqual(['local']);
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -45,6 +83,17 @@ test("the same authentication session restores its own active dialogue but a new
   await expect(storeAssistantConversation({ ...identity, conversationId: first.conversationId, messages: [question("late")] })).rejects.toMatchObject({ code: "assistantConversationChanged" });
 });
 
+test("a direct-guide presentation flag survives account history without allowing arbitrary metadata", async () => {
+  const current = await loadAssistantConversations(identity);
+  const reply = { id: "guide", sender: "ai", action: "equipment_local", reply: "按舒適幅度慢慢活動。", guideContentDirect: true, untrustedExtra: true };
+  await storeAssistantConversation({ ...identity, conversationId: current.conversationId, messages: [reply] });
+  const restored = await loadAssistantConversations(identity);
+  expect(restored.messages[0]).toMatchObject({ guideContentDirect: true, reply: reply.reply });
+  expect(restored.messages[0]).not.toHaveProperty("untrustedExtra");
+  const freshLogin = await loadAssistantConversations({ ...identity, authSessionId: "another-session" });
+  expect(freshLogin.history[0].messages[0].guideContentDirect).toBe(true);
+});
+
 test("starting a new dialogue archives the former one and refuses late writes to it", async () => {
   const first = await loadAssistantConversations(identity);
   await storeAssistantConversation({ ...identity, conversationId: first.conversationId, messages: [question("q1")] });
@@ -66,6 +115,49 @@ test("owner and language boundaries never import or return another scope's text"
   expect((await loadAssistantConversations({ ...identity, owner: "user-two" })).messages).toEqual([question("user-two-zh")]);
   expect((await loadAssistantConversations({ ...identity, locale: "en" })).messages).toEqual([question("user-one-en")]);
   expect((await listAssistantConversations(identity)).history).toHaveLength(1);
+});
+
+test('account history combines web and phone languages without activating or mixing their composers', async () => {
+  for (const locale of ['zh','en']) {
+    const value = {...identity,locale}, active = await loadAssistantConversations(value);
+    await storeAssistantConversation({...value,conversationId:active.conversationId,messages:[question(`${locale}-question`)]});
+    await startNewAssistantConversation(value);
+  }
+  const before = new Map(AsyncStorage.__data);
+  const result = await listAccountAssistantConversations({owner:identity.owner});
+  expect(result.history).toHaveLength(2);
+  expect(new Set(result.history.map(item=>item.locale))).toEqual(new Set(['zh','en']));
+  for (const item of result.history) {
+    expect(item.id).toBe(`${item.locale}:${item.sourceId}`);
+    expect(item).toMatchObject({readOnly:true,canDelete:true});
+    expect(item.messages[0].id).toBe(`${item.locale}-question`);
+  }
+  expect(AsyncStorage.__data).toEqual(before);
+  expect((await listAccountAssistantConversations({owner:'other-account'})).history).toEqual([]);
+});
+
+test('same legacy ID in both languages remains independently deletable and clear spans both collections', async () => {
+  for (const locale of ['zh','en']) AsyncStorage.__data.set(legacyKey({...identity,locale}),JSON.stringify([question(`${locale}-old`)]));
+  const history = (await listAccountAssistantConversations(identity)).history;
+  expect(new Set(history.map(item=>item.id))).toEqual(new Set(['zh:legacy-v1','en:legacy-v1']));
+  const target = history.find(item=>item.locale==='en');
+  await deleteAssistantConversation({...identity,locale:target.locale,conversationId:target.sourceId});
+  expect((await listAccountAssistantConversations(identity)).history.map(item=>item.id)).toEqual(['zh:legacy-v1']);
+  await clearAccountAssistantConversationHistory(identity);
+  expect((await listAccountAssistantConversations(identity)).history).toEqual([]);
+});
+
+test('account history excludes only the exact current composer and protects another active language', async () => {
+  const current = await loadAssistantConversations(identity);
+  await storeAssistantConversation({...identity,conversationId:current.conversationId,messages:[question('current')]});
+  const english = {...identity,locale:'en'}, other = await loadAssistantConversations(english);
+  await storeAssistantConversation({...english,conversationId:other.conversationId,messages:[question('english-current')]});
+  const result = await listAccountAssistantConversations({owner:identity.owner,exclude:{locale:'zh',conversationId:current.conversationId}});
+  expect(result.history).toHaveLength(1);
+  expect(result.history[0]).toMatchObject({locale:'en',sourceId:other.conversationId,canDelete:false});
+  await clearAccountAssistantConversationHistory(identity);
+  expect((await loadAssistantConversations(identity)).messages[0].id).toBe('current');
+  expect((await loadAssistantConversations(english)).messages[0].id).toBe('english-current');
 });
 
 test("legacy text migrates once into read-only history, never active context; original bytes remain", async () => {
@@ -127,7 +219,7 @@ test("read-only v2 history preserves source metadata so edited evidence is not r
   expect(assistantMessagesForDisplay(history, catalog)[1].reply).toBe(answer.reply);
   const changed = assistantMessagesForDisplay(history, [{ ...catalog[0], ptTip: "旧內容已移除。" }])[1];
   expect(changed.recommendations).toEqual([]);
-  expect(changed.reply).toContain("請重新發送問題");
+  expect(changed.reply).toContain("請重新提問");
   expect(changed.reply).not.toContain(quote);
   expect(JSON.stringify(history)).toBe(before);
 });

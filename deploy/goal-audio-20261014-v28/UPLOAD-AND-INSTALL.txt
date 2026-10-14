@@ -1,0 +1,26 @@
+STEP 1 - Run in Windows PowerShell (copy commands only):
+
+Set-Location -LiteralPath 'D:\polyu work\outdoor-rehab-fit-anesthesia'
+$v28Package = '.\deploy\goal-audio-20261014-v28\outdoor-fit-goal-audio-20261014-v28.tar.gz'
+if ((Get-FileHash -LiteralPath $v28Package -Algorithm SHA256).Hash.ToLowerInvariant() -ne '69a955a88ac880524ec02e09c200fc7042374dece8d219a07c0227e5cfadc01c') { throw 'UPDATE_ARCHIVE_HASH_MISMATCH' }
+scp -P 28832 $v28Package root@47.83.186.36:/tmp/
+if ($LASTEXITCODE -ne 0) { throw 'UPLOAD_FAILED' }
+
+STEP 2 - Run in the OLD ECS SSH window (47.83.186.36, not 47.239.116.133):
+
+(
+set -euo pipefail
+umask 077
+cd /tmp
+printf '%s\n' '69a955a88ac880524ec02e09c200fc7042374dece8d219a07c0227e5cfadc01c  outdoor-fit-goal-audio-20261014-v28.tar.gz' | sha256sum -c -
+update_dir="$(mktemp -d /root/outdoor-fit-goal-audio-v28.XXXXXXXX)"
+printf 'UPDATE_DIR=%s\n' "$update_dir"
+env -u TAR_OPTIONS tar --extract --gzip --file=outdoor-fit-goal-audio-20261014-v28.tar.gz --directory="$update_dir" --no-same-owner --no-same-permissions --keep-old-files
+cd "$update_dir/outdoor-fit-goal-audio-20261014-v28"
+python3 install.py --check-only
+python3 install.py --prepare
+python3 install.py --apply
+)
+
+Expected completion: GOAL_AUDIO_WEB_UPDATE=PASS
+This updates the browser app; Android/iOS require their separate OTA Publish commands.

@@ -1,7 +1,17 @@
-import { ApiError, API_BASE_URL, ASSISTANT_REQUEST_TIMEOUT_MS, sendAssistantMessage } from "../api";
+import { ApiError, API_BASE_URL, ASSISTANT_REQUEST_TIMEOUT_MS, sendAssistantMessage, getAssistantRuntime, createAssistantJob, getAssistantJob } from "../api";
 
 const originalFetch = global.fetch;
 const originalAbortController = global.AbortController;
+
+test("reads the authenticated assistant runtime without a stale HTTP cache or credentials in the body", async () => {
+	const runtime = { provider: "bailian", revision: "revision-2", model: "qwen-plus", scope: "bailian", promptMode: "none", faqEnabled: false, protocol: 2 };
+	global.fetch.mockResolvedValue(response(runtime));
+	await expect(getAssistantRuntime("session-token")).resolves.toBe(runtime);
+	expect(global.fetch).toHaveBeenCalledWith(`${API_BASE_URL}/assistant/runtime`, expect.objectContaining({
+		method: "GET", cache: "no-store", headers: { Authorization: "Bearer session-token" },
+	}));
+	expect(global.fetch.mock.calls[0][1]).not.toHaveProperty("body");
+});
 
 function deferred() {
 	let resolve;
@@ -116,7 +126,7 @@ test.each([false, true])("preserves the request and authorization for photo=%s",
 	global.fetch.mockResolvedValue(response({ reply: "Answer", recommendations: [] }));
 	await sendAssistantMessage(data, "session-token");
 	expect(global.fetch).toHaveBeenCalledTimes(1);
-	expect(global.fetch).toHaveBeenCalledWith(`${API_BASE_URL}/assistant/chat`, expect.objectContaining({
+	expect(global.fetch).toHaveBeenCalledWith(`${API_BASE_URL}/assistant/v2/chat`, expect.objectContaining({
 		method: "POST",
 		headers: { "Content-Type": "application/json", Authorization: "Bearer session-token" },
 		body: JSON.stringify(expectedData),
@@ -155,6 +165,25 @@ test("maps a rejected transport to networkError and clears the deadline", async 
 	global.fetch.mockRejectedValue(new TypeError("Failed to fetch"));
 	await expect(sendAssistantMessage({ message: "Question" })).rejects.toMatchObject({ code: "networkError", status: 0 });
 	expect(jest.getTimerCount()).toBe(0);
+});
+
+test.each([
+	["chat", "/assistant/v2/chat", () => sendAssistantMessage({ message: "百煉問題", provider: "bailian" }, "session-token")],
+	["job creation", "/assistant/v2/jobs", () => createAssistantJob("session-token", "saved-job-id", { message: "百煉問題", provider: "bailian" })],
+	["job polling", "/assistant/v2/jobs/saved-job-id", () => getAssistantJob("session-token", "saved-job-id")],
+])("%s cannot fall back to legacy routing after a server rollback", async (_kind, path, call) => {
+	global.fetch.mockResolvedValue({ ok: false, status: 404, json: async () => ({ error: "notFound" }) });
+	await expect(call()).rejects.toMatchObject({ code: "assistantClientUpdateRequired", status: 503 });
+	expect(global.fetch).toHaveBeenCalledTimes(1);
+	expect(global.fetch.mock.calls[0][0]).toBe(`${API_BASE_URL}${path}`);
+	expect(jest.getTimerCount()).toBe(0);
+});
+
+test("an explicit missing-job reply from the v2 server remains a 404", async () => {
+	global.fetch.mockResolvedValue({ ok: false, status: 404, json: async () => ({ error: "assistantJobNotFound" }) });
+	await expect(getAssistantJob("session-token", "missing-job-id")).rejects.toMatchObject({ code: "assistantJobNotFound", status: 404 });
+	expect(global.fetch).toHaveBeenCalledTimes(1);
+	expect(global.fetch.mock.calls[0][0]).toBe(`${API_BASE_URL}/assistant/v2/jobs/missing-job-id`);
 });
 
 test.each([

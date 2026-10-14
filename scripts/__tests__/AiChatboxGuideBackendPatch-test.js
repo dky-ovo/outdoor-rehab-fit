@@ -308,21 +308,19 @@ test("rejects smoke scratch inside, outside-parent-of, or nonempty beside the AP
   expect(fs.readFileSync(path.join(nonempty, "private.txt"), "utf8")).toBe("untouched");
 });
 
-test("actual isolated HTTP smoke verifies deterministic safety, read-only simulated tools, invalid replies and continued conversations", () => {
+test("historical guide patch smoke fails closed against the later FAQ backend without changing its source", () => {
   const data = fixture(), scratch = path.join(data.root, "smoke"), api = path.resolve(__dirname, "../../server");
   fs.mkdirSync(scratch);
   const verifier = path.resolve(__dirname, "../verify-ai-chatbox-guide-backend-patch.cjs");
   const before = fs.readFileSync(path.join(api, "src/app.js"));
-  const output = execFileSync(process.execPath, [verifier, "smoke", api, scratch], { encoding: "utf8", stdio: "pipe", timeout: 40000 });
-  const result = JSON.parse(output.trim());
-  expect(result.smoke).toBe("passed");
-  expect(result.database).toBe("memory");
-  expect(result.externalAiCalls).toBe(0);
-  expect(result.symptomPolicy).toBe("app-symptom-deepseek-v2");
-  expect(result.simulatedSymptomAiCalls).toBeGreaterThanOrEqual(10);
-  expect(result.guideRequests).toBeGreaterThanOrEqual(20);
-  expect(result.simulatedAiCalls).toBeGreaterThan(result.guideRequests);
-  expect(result.requests).toBeGreaterThan(result.guideRequests);
+  // This release-bound verifier predates the deterministic FAQ path. It must
+  // refuse that later backend, not silently accept changed response contracts.
+  let failure;
+  try { execFileSync(process.execPath, [verifier, "smoke", api, scratch], { encoding: "utf8", stdio: "pipe", timeout: 40000 }); }
+  catch (error) { failure = error; }
+  expect(failure).toBeDefined();
+  expect(failure.status).toBe(1);
+  expect(String(failure.stderr)).toContain("Verification failed: Assistant did not use the expected APP-only retrieval path");
   expect(fs.readFileSync(path.join(api, "src/app.js"))).toEqual(before);
   expect(fs.readdirSync(scratch).every(name => ["equipment", "media", "guide-equipment", "guide-media"].includes(name))).toBe(true);
 }, 45000);

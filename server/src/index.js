@@ -2,11 +2,13 @@ import { createApp } from "./app.js";
 import { readConfig } from "./config.js";
 import { createDatabase } from "./database.js";
 import { facilitySource, safeSyncFacilities } from "./facilities.js";
+import { createBailianFaqSelector } from "./assistantBailian.js";
 
 const config = readConfig();
 const database = createDatabase(config.databasePath);
 const app = createApp({
   database,
+  faqSelector: createBailianFaqSelector(),
   jwtSecret: config.jwtSecret,
   smsMode: config.smsMode,
 	testSmsCodeEnabled: config.testSmsCodeEnabled,

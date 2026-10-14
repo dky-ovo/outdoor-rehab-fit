@@ -14,6 +14,7 @@ import { ParticipantLearningEquipment, ParticipantLearningMetrics, ParticipantLe
 export default function ParticipantLearningList() {
 	const params = useLocalSearchParams();
 	const participantId = participantLearningParam(params.participantId), date = participantLearningParam(params.date);
+	const returnWeek = participantLearningParam(params.returnWeek);
 	const view = participantLearningParam(params.view) === "exercise" ? "exercise" : "usage";
 	const { user } = useContext(AuthContext); const { i18n, locale } = useContext(LocaleContext); const insets = useSafeAreaInsets();
 	const copy = participantLearningCopy(locale);
@@ -22,7 +23,7 @@ export default function ParticipantLearningList() {
 	const [selection, setSelection] = useState(null);
 	const page = selection?.scope === paginationScope ? selection.page : initialPage;
 	const { result, catalog, loading, error, retry } = useParticipantLearningPage({ token: user?.token, participantId, date, page, locale, i18n });
-	const target = useMemo(() => ({ pathname: date ? "/participant-usage/day" : "/participant-usage/detail", params: { participantId, ...(date ? { date } : {}), view } }), [participantId, date, view]);
+	const target = useMemo(() => ({ pathname: date ? "/participant-usage/day" : "/participant-usage/detail", params: { participantId, ...(date ? { date } : {}), ...(returnWeek ? { returnWeek } : {}), view } }), [participantId, date, returnWeek, view]);
 	const back = useUsageBack(target, true);
 	const items = Array.isArray(result?.items) ? result.items : [];
 	const catalogById = useMemo(() => new Map(catalog.map(item => [String(item.id), item])), [catalog]);
@@ -37,7 +38,7 @@ export default function ParticipantLearningList() {
 			ListEmptyComponent={<Text testID="participant-learning-empty" style={styles.message}>{copy.empty}</Text>}
 			renderItem={({ item: record }) => {
 				const equipment = catalogById.get(String(record.equipmentId));
-				return <TouchableOpacity testID={`participant-learning-equipment-${record.equipmentId}`} accessibilityRole="button" style={styles.card} onPress={() => router.push({ pathname: "/participant-usage/learning-detail", params: { participantId, ...(date ? { date } : {}), view, page: String(currentPage), equipmentId: String(record.equipmentId) } })}>
+				return <TouchableOpacity testID={`participant-learning-equipment-${record.equipmentId}`} accessibilityRole="button" style={styles.card} onPress={() => router.push({ pathname: "/participant-usage/learning-detail", params: { participantId, ...(date ? { date } : {}), ...(returnWeek ? { returnWeek } : {}), view, page: String(currentPage), equipmentId: String(record.equipmentId) } })}>
 					<ParticipantLearningEquipment item={equipment} equipmentId={record.equipmentId} locale={locale}><ParticipantLearningMetrics entry={record.entry} item={equipment} locale={locale} /></ParticipantLearningEquipment>
 					{!equipment && <Text style={styles.message}>{copy.missing}</Text>}
 				</TouchableOpacity>;

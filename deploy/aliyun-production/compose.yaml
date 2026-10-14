@@ -30,7 +30,10 @@ services:
       MYSQL_USER: "${MYSQL_USER:?Set the application database user}"
       MYSQL_PASSWORD_FILE: /run/outdoor-secrets/mysql-password
       MYSQL_DATABASE: "${MYSQL_DATABASE:?Explicitly select the prepared database}"
-      MYSQL_POOL_SIZE: "4"
+      MYSQL_POOL_SIZE: "${MYSQL_POOL_SIZE:-4}"
+      # Admit bounded bursts from 50 users; retain four DB connections until
+      # measured RDS capacity justifies more. Zero/unlimited queue is rejected.
+      MYSQL_POOL_QUEUE_LIMIT: "${MYSQL_POOL_QUEUE_LIMIT:-128}"
       MYSQL_SSL_CA: /run/rds-ca/ca-chain.pem
       EQUIPMENT_UPLOAD_DIR: /app/data/equipment-images
       MEDIA_UPLOAD_DIR: /app/data/media-library
@@ -41,6 +44,11 @@ services:
       TWILIO_API_KEY_SID: "${TWILIO_API_KEY_SID:-}"
       TWILIO_API_KEY_SECRET: "${TWILIO_API_KEY_SECRET:-}"
       TWILIO_VERIFY_SERVICE_SID: "${TWILIO_VERIFY_SERVICE_SID:-}"
+      # Runtime-only FAQ provider configuration; it is disabled by default.
+      BAILIAN_FAQ_ENABLED: "${BAILIAN_FAQ_ENABLED:-false}"
+      BAILIAN_MODEL_ID: "${BAILIAN_MODEL_ID:-}"
+      BAILIAN_BASE_URL: "${BAILIAN_BASE_URL:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}"
+      DASHSCOPE_API_KEY: "${DASHSCOPE_API_KEY:-}"
     volumes:
       - type: bind
         source: "${JWT_SECRET_FILE:?Set the preserved JWT secret file}"

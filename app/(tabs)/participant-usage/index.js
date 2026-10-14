@@ -8,6 +8,7 @@ import CountrySelector from "../../../components/CountrySelector";
 import { AuthContext } from "../../../contexts/AuthContext";
 import { LocaleContext } from "../../../contexts/LocaleContext";
 import { addVolunteerParticipant, getVolunteerParticipants } from "../../../utils/api";
+import { formatParticipantWeek } from "../../../utils/participantWeeks";
 import { useUsageBack } from "../../../hooks/useUsageBack";
 
 export default function ParticipantUsageScreen() {
@@ -57,7 +58,7 @@ export default function ParticipantUsageScreen() {
 		{loading && !participants.length ? <ActivityIndicator style={{ marginTop: 30 }} color="#840B1C" /> : <FlatList data={participants.filter(Boolean)} keyExtractor={(item) => item.id} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.empty}>{i18n.t("noParticipants")}</Text>} renderItem={({ item }) => {
 			const dateField = dataView === "exercise" ? "lastExerciseDate" : "lastAppUsageDate";
 			const lastDate = Object.prototype.hasOwnProperty.call(item, dateField) ? item[dateField] : item.lastUsageDate;
-			return <TouchableOpacity style={styles.card} onPress={() => router.push({ pathname: "/participant-usage/detail", params: { participantId: item.id, view: dataView } })}><View style={styles.avatar}><Ionicons name="person" size={26} color="#840B1C" /></View><View style={{ flex: 1 }}><Text style={styles.name}>{item.name}{item.relationship === "self" ? ` · ${i18n.t(dataView === "exercise" ? "myExerciseData" : "myUsageData")}` : ""}</Text><Text style={styles.phone}>{item.phone}</Text><Text style={styles.last}>{lastDate ? `${i18n.t(dataView === "exercise" ? "dailyExerciseData" : "dailyUsage")}: ${lastDate}` : i18n.t(dataView === "exercise" ? "noExerciseData" : "noDailyUsage")}</Text></View><Ionicons name="chevron-forward" size={24} color="#888" /></TouchableOpacity>;
+			return <TouchableOpacity style={styles.card} onPress={() => router.push({ pathname: "/participant-usage/detail", params: { participantId: item.id, view: dataView } })}><View style={styles.avatar}><Ionicons name="person" size={26} color="#840B1C" /></View><View style={{ flex: 1 }}><Text style={styles.name}>{item.name}{item.relationship === "self" ? ` · ${i18n.t(dataView === "exercise" ? "myExerciseData" : "myUsageData")}` : ""}</Text><Text style={styles.phone}>{item.phone}</Text><Text style={styles.last}>{lastDate ? `${i18n.t(dataView === "exercise" ? "weeklyExerciseData" : "weeklyUsage")}: ${formatParticipantWeek(lastDate, locale)}` : i18n.t(dataView === "exercise" ? "noExerciseData" : "noDailyUsage")}</Text></View><Ionicons name="chevron-forward" size={24} color="#888" /></TouchableOpacity>;
 		}} />}
 	</View>;
 }

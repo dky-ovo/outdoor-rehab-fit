@@ -81,6 +81,25 @@ test('late AI response from a signed-out session is ignored and pending local hi
   await synchronizeAssistantConversations({...identity,token:'t',isCurrent:()=>current,send:async(_,body)=>{current=false;return ack(body,body.changes.map(x=>({id:x.id,value:null,deleted:true,version:2})));}});
   expect((await listAssistantConversations(identity)).history[0].messages[0].text).toBe('kept');
 });
+
+test('one rejected local AI history cannot prevent downloading another device answer',async()=>{
+  const first=await loadAssistantConversations(identity);
+  await storeAssistantConversation({...identity,conversationId:first.conversationId,messages:[{id:'legacy.invalid.id',sender:'user',text:'local record retained'}]});
+  const rejected=Object.assign(new Error('invalidAccountData'),{status:400,code:'invalidAccountData'});
+  const remote={id:'remote-conversation',version:2,deleted:false,value:{createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:01Z',legacy:false,messages:[{id:'question',sender:'user',text:'remote question'},{id:'job-remote-answer',sender:'ai',reply:'remote answer'}]}};
+  const send=jest.fn(async(_token,body)=>{
+    if(body.changes.length) throw rejected;
+    return {records:[remote],acknowledged:[],cursor:2,more:false};
+  });
+  await expect(synchronizeAssistantConversations({...identity,token:'t',send})).rejects.toBe(rejected);
+  expect(send).toHaveBeenCalledTimes(2);
+  const history=(await listAssistantConversations(identity)).history;
+  expect(history.find(item=>item.id==='remote-conversation').messages[1].reply).toBe('remote answer');
+  expect(history.find(item=>item.id===first.conversationId).messages[0].text).toBe('local record retained');
+  const stored=JSON.parse(await AsyncStorage.getItem('@outdoor_fit_ai_conversations_v2:alice:zh'));
+  expect(stored.cloud.cursor).toBe(2);
+  expect(stored.cloud.pending[first.conversationId]).toBeDefined();
+});
 test('fresh goals pull cloud targets without publishing defaults; offline edit is retained',async()=>{
   const options={owner:mockOwner,token:'t',isCurrent:()=>true};
   await synchronizeGoals({...options,send:async(_,body)=>{expect(body.changes).toEqual([]);return ack(body,[{id:'target-aerobic',value:{target:200},version:4,deleted:false}]);}});

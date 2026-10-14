@@ -39,12 +39,12 @@ beforeEach(() => {
 });
 afterEach(async () => { if (tree) await act(async () => tree.unmount()); tree = null; jest.restoreAllMocks(); });
 
-test("selecting a date opens that participant and day without showing all daily metrics", async () => {
+test("selecting a week combines its dates and opens that participant week", async () => {
 	await act(async () => { tree = renderer.create(<DatesScreen />); });
 	const dates = tree.root.findAllByType(TouchableOpacity);
-	expect(dates).toHaveLength(2);
-	await act(async () => dates[1].props.onPress());
-	expect(router.push).toHaveBeenCalledWith({ pathname: "/participant-usage/day", params: { participantId: "participant-1", date: "2026-09-04", view: "exercise" } });
+	expect(dates).toHaveLength(1);
+	await act(async () => dates[0].props.onPress());
+	expect(router.push).toHaveBeenCalledWith({ pathname: "/participant-usage/day", params: { participantId: "participant-1", weekStart: "2026-08-31", view: "exercise" } });
 	expect(tree.root.findAllByType(Text).map((node) => node.props.children)).not.toContain("exerciseMinutes");
 });
 
@@ -74,7 +74,7 @@ test("usage entry excludes exercise metrics from its daily view", async () => {
 	expect(router.push).toHaveBeenLastCalledWith({ pathname: "/participant-usage/learning", params: { participantId: "participant-1", date: "2026-09-04", view: "usage" } });
 });
 
-test("usage dates include learning-only days and offer cumulative learning separately", async () => {
+test("usage weeks include learning-only days and offer cumulative learning separately", async () => {
 	mockSearchParams = { participantId: "participant-1", view: "usage" };
 	getVolunteerParticipantUsage.mockResolvedValue({ participant: { id: "participant-1", name: "User One" }, days: [{ date: "2026-09-22", facilityLearningCount: 1 }, { date: "2026-09-21", exerciseSessions: 1 }] });
 	await act(async () => { tree = renderer.create(<DatesScreen />); });
@@ -84,7 +84,7 @@ test("usage dates include learning-only days and offer cumulative learning separ
 	await act(async () => learning.props.onPress());
 	expect(router.push).toHaveBeenLastCalledWith({ pathname: "/participant-usage/learning", params: { participantId: "participant-1", view: "usage" } });
 	await act(async () => buttons.find(node => !node.props.testID).props.onPress());
-	expect(router.push).toHaveBeenLastCalledWith({ pathname: "/participant-usage/day", params: { participantId: "participant-1", date: "2026-09-22", view: "usage" } });
+	expect(router.push).toHaveBeenLastCalledWith({ pathname: "/participant-usage/day", params: { participantId: "participant-1", weekStart: "2026-09-21", view: "usage" } });
 });
 
 test.each([DatesScreen, DayScreen])("exercise views do not acquire Facility Guide entries", async Component => {
@@ -115,3 +115,23 @@ test("late participant-list responses cannot show the previous account's partici
 	expect(rendered).toContain("New Account Participant");
 	expect(rendered).not.toContain("Old Account Participant");
 });
+
+ test("week details add all days but exclude the next week", async () => {
+ mockSearchParams = { participantId: "participant-1", weekStart: "2026-08-31", view: "exercise" };
+ getVolunteerParticipantUsage.mockResolvedValue({ participant: { name: "User One" }, days: [...days, { date: "2026-09-07", exerciseSessions: 1, exerciseMinutes: 333 }] });
+ await act(async () => { tree = renderer.create(<DayScreen />); });
+ const text = tree.root.findAllByType(Text).map(node => node.props.children);
+ expect(text).toContain(1016);
+ expect(text).not.toContain(333);
+ expect(text).toContain("weeklyExerciseRecords");
+ });
+ test("weekly usage totals remain separate from exercise and daily learning stays reachable", async () => {
+ mockSearchParams = { participantId: "participant-1", weekStart: "2026-08-31", view: "usage" };
+ await act(async () => { tree = renderer.create(<DayScreen />); });
+ const text = tree.root.findAllByType(Text).map(node => node.props.children);
+ expect(text).toContain(9);
+ expect(text).not.toContain("exerciseMinutes");
+ const daily = tree.root.findAllByType(TouchableOpacity).find(node => node.findAllByType(Text).some(item => item.props.children === "2026-09-04"));
+ await act(async () => daily.props.onPress());
+ expect(router.push).toHaveBeenLastCalledWith({ pathname: "/participant-usage/day", params: { participantId: "participant-1", date: "2026-09-04", view: "usage", returnWeek: "2026-08-31" } });
+ });

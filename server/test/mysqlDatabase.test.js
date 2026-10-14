@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import mysql from "mysql2/promise";
 import { createMysqlDatabase } from "../src/mysqlDatabase.js";
 
 function fixture(overrides = {}) {
@@ -8,6 +9,7 @@ function fixture(overrides = {}) {
   const connections = [];
   const pool = {
     async getConnection() {
+      if (overrides.acquireError) throw overrides.acquireError;
       const id = ++count;
       const connection = {
         async query(sql) { calls.push([id, "setup", sql]); if (overrides.setupError) throw overrides.setupError; },
@@ -151,6 +153,61 @@ test("driver errors omit SQL, bound values, message and cause", async () => {
   });
   assert.equal(calls.at(-1)[1], "release");
   await database.close();
+});
+
+test("the locked mysql2 driver's full queue becomes a stable capacity error without opening a socket", async t => {
+  const pool = mysql.createPool({ connectionLimit: 1, waitForConnections: true, queueLimit: 1 });
+  // Occupy the sole driver slot with a synthetic connection. Exercising the
+  // real queue path must not connect to a database or depend on network timing.
+  pool.pool._allConnections.push({ _realEnd: callback => callback() });
+  const queued = pool.getConnection().catch(error => error);
+  assert.equal(pool.pool._connectionQueue.length, 1);
+  const database = createMysqlDatabase({ ssl: { ca: "synthetic", rejectUnauthorized: true, verifyIdentity: true } }, { poolFactory: () => pool });
+  t.after(() => database.close());
+  for (const operation of [() => database.get("SELECT secret", ["private-secret"]),
+    () => database.transaction(() => assert.fail("must not enter callback"))]) {
+    await assert.rejects(operation(), error => {
+      assert.equal(error.name, "MysqlOperationError");
+      assert.equal(error.code, "MYSQL_POOL_QUEUE_LIMIT");
+      assert.equal(error.message, "MySQL connection acquisition failed (MYSQL_POOL_QUEUE_LIMIT)");
+      assert.equal(error.cause, undefined);
+      assert.doesNotMatch(error.stack + JSON.stringify(error), /private-secret|SELECT secret|Queue limit reached/);
+      return true;
+    });
+  }
+  assert.equal(pool.pool._connectionQueue.length, 1, "failed operations must not add more queued work");
+  await database.close();
+  assert.equal((await queued).message, "Pool is closed.");
+});
+
+test("only the exact acquisition queue error is classified, with raw error properties discarded", async () => {
+  const raw = Object.assign(new Error("Queue limit reached."), {
+    sql: "SELECT private-secret", sqlMessage: "password=private-secret", cause: new Error("private-secret"), errno: 1234, sqlState: "HY000",
+  });
+  const saturated = fixture({ acquireError: raw });
+  await assert.rejects(saturated.database.get("SELECT 1"), error => {
+    assert.equal(error.code, "MYSQL_POOL_QUEUE_LIMIT");
+    assert.deepEqual(Object.keys(error).sort(), ["code", "name"]);
+    assert.equal(error.cause, undefined);
+    assert.doesNotMatch(error.stack + JSON.stringify(error), /private-secret/);
+    return true;
+  });
+  assert.equal(saturated.calls.length, 0);
+  await saturated.database.close();
+  for (const message of ["Queue limit reached", "Queue limit reached. password=private-secret", "queue limit reached.", "Pool is closed."]) {
+    const { database } = fixture({ acquireError: new Error(message) });
+    await assert.rejects(database.get("SELECT 1"), error => {
+      assert.equal(error.code, "MYSQL_OPERATION_FAILED");
+      assert.doesNotMatch(error.stack + JSON.stringify(error), /private-secret/);
+      return true;
+    });
+    await database.close();
+  }
+  for (const field of ["setupError", "executeError"]) {
+    const { database } = fixture({ [field]: new Error("Queue limit reached.") });
+    await assert.rejects(database.get("SELECT 1"), { code: "MYSQL_OPERATION_FAILED" });
+    await database.close();
+  }
 });
 
 test("connection setup and transaction start failures destroy instead of releasing a bad connection", async () => {

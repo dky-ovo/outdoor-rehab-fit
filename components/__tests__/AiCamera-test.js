@@ -22,7 +22,7 @@ jest.mock("../../contexts/LocaleContext", () => ({ LocaleContext: require("react
 jest.mock("../../contexts/AuthContext", () => ({ AuthContext: require("react").createContext({}) }));
 jest.mock("@react-navigation/native", () => ({ useIsFocused: () => mockFocused }));
 jest.mock("@react-navigation/elements", () => ({ useHeaderHeight: () => 0 }));
-jest.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ bottom: 0 }) }));
+jest.mock("react-native-safe-area-context", () => ({ SafeAreaProvider: ({ children }) => children, SafeAreaView: require("react-native").View, useSafeAreaInsets: () => ({ bottom: 0 }) }));
 jest.mock("../../hooks/useKeyboardInset", () => ({ useKeyboardInset: () => mockKeyboard }));
 jest.mock("../../hooks/useAndroidBackTarget", () => ({ useAndroidBackTarget: () => {} }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn() }, useLocalSearchParams: () => mockRouteParams }));
@@ -132,9 +132,6 @@ test("old photo questions and replies retain read-only text without attachments 
   let rowTree; await act(async () => { rowTree = renderer.create(row); });
   expect(rowTree.root.findAllByType(Image).some(image => image.props.source.uri === "facility.jpg")).toBe(true);
   await act(async () => rowTree.unmount());
-  const saved = persistedCurrentAssistantMessages(AsyncStorage);
-  expect(saved.filter(item => item.retiredImage).map(item => item.text || item.reply)).toEqual(["旧照片", "旧辨识", "旧確認文字"]);
-  expect(JSON.stringify(saved)).not.toMatch(/data:image|imageUri|imageData|confirmationRequired/);
   const retiredRow = list.props.renderItem({ item: list.props.data.find(item => item.id === "photo-ai") });
   await act(async () => { rowTree = renderer.create(retiredRow); });
   expect(rowTree.root.findAllByType(Text).some(node => node.props.children === "旧辨识")).toBe(true);
@@ -145,6 +142,11 @@ test("old photo questions and replies retain read-only text without attachments 
   const payload = sendAssistantMessage.mock.calls.at(-1)[0];
   expect(payload.history.map(item => item.content)).toEqual(["文字問題", "器材資料"]);
   expect(JSON.stringify(payload)).not.toMatch(/旧照片|旧辨识|旧確認文字|data:image/);
+  // Restoring an unchanged archive does not force a storage write. A real
+  // message persists the sanitized history without retaining retired images.
+  const saved = persistedCurrentAssistantMessages(AsyncStorage);
+  expect(saved.filter(item => item.retiredImage).map(item => item.text || item.reply)).toEqual(["旧照片", "旧辨识", "旧確認文字"]);
+  expect(JSON.stringify(saved)).not.toMatch(/data:image|imageUri|imageData|confirmationRequired/);
   await act(async () => tree.unmount()); tree = null;
   mockCurrentAssistantConversation(AsyncStorage, saved);
   await act(async () => { tree = renderer.create(screen()); });

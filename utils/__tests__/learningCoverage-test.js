@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getLearningProgress, learningGroupCoverage, mergeLearningRanges, recordLearningCoverage, learningFlags, markRead, equipmentLearningFlags, learningContentKey } from "../learning";
+import { getLearningProgress, learningGroupCoverage, mergeLearningRanges, recordLearningCoverage, learningFlags, markRead, equipmentLearningFlags, learningContentKey, learningVideoKey, learningVideoMetadata } from "../learning";
 import { createPlaybackCoverage, createReadingCoverage, visibleLearningRange, learningTextSections } from "../learningCoverage";
 import { speechChunks } from "../ttsLearning";
 jest.mock("@react-native-async-storage/async-storage", () => require("@react-native-async-storage/async-storage/jest/async-storage-mock"));
@@ -41,6 +41,31 @@ test("favorites use only current content/language and a revised source does not 
 	expect(equipmentLearningFlags(entry, item, "en").read).toBe(true);
 	expect(equipmentLearningFlags(entry, { ...item, details: "b".repeat(100) }, "en").read).toBe(false);
 	expect(equipmentLearningFlags(entry, item, "zh").read).toBe(false);
+});
+
+test("quality/CDN changes preserve original watched coverage while a different lesson or language stays separate", async () => {
+ const original = '/api/media/original/original.mov';
+ const item = { id: 0, videoUrl: original };
+ await evidence('watched', 0, 75, { groupKey: `en:${learningVideoKey(item)}:100` });
+ const entry = (await getLearningProgress())[0];
+ const delivery = { ...item, videoUrl: 'https://cdn.example/api/media/original/quality-hash.mp4', videoIdentityUrl: original };
+ expect(learningVideoKey(delivery)).toBe(learningContentKey(original));
+ expect(equipmentLearningFlags(entry, delivery, 'en').watched).toBe(true);
+ expect(equipmentLearningFlags(entry, delivery, 'zh').watched).toBe(false);
+ expect(equipmentLearningFlags(entry, { ...delivery, videoIdentityUrl: '/api/media/new/new.mp4' }, 'en').watched).toBe(false);
+});
+
+test("a quality rendition uses the original duration group without scaling or inventing watched positions", () => {
+ const item = { videoIdentityUrl: '/api/media/original/original.mp4', videoIdentityDurationSeconds: 24.557875 };
+ expect(learningVideoMetadata(item, { positionMs: 1000, durationMs: 24602 })).toEqual({ positionMs: 1000, durationMs: 24558 });
+ expect(learningVideoMetadata(item, { positionMs: 24602, durationMs: 24602 })).toEqual({ positionMs: 24558, durationMs: 24558 });
+ expect(learningVideoMetadata(item, { positionMs: 24500, durationMs: 24500 }).positionMs).toBe(24500);
+ const sample = { positionMs: 1000, durationMs: 24602 };
+ expect(learningVideoMetadata({ videoIdentityUrl: item.videoIdentityUrl }, sample)).toBe(sample);
+ const ranges = jest.fn(), coverage = createPlaybackCoverage(ranges);
+ coverage('playing', learningVideoMetadata(item, { positionMs: 0, durationMs: 24602 }), 0);
+ coverage('progress', learningVideoMetadata(item, { positionMs: 1000, durationMs: 24602 }), 1000);
+ expect(ranges).toHaveBeenCalledWith(0, 1000, 24558);
 });
 test("no initialized owner means no anonymous progress is recorded or reused as guest", async () => {
 	mockOwner = null; await evidence("read", 0, 100); expect(await getLearningProgress()).toEqual({}); expect(AsyncStorage.setItem).not.toHaveBeenCalled();

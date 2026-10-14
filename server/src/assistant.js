@@ -1,4 +1,5 @@
 import { symptomConcern, symptomEvidence } from "./assistantSymptomEvidence.js";
+import { assistantExerciseQuantityQuestion } from "./assistantLanguage.js";
 
 const GENERAL = { type: "general", categories: [], focus: "" };
 
@@ -25,7 +26,21 @@ export function normalizeEquipmentLookup(value) {
 
 export function assistantAsksForJudgement(message) {
 	const normalizedMessage = normalizeEquipmentLookup(message);
-	return /(適合|适合|推薦|推荐|疼|痛|能不能|可不可以|shouldi|recommend|suitable|pain|diagnos|cure)/i.test(normalizedMessage);
+	return /(適合|适合|推薦|推荐|疼|痛|能不能|可不可以|可唔可以|shouldi|recommend|suitable|pain|diagnos|cure)/i.test(normalizedMessage);
+}
+
+export function assistantAsksForGuideContent(message) {
+	if (assistantExerciseQuantityQuestion(message)) return true;
+	return /(怎麼|怎么|如何|點用|点用|點玩|点玩|點樣|点样|玩法|用法|使用|操作|方法|說明|说明|介紹|介绍|教學|教学|內容|内容|資料|资料|功能|作用|注意事項|注意事项|物理治療|物理治疗|職業治療|职业治疗|是什麼|是什么|做什麼|做什么|howto|howdo|use|instruction|guide|about|whatis|whatdoes|information|explain|precautions|occupationaltherapy|physiotherapy)/i.test(normalizeEquipmentLookup(message));
+}
+
+export function assistantAsksForLocation(message) {
+	const text = String(message || "");
+	// A park is often the setting for a teaching question. Ask where, nearby,
+	// or how to get there before switching the APP to the location flow.
+	return /(?:哪[裡里裏兒儿]|邊度|边度|何處|何处|在哪|位置|地點|地点|地址|點去|点去|怎麼去|怎么去|如何去|\b(?:nearby|nearest|where|location|address|directions?)\b)/i.test(text)
+		|| /(?:附近|周邊|周边|最近).{0,25}(?:公園|公园|設施|设施|器材|器械|運動場|运动场)/i.test(text)
+		|| /(?:公園|公园|設施|设施|器材|器械).{0,20}(?:附近|周邊|周边|最近)/i.test(text);
 }
 
 function equipmentLookupAliases(item) {
@@ -79,8 +94,11 @@ export function assistantHistory(value) {
 export function assistantIntent(message, history = [], categoryDefinitions = []) {
 	const text = String(message || "").toLowerCase();
 	const concern = symptomConcern(message, history);
+	// The shared symptom parser owns current/negated/historical emergencies.
+	// Location words must never override a current urgent complaint.
+	if (concern?.urgent) return { ...GENERAL, urgent: true, concern };
 	if (/^(你好|您好|嗨|早安|午安|晚安|謝謝|谢谢|多謝|再見|再见|hello|hi|hey|thanks?|thank you|bye)[!！。,.，?？\s]*$/i.test(text)) return { ...GENERAL };
-	if (/(附近|最近|周邊|周边|位置|地點|地点|公園|公园|\b(?:nearby|nearest|where|location|park)\b)/i.test(text)) return { type: "facility", categories: [], focus: "" };
+	if (!concern && assistantAsksForLocation(message)) return { type: "facility", categories: [], focus: "" };
 	const categories = [];
 	const lower = /(腿|腳|脚|膝|髖|髋|足|踝|下肢|\b(?:legs?|knees?|hips?|calf|calves|feet|foot|ankles?|lower body)\b)/i.test(text);
 	const back = /(腰|背|脊|腰椎|頸|颈|\b(?:back|waist|spine|neck)\b)/i.test(text);
@@ -96,8 +114,6 @@ export function assistantIntent(message, history = [], categoryDefinitions = [])
 	if (/(放鬆|放松|按摩|舒緩|舒缓|\b(?:relax|relaxation|massage|release)\b)/i.test(text)) categories.push("relaxation");
 	if (discomfort && (lower || back || upper)) categories.push("relaxation");
 	const focus = lower && upper ? "mixed" : lower ? "lower" : upper ? "upper" : back ? "back" : categories.includes("balance") ? "balance" : categories.includes("aerobic") ? "aerobic" : categories.includes("relaxation") ? "relaxation" : "";
-	const urgent = /(胸痛|胸口痛|呼吸困難|呼吸困难|無法站立|无法站立|突然劇痛|突然剧痛|嚴重腫脹|严重肿胀|chest pain|difficulty breathing|cannot stand|sudden severe pain)/i.test(text);
-	if (urgent) return { ...GENERAL, urgent: true };
 	// Labels are curated in the same APP catalog; custom labels can narrow a
 	// search but never override greeting, location or urgent-symptom handling.
 	const normalizedText = normalizeEquipmentLookup(text);

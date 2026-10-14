@@ -57,10 +57,10 @@ export function withEquipmentTcm(recommendations, catalog, locale = "zh") {
 
 const EQUIPMENT_REPLY_VERSION = "app-equipment-prose-v1";
 const EVIDENCE_LABELS = {
-  ptTip: ["物理治療師的小貼士（APP原文）", "Tips from Physiotherapists (APP excerpt)"],
-  kinesiologyTip: ["運動學專家的專業介紹（APP原文）", "Introduction by Exercise Specialists (APP excerpt)"],
-  otTip: ["職業治療師的小貼士（APP原文）", "Tips from Occupational Therapists (APP excerpt)"],
-  tcmTip: ["從中醫學角度（APP原文）", "From a TCM perspective (APP excerpt)"],
+  ptTip: ["物理治療師的小貼士", "Tips from Physiotherapists"],
+  kinesiologyTip: ["運動學專家的介紹", "Exercise specialist tips"],
+  otTip: ["職業治療師的小貼士", "Tips from Occupational Therapists"],
+  tcmTip: ["中醫小知識", "TCM background"],
 };
 
 export function withEquipmentTcmReply(answer, catalog, locale = "zh") {
@@ -100,7 +100,11 @@ export function withEquipmentTcmReply(answer, catalog, locale = "zh") {
     }
     return [clean];
   });
-  const enriched = withEquipmentTcm(recommendations, [...trusted.values()].filter(Boolean), locale);
+  // A direct guide answers the requested section. Do not append unrelated TCM
+  // or other sections on restore. The flag affects presentation only: catalog
+  // visibility, IDs and any proposed evidence were still checked above.
+  const enriched = answer.guideContentDirect === true ? recommendations
+    : withEquipmentTcm(recommendations, [...trusted.values()].filter(Boolean), locale);
   const blocked = ["facility", "auth_error", "error", "image_confirmation"].includes(answer.action) ||
     answer.confirmationAnswered === "no" || (answer.confirmationRequired && answer.confirmationAnswered !== "yes");
   const blocks = [];
@@ -115,7 +119,7 @@ export function withEquipmentTcmReply(answer, catalog, locale = "zh") {
         if (field === "tcmTip") includesTcm = true;
         if (!base.includes(quote)) passages.push(passage(EVIDENCE_LABELS[field][en ? 1 : 0], quote));
       }
-      if (recommendation.tcmExcerpt && !base.includes(recommendation.tcmExcerpt.quote)) {
+      if (answer.guideContentDirect !== true && recommendation.tcmExcerpt && !base.includes(recommendation.tcmExcerpt.quote)) {
         passages.push(passage(EVIDENCE_LABELS.tcmTip[en ? 1 : 0], recommendation.tcmExcerpt.quote));
         includesTcm = true;
       }
@@ -123,8 +127,8 @@ export function withEquipmentTcmReply(answer, catalog, locale = "zh") {
     }
   }
   const tcmNote = en
-    ? "This is TCM background from the APP, not advice to use this equipment for your symptoms. Please read the full precautions in the Facility Guide."
-    : "這是APP的中醫背景資料，並非針對症狀的使用建議。請查看設施教學的完整注意事項。";
+    ? "These are general TCM explanations, not treatment advice. If you have pain, ask a healthcare professional before exercising."
+    : "這些是中醫的一般說明，不能代替診治。有痛楚時，請先找醫護人員評估。";
   if (includesTcm && !base.includes(tcmNote)) blocks.push(tcmNote);
   return { ...answer, recommendations: enriched,
     reply: blocks.length ? [base, ...blocks].filter(part => part.trim()).join("\n\n") : base,

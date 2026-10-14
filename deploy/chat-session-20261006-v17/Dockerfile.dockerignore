@@ -1,0 +1,14 @@
+*
+!server/
+!server/src/
+!server/src/assistantFaqKnowledge.js
+!server/src/assistantFaq.js
+!server/src/accountContinuity.js
+!server/src/assistantDeadline.js
+!server/src/appMysql.js
+!server/src/app.js
+!server/src/assistantContentPolicy.js
+!server/src/assistantGuide.js
+!server/src/mysqlAssistantGuide.js
+!server/src/assistantSymptomRecommendations.js
+!server/src/mysqlAssistantSymptomRecommendations.js

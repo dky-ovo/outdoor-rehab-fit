@@ -59,6 +59,14 @@
 
 ## 官方依据
 
+### iOS 灵动岛文字布局修订（2026-10-12）
+
+- 紧凑右侧从 42–82 pt 弹性宽改为固定 50 × 24 pt 的单行等宽计时槽，位于较小 iPhone 的 52.33 × 36.67 pt 区域内；保留小时位，不根据每秒钟的数字改宽。紧凑左侧和最小样式仅使用固定尺寸图标。
+- 展开样式及锁屏卡片让时间数字独占一行，返回提示不再与长时长争抢横向空间；展开的模式、状态和提示各自限制行数。
+- `OutdoorFitTimerWidget_Previews` 提供八组原生 Xcode 预览：24 小时、小时边界、暂停、最大累计时长、中英文、深色和辅助字号。Windows 只能运行源代码契约与生成工程测试，尚未完成这些 SwiftUI 预览或 iPhone 真机验收；EAS/Xcode 编译成功也不等于实机布局通过。
+- 本次不更改计时生命周期、提醒声音或深链参数。Swift Widget 修订需要新的 iOS 安装包，旧包不能仅靠 OTA 获得。
+- 参考 [Apple Live Activities 布局指南](https://developer.apple.com/design/human-interface-guidelines/live-activities) 与 [展开区域布局规则](https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities)。[SwiftPizza 的原生示例](https://github.com/1998code/iOS16-Live-Activities) 使用固定宽度计时文本；[Expo issue 44543 的宽度讨论](https://github.com/expo/expo/issues/44543) 提醒 `Text(timerInterval:)` 可能占满可用宽度。本项目继续使用现有纯 Swift Widget，不引入该 issue 涉及的 JS Widget 渲染器，也不采用后台静音音频保活。
+
 - [Expo Autolinking：local modules 默认目录](https://docs.expo.dev/modules/autolinking/)
 - [Android Notification.Builder：Chronometer 与 timeout](https://developer.android.com/reference/android/app/Notification.Builder)
 - [Android Doze 限制](https://developer.android.com/training/monitoring-device-state/doze-standby)

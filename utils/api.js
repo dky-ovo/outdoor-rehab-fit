@@ -28,44 +28,59 @@ export const SESSION_REQUEST_TIMEOUT_MS = 15000;
 // Allow the server's 55-second AI budget plus transport time, while also
 // bounding transports that ignore abort or stall while reading the response.
 export const ASSISTANT_REQUEST_TIMEOUT_MS = 65000;
+export const PUBLIC_CONTENT_REQUEST_TIMEOUT_MS = 15000;
 
-async function request(path, { method = "GET", body, token, timeoutMs = 0, timeoutCode = "networkError" } = {}) {
+async function request(path, { method = "GET", body, token, timeoutMs = 0, timeoutCode = "networkError", cache, signal } = {}) {
+	if (signal?.aborted) throw new ApiError("requestCancelled", 0);
 	const accountScope = captureAccountSession(token);
-	const controller = timeoutMs > 0 && typeof AbortController !== "undefined" ? new AbortController() : null;
-	let timer;
+	const controller = (timeoutMs > 0 || signal) && typeof AbortController !== "undefined" ? new AbortController() : null;
+	let timer, onCancel;
 	try {
 		const operation = (async () => {
 			const response = await fetch(`${API_BASE_URL}${path}`, {
 				method,
+				...(cache ? { cache } : {}),
 				headers: {
 					...(body ? { "Content-Type": "application/json" } : {}),
 					...(token ? { Authorization: `Bearer ${token}` } : {}),
 				},
 				...(body ? { body: JSON.stringify(body) } : {}),
-				...(controller ? { signal: controller.signal } : {}),
+				...(controller || signal ? { signal: controller?.signal || signal } : {}),
 			});
 			const payload = await response.json().catch(() => ({}));
 			if (!response.ok) {
 				reportAccountDeleted(accountScope, response.status, payload?.error);
-				throw new ApiError(payload?.error || "serverError", response.status);
+				const error = new ApiError(payload?.error || "serverError", response.status);
+				const retrySeconds = Number(response.headers?.get?.("Retry-After"));
+				if (Number.isFinite(retrySeconds) && retrySeconds > 0) error.retryAfterMs = Math.min(120000, retrySeconds * 1000);
+				throw error;
 			}
 			return payload;
 		})();
-		if (!timeoutMs) return await operation;
+		if (!timeoutMs && !signal) return await operation;
 		return await Promise.race([
 			operation,
-			new Promise((_, reject) => {
+			...(timeoutMs ? [new Promise((_, reject) => {
 				timer = setTimeout(() => {
 					reject(new ApiError(timeoutCode, 0));
 					controller?.abort();
 				}, timeoutMs);
-			}),
+			})] : []),
+			...(signal ? [new Promise((_, reject) => {
+				onCancel = () => {
+					reject(new ApiError("requestCancelled", 0));
+					controller?.abort();
+				};
+				if (signal.aborted) onCancel();
+				else signal.addEventListener("abort", onCancel, { once: true });
+			})] : []),
 		]);
 	} catch (error) {
 		if (error instanceof ApiError) throw error;
 		throw new ApiError("networkError", 0);
 	} finally {
 		if (timer !== undefined) clearTimeout(timer);
+		if (onCancel) signal.removeEventListener("abort", onCancel);
 	}
 }
 
@@ -118,8 +133,10 @@ export function sendResearchEvent(token, eventName, metadata = {}) {
 	return request("/research/events", { method: "POST", body: { eventName, metadata, appVersion: "1.0.0" }, token });
 }
 
-export function getPublicContent(pageKey = "") {
-	return request(`/content?pageKey=${encodeURIComponent(pageKey)}`);
+export function getPublicContent(pageKey = "", { signal } = {}) {
+	return request(`/content?pageKey=${encodeURIComponent(pageKey)}`, {
+		timeoutMs: PUBLIC_CONTENT_REQUEST_TIMEOUT_MS, timeoutCode: "publicContentTimeout", signal,
+	});
 }
 
 export function getAppTexts() { return request('/app-texts', { timeoutMs: 12000 }); }
@@ -180,8 +197,23 @@ export function getEquipmentCatalog({ forceRefresh = false } = {}) {
 	return equipmentCatalogRequest;
 }
 
+export function getAssistantRuntime(token) {
+	return request("/assistant/runtime", { token, timeoutMs: SESSION_REQUEST_TIMEOUT_MS, cache: "no-store", timeoutCode: "assistantRuntimeUnavailable" });
+}
+
+// Old servers do not recognize the provider protocol. A distinct path closes
+// the race where the server is rolled back after the runtime was fetched.
+// Never retry these requests on the legacy DeepSeek-only routes.
+async function assistantV2Request(path, options) {
+	try { return await request(`/assistant/v2/${path}`, options); }
+	catch (error) {
+		if (error?.status === 404 && error?.code !== 'assistantJobNotFound') throw new ApiError('assistantClientUpdateRequired', 503);
+		throw error;
+	}
+}
+
 export async function sendAssistantMessage(data, token = "") {
-	const payload = await request("/assistant/chat", {
+	const payload = await assistantV2Request("chat", {
 		method: "POST", body: data, token,
 		timeoutMs: ASSISTANT_REQUEST_TIMEOUT_MS, timeoutCode: "assistantTimeout",
 	});
@@ -192,10 +224,10 @@ export async function sendAssistantMessage(data, token = "") {
 	return payload;
 }
 
-export const createAssistantJob = (token, id, data) => request('/assistant/jobs', {
+export const createAssistantJob = (token, id, data) => assistantV2Request('jobs', {
 	method: 'POST', token, body: { id, request: data }, timeoutMs: 15000,
 });
-export const getAssistantJob = (token, id) => request(`/assistant/jobs/${encodeURIComponent(id)}`, { token, timeoutMs: 15000 });
+export const getAssistantJob = (token, id) => assistantV2Request(`jobs/${encodeURIComponent(id)}`, { token, timeoutMs: 15000 });
 export const syncAccountBookmarks = (token, changes) => request('/account/bookmarks/sync', {
 	method: 'POST', token, body: { changes }, timeoutMs: 15000,
 });
@@ -307,6 +339,10 @@ export function getAdminGuestProfiles(token, { page = 1, pageSize = 20, gender =
 	const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize), gender, purpose });
 	return request(`/admin/guest-profiles?${query.toString()}`, { token });
 }
+
+export function getAdminTestUsers(token) { return request("/admin/test-users", { token, timeoutMs: 30000 }); }
+export function createAdminTestUsers(token, body) { return request("/admin/test-users", { method: "POST", body, token, timeoutMs: 45000 }); }
+export function disableAdminTestUsers(token, batchId) { return request(`/admin/test-users/${encodeURIComponent(batchId)}/disable`, { method: "POST", body: { confirmation: batchId }, token, timeoutMs: 30000 }); }
 
 export function createAdminUser(token, data) {
 	return request("/admin/users", { method: "POST", body: data, token });
@@ -484,8 +520,8 @@ export function updateAdminAiConfiguration(token, data) {
 	return request("/admin/ai-configuration", { method: "PATCH", body: data, token });
 }
 
-export function testAdminAiConfiguration(token) {
-	return request("/admin/ai-configuration/test", { method: "POST", token });
+export function testAdminAiConfiguration(token, data = {}) {
+	return request("/admin/ai-configuration/test", { method: "POST", body: data, token });
 }
 
 export function getAdminUserChatMessages(token, userId) {

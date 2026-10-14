@@ -49,6 +49,18 @@ test("uses server pagination and never requests all files to make a fake page", 
 	expect(api.getAdminMedia).toHaveBeenLastCalledWith("auth", expect.objectContaining({ page: 2, limit: 20, folderId: "" }));
 	expect(manager().props.data.filter(item => item.type === "file")).toHaveLength(1);
 });
+test('multiple stored-video picker confirms valid selections in selection order without local upload', async () => {
+  const second = { ...file, id: 'second-video', name: 'second.mp4', url: '/api/media/second/video.mp4' };
+  api.getAdminMedia.mockResolvedValue(response([file, second, folder])); const onSelect = jest.fn();
+  await mount({ onSelect, kind: 'video', multiple: true });
+  await select('/second.mp4');
+  await act(async () => mockApi.exec('select-file', { id: '/exercise.mp4', toggle: true }));
+  expect(onSelect).not.toHaveBeenCalled(); expect(button('media-upload-toggle')).toBeUndefined();
+  expect(button('media-use-selected').props.disabled).toBe(false);
+  await click('media-use-selected'); expect(onSelect).toHaveBeenCalledWith([second, file]);
+  await act(async () => mockApi.exec('select-file', { id: '/Videos', toggle: true }));
+  expect(button('media-use-selected').props.disabled).toBe(true);
+});
 test("folder double-click and root breadcrumb request the correct parent", async () => {
 	await mount(); await act(async () => mockApi.exec("set-path", { id: "/Videos" }));
 	expect(api.getAdminMedia).toHaveBeenLastCalledWith("auth", expect.objectContaining({ folderId: "folder-uuid", page: 1 }));

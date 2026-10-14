@@ -1,10 +1,10 @@
 import React from "react";
 import renderer, { act } from "react-test-renderer";
-import { Platform } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import TabLayout from "../../app/(tabs)/_layout";
 import { AuthContext } from "../../contexts/AuthContext";
 import { LocaleContext } from "../../contexts/LocaleContext";
-import { Redirect, Tabs } from "expo-router";
+import { Redirect, Tabs, router } from "expo-router";
 jest.mock("../../contexts/AuthContext", () => ({ AuthContext: require("react").createContext({}) }));
 jest.mock("../../contexts/LocaleContext", () => ({ LocaleContext: require("react").createContext({}) }));
 jest.mock("expo-router", () => {
@@ -62,4 +62,16 @@ test.each(["android", "ios", "web"])("%s gives Settings a fixed parent layout an
     expect(options.headerLeft).toEqual(expect.any(Function));
     expect(options.tabBarHideOnKeyboard).toBeUndefined();
   }
+});
+
+test.each(["other", "exercise-videos"])("%s keeps its home return target with a labelled 44-point header button", async name => {
+  Platform.OS = "ios";
+  await act(async () => { tree = renderer.create(screen({ user: { id: "person" }, isLoading: false })); });
+  const options = tree.root.findAllByType(Tabs.Screen).find(item => item.props.name === name).props.options;
+  const button = options.headerLeft();
+  expect(StyleSheet.flatten(button.props.style)).toMatchObject({ minWidth: 44, minHeight: 44 });
+  expect(button.props.accessibilityRole).toBe("button");
+  expect(button.props.accessibilityLabel).toBe("back");
+  button.props.onPress();
+  expect(router.replace).toHaveBeenLastCalledWith("/(tabs)");
 });

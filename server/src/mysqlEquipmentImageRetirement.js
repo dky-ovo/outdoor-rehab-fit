@@ -16,7 +16,7 @@ const MAX_TEXT_BYTES = 8 * 1024 * 1024;
 const BATCH_SIZE = 8;
 const RETRY_MS = 60000;
 const REFERENCE_FIELDS = Object.freeze({
-  app_equipment_items: "image_url,gif_left_url,gif_right_url,video_url,youtube_key,video_url_zh,video_url_en,details_zh,details_en,kinesiology_zh,kinesiology_en,pt_tip_zh,pt_tip_en,ot_tip_zh,ot_tip_en,tcm_zh,tcm_en,care_tip_zh,care_tip_en",
+  app_equipment_items: "image_url,gif_left_url,gif_right_url,video_url,youtube_key,video_url_zh,video_url_en,additional_videos_json,teaching_sections_json,details_zh,details_en,kinesiology_zh,kinesiology_en,pt_tip_zh,pt_tip_en,ot_tip_zh,ot_tip_en,tcm_zh,tcm_en,care_tip_zh,care_tip_en",
   content_items: "title,value",
   app_text_overrides: "zh,en",
   messages: "body,metadata_json",

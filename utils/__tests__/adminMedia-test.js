@@ -1,4 +1,10 @@
 import { ADMIN_MEDIA_LIMITS, mediaAccept, mediaCanSelect, mediaErrorMessage, mediaMimeType, mediaSizeLabel, validateAdminMedia } from "../adminMedia";
+test("only explicit Word picker may select private DOCX, never general media picker", () => {
+	const item = { id: "a", kind: "file", name: "Teaching.docx", source: "upload", size: 100, selectable: false };
+	expect(mediaCanSelect(item, "file")).toBe(true);
+	expect(mediaCanSelect(item)).toBe(false);
+	for (const patch of [{name:"data.csv"}, {archived:true}, {deletedAt:"2026-10-02"}, {source:"external"}, {size:13*1024*1024}]) expect(mediaCanSelect({...item,...patch},"file")).toBe(false);
+});
 
 test.each([["demo.mp4", "video/mp4", "video"], ["DEMO.GIF", "image/gif", "image"], ["demo.JPG", "image/jpeg", "image"], ["demo.mov", "video/quicktime", "video"]])("detects and validates %s without base64", (name, type, kind) => {
 	expect(mediaMimeType({ name })).toBe(type);

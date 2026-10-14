@@ -27,6 +27,9 @@ export function validateAdminMedia(file, kind = "") {
 }
 
 export function mediaCanSelect(item, kind = "") {
+	// Documents stay private attachments; only the explicit Word-import picker
+	// can select them. Never expose arbitrary files as public media.
+	if (kind === "file") return Boolean(item?.id && item.kind === "file" && item.source === "upload" && !item.archived && !item.deletedAt && /\.docx$/i.test(item.name || "") && Number(item.size) > 0 && Number(item.size) <= 12 * 1024 * 1024);
 	if (!item?.url || item.archived || item.deletedAt || item.kind === "folder" || item.kind === "file" || item.selectable === false) return false;
 	return kind === "gif" ? item.mimeType === "image/gif" : !kind || item.kind === kind;
 }

@@ -37,7 +37,7 @@ jest.mock("../../utils/assistantReplyPresentation", () => ({ assistantReplyPrese
 jest.mock("../../hooks/useAndroidBackTarget", () => ({ useAndroidBackTarget: jest.fn() }));
 jest.mock("../../hooks/useKeyboardInset", () => ({ useKeyboardInset: () => ({ visible: false, inset: 0 }) }));
 jest.mock("@react-navigation/elements", () => ({ useHeaderHeight: () => 48 }));
-jest.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
+jest.mock("react-native-safe-area-context", () => ({ SafeAreaProvider: ({ children }) => children, SafeAreaView: require("react-native").View, useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 jest.mock("react-native-responsive-fontsize", () => ({ RFValue: value => value }));
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null, MaterialCommunityIcons: () => null }));
 jest.mock("expo-modules-core", () => ({ requireOptionalNativeModule: () => null }));

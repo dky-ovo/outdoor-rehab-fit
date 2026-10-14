@@ -1,5 +1,6 @@
 (() => {
   'use strict';
+  document.body.classList.add('js-ready');
   const header = document.querySelector('.site-header');
   const toggle = document.querySelector('.menu-toggle');
   const nav = document.querySelector('#site-nav');
@@ -42,10 +43,16 @@
         if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); }
       });
     }, { threshold: 0.07, rootMargin: '0px 0px -24px 0px' });
-    document.querySelectorAll('main section:not(.hero) .head, .about-grid, .compare, .steps, .prep-row, .cat-grid, .topic-list, .app-grid, .chatbot-grid, .impact-grid, .team-group, .partner-logos, .support, .resource-card').forEach(element => {
+    document.querySelectorAll('main section:not(.hero) .head, .about-grid, .compare .card, .step, .prep, .cat-card, .topic-list li, .app-copy, .phone-mock, .chatbot-copy, .chat-thread, .impact-grid, .team-subhead, .person, .partner-logo, .support, .resource-card').forEach(element => {
       if (element.getBoundingClientRect().top > innerHeight) {
+        const index = [...element.parentElement.children].indexOf(element);
+        element.style.setProperty('--reveal-delay', `${Math.min(index % 4, 3) * 55}ms`);
         element.classList.add('reveal-ready'); observer.observe(element);
       }
+    });
+    document.addEventListener('focusin', event => {
+      const target = event.target.closest('.reveal-ready');
+      if (target) { target.classList.add('is-visible'); observer.unobserve(target); }
     });
     reduced.addEventListener('change', event => {
       if (event.matches) { observer.disconnect(); document.querySelectorAll('.reveal-ready').forEach(element => element.classList.add('is-visible')); }
@@ -64,4 +71,37 @@
     }, { rootMargin: '-15% 0px -65% 0px' });
     document.querySelectorAll('main section[id]').forEach(section => observer.observe(section));
   }
+  const screenDialog = document.querySelector('#screen-dialog');
+  const screenZoom = document.querySelector('.screen-zoom');
+  screenZoom?.addEventListener('click', event => {
+    if (typeof screenDialog?.showModal !== 'function') return;
+    event.preventDefault();
+    screenDialog.showModal();
+    document.body.classList.add('dialog-open');
+  });
+  screenDialog?.querySelector('.dialog-close')?.addEventListener('click', () => screenDialog.close());
+  screenDialog?.addEventListener('click', event => {
+    const bounds = screenDialog.getBoundingClientRect();
+    if (event.target === screenDialog && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) screenDialog.close();
+  });
+  screenDialog?.addEventListener('close', () => {
+    document.body.classList.remove('dialog-open');
+    screenZoom?.focus({ preventScroll: true });
+  });
+  document.querySelector('[data-copy-email]')?.addEventListener('click', async event => {
+    const status = document.querySelector('.copy-status');
+    try {
+      await navigator.clipboard.writeText(event.currentTarget.dataset.copyEmail);
+      status.textContent = '已複製電郵地址';
+    } catch { status.textContent = '請選取上方電郵地址複製。'; }
+  });
+  const precisePointer = matchMedia('(hover:hover) and (pointer:fine)');
+  const heroVisual = document.querySelector('.hero-visual');
+  heroVisual?.addEventListener('pointermove', event => {
+    if (reduced.matches || !precisePointer.matches) return;
+    const bounds = heroVisual.getBoundingClientRect();
+    heroVisual.style.setProperty('--glow-x', `${(event.clientX - bounds.left) / bounds.width * 100}%`);
+    heroVisual.style.setProperty('--glow-y', `${(event.clientY - bounds.top) / bounds.height * 100}%`);
+  }, { passive: true });
+  heroVisual?.addEventListener('pointerleave', () => { heroVisual.style.removeProperty('--glow-x'); heroVisual.style.removeProperty('--glow-y'); });
 })();

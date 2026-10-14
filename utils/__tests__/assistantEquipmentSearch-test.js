@@ -24,14 +24,15 @@ test("matches simplified, traditional, English and the legacy Tai Chi equipment 
 	expect(findLocalEquipment("How do I use Push Hands?", catalog)?.id).toBe(0);
 });
 
-test("renders APP usage content as the same numbered steps shown in Facility Guide", () => {
+test("direct instructions retain the complete maintained section including its warning", () => {
 	const detailedCatalog = [{
 		...catalog[0],
 		details: "首先，雙腳分開站立。注意膝關節不能超過腳趾。\n\n兩隻手緊握手柄。\n\n記得力度要適中。",
 	}];
 	const answer = localEquipmentAnswer("太極揉推器如何使用", detailedCatalog, "zh");
-	expect(answer.reply).toBe("使用步驟\n\n1\n首先，雙腳分開站立。\n\n2\n兩隻手緊握手柄。\n\n3\n記得力度要適中。");
-	expect(answer.reply).not.toContain("注意膝關節");
+	expect(answer.reply).toContain(detailedCatalog[0].details);
+	expect(answer.reply).toContain("注意膝關節不能超過腳趾");
+	expect(answer.guideContentDirect).toBe(true);
 	expect(answer.recommendations).toEqual([expect.objectContaining({ id: "0", name: "太極揉推器" })]);
 	expect(answer.deepSeekUsed).toBe(false);
 
@@ -39,15 +40,13 @@ test("renders APP usage content as the same numbered steps shown in Facility Gui
 	expect(associated.reply).toBe(answer.reply);
 });
 
-test("returns all 11 APP steps for Tai Chi Wheel without the separate warning text", () => {
+test("Tai Chi Wheel keeps its full instructions and warning instead of extracting only steps", () => {
 	const taiChiWheel = equipmentTranslations.zh.equipmentList.find((item) => item.id === 0);
 	const answer = localEquipmentAnswer("太極揉推器如何使用", [taiChiWheel], "zh");
-	const numberedSteps = answer.reply.match(/(?:^|\n\n)\d+\n/g) || [];
-	expect(answer.reply.startsWith("使用步驟")).toBe(true);
-	expect(numberedSteps).toHaveLength(11);
+	expect(answer.reply).toContain(taiChiWheel.details);
 	expect(answer.reply).toContain("首先，雙腳分開站立，站立嘅時候雙腳距離同膊頭一樣咁闊");
 	expect(answer.reply).toContain("最後，我地反方向再試下。");
-	expect(answer.reply).not.toContain("注意膝關節不能超過腳趾");
+	expect(answer.reply).toContain("注意膝關節不能超過腳趾");
 	expect(answer.recommendations[0]).toMatchObject({ id: "0", name: "太極揉推器" });
 });
 
@@ -55,7 +54,7 @@ test("returns an immediate Facility Guide answer and a stable detail entry", () 
 	const result = localEquipmentAnswer("太极揉推器怎么使用？", catalog, "zh");
 	expect(result.source).toBe("app_content");
 	expect(result.deepSeekUsed).toBe(false);
-	expect(result.reply).toContain("使用步驟");
+	expect(result.reply).toContain("使用說明");
 	expect(result.reply).toContain("雙手握住手柄");
 	expect(result.recommendations[0]).toMatchObject({ id: "0", name: "太極揉推器" });
 	expect(result.action).toBe("equipment_local");
@@ -190,7 +189,7 @@ test.each([
 ])("v2 %s removes obsolete body and base, not only its card", (_name, entries) => {
 	const answer = v2Answer({ reply: `先前說明：${kneeQuote}` });
 	const displayed = displayV2(answer, entries);
-	expect(displayed.reply).toContain("請重新發送問題");
+	expect(displayed.reply).toContain("請重新提問");
 	expect(displayed.reply).not.toContain(kneeQuote);
 	expect(displayed.equipmentReplyBase).toBeUndefined();
 	expect(displayed.equipmentReplyVersion).toBeUndefined();
@@ -210,14 +209,14 @@ test.each([
 	answer.recommendations = [{ ...answer.recommendations[0], ...invalid }];
 	const displayed = displayV2(answer);
 	expect(displayed.recommendations).toEqual([]);
-	expect(displayed.reply).toContain("請重新發送問題");
+	expect(displayed.reply).toContain("請重新提問");
 	expect(displayed.equipmentReplyBase).toBeUndefined();
 });
 
 test.each([{ deepSeekUsed: false }, { recommendationsFinal: false }, { source: "external_search" }, { knowledgeSource: "model_guess" }])("incomplete v2 flags %j never fabricate a local AI recommendation", flags => {
 	const displayed = displayV2(v2Answer(flags));
 	expect(displayed.recommendations).toEqual([]);
-	expect(displayed.reply).toContain("未能核實");
+	expect(displayed.reply).toContain("可能已不適用");
 });
 
 test("v2 follows the user history's knee concern without borrowing an assistant's foot statement", () => {
@@ -254,7 +253,7 @@ test.each(["幫我整理今天的行程", "附近公園在哪裡", "你好", "�
 	]);
 	const last = assistantMessagesForDisplay(messages, verifiedCatalog).at(-1);
 	expect(last.recommendations).toEqual([]);
-	expect(last.reply).toContain("請重新發送問題");
+	expect(last.reply).toContain("請重新提問");
 	expect(last.reply).not.toContain(kneeQuote);
 });
 
@@ -284,5 +283,5 @@ test("disabling TCM that is itself the v2 symptom evidence clears its old quoted
 	expect(displayed.reply).not.toContain(initial.tcmTip);
 	expect(displayed.equipmentReplyBase).toBeUndefined();
 	expect(displayed.recommendations).toEqual([]);
-	expect(displayed.reply).toContain("請重新發送問題");
+	expect(displayed.reply).toContain("請重新提問");
 });

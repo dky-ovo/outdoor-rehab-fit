@@ -1,0 +1,10 @@
+# Layer after the CURRENT deployment's Compose files; this is not standalone.
+# Requires a separately released compatible backend. This file selects no image.
+# Supply values through a private env file; do not print resolved configuration.
+services:
+  api:
+    environment:
+      BAILIAN_FAQ_ENABLED: "${BAILIAN_FAQ_ENABLED:-false}"
+      BAILIAN_MODEL_ID: "${BAILIAN_MODEL_ID:-}"
+      BAILIAN_BASE_URL: "${BAILIAN_BASE_URL:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}"
+      DASHSCOPE_API_KEY: "${DASHSCOPE_API_KEY:-}"

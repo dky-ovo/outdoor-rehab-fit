@@ -1,7 +1,35 @@
+import { assistantAppText } from "../server/src/assistantContentPolicy";
 // Presentation only. Keep stored replies, evidence and model context intact.
 // Match our known source wrappers, never delete arbitrary APP/原文 words.
 function withoutSourceWrappers(text) {
   return text
+    // Exact legacy answer templates only. Saved conversations are immutable;
+    // remove internal editorial provenance on display without weakening the
+    // accompanying limitation, stop instruction or request for assessment.
+    .replaceAll("FAQ 比較的下肢關節健身架", "下肢關節健身架")
+    .replaceAll("In the FAQ comparison, the lower-limb", "The lower-limb")
+    .replaceAll("現有 FAQ 列出的成年人活動量為", "成年人一般的活動量建議為")
+    .replaceAll("The reviewed FAQ lists ", "General activity guidance is ")
+    .replaceAll("現有 FAQ 沒有足夠資料把任何戶外器材作為改善手肘痛的治療建議。", "不能單憑器材資訊，判斷哪項運動適合您的手肘痛。")
+    .replaceAll("The FAQ does not establish any outdoor machine as treatment for elbow pain.", "Equipment information alone cannot establish a suitable exercise for your elbow pain.")
+    .replaceAll("這些是現有 FAQ 的使用注意，不能確認器材適合您的情況；", "這些注意事項不能確認器材適合您的情況；")
+    .replaceAll("These precautions from the reviewed FAQ do not establish suitability;", "These precautions do not establish suitability;")
+    .replaceAll("現有 FAQ 的相關注意是：", "請注意：")
+    .replaceAll("The reviewed FAQ notes that its rotating platform", "Its rotating platform")
+    .replaceAll("這些是現有 FAQ 的注意事項，不能把掌上壓當作改善手腕痛的治療。", "不能把掌上壓當作改善手腕痛的治療。")
+    .replaceAll("These precautions come from the reviewed FAQ; push-ups are not a treatment recommendation for wrist pain.", "Push-ups are not a treatment recommendation for wrist pain.")
+    .replaceAll("現有 FAQ 亦沒有適用所有人的固定拉繩次數，", "拉繩次數不宜一概而論，")
+    .replaceAll("目前項目教學的手部操作說明有互相衝突之處，需先向場地人員或治療師核對；我不會替您選擇單手或雙手拉法。", "正確的拉法仍需向場地人員或治療師確認；確認前，不要自行選擇單手或雙手操作。")
+    .replaceAll("the project's hand-operation instructions contain conflicting directions and need checking with venue staff or a physiotherapist. I will not choose a one-handed or two-handed technique for you.", "the correct technique needs confirmation with venue staff or a physiotherapist. Until then, do not choose a one-handed or two-handed technique yourself.")
+    .replaceAll("The reviewed FAQ also gives no fixed repetition count suitable for everyone.", "There is no single repetition count suitable for everyone.")
+    .replaceAll("下方是供核對的教學入口。", "下方可查看器材圖片和說明。")
+    .replaceAll("The guide below is for checking the equipment.", "The pictures and instructions are below.")
+    .replaceAll("這是根據項目 FAQ 的陪同及疼痛注意事項，不是判斷痛楚原因。", "這些是陪同時的注意事項，不能判斷痛楚原因。")
+    .replaceAll("These are companion and pain precautions from the project FAQ, not a diagnosis.", "These are companion and pain precautions, not a diagnosis.")
+    .replaceAll("目前的 FAQ 未能確認您所用版本的分享功能及步驟；", "我未能確認您所用版本的分享功能及步驟；")
+    .replaceAll("The FAQ cannot confirm the sharing features or steps in your version.", "I cannot confirm the sharing features or steps in your version.")
+    .replaceAll("AI 助手可參考已整理的常見問題，回答", "AI 助手可回答")
+    .replaceAll("The AI assistant can refer to the reviewed FAQ for questions about", "The AI assistant can answer questions about")
     .replace(/根據APP設施教學，以下器材的說明有明確提及([^。\n]+)疼痛或不適。以下列出相應原文及原文所述的適用情況，方便您查閱。/g,
       "以下是與$1疼痛或不適相關的器材說明及適用情況，供您參考。")
     .replace(/According to the APP Facility Guide, the following equipment descriptions explicitly discuss ([^.\n]+) discomfort\. Here are the original passages and their stated conditions\./g,
@@ -63,5 +91,5 @@ export function formatAssistantDisplayText(value, protectedPassages = []) {
     result += withoutSourceWrappers(value.slice(cursor, start)) + value.slice(start, end);
     cursor = end;
   }
-  return result + withoutSourceWrappers(value.slice(cursor));
+  return assistantAppText(result + withoutSourceWrappers(value.slice(cursor)));
 }

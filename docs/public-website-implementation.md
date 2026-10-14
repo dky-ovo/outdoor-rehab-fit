@@ -25,6 +25,10 @@ python scripts/package-public-website.py
 
 ## 上线后更新
 
+- 2026-10-09 v6：按用户最终要求，从首发 v1 安装包恢复首页的原始章节顺序、列布局与正文，保留后续人物和学校链接修正；只细化字体、间距、边框、阴影和悬停反馈，各主章节至少填满扣除导航后的视窗高度。器械恢复持续、错峰上下浮动，尊重减少动态偏好。头像覆盖标签与资源栏目（导航、三页 HTML、sitemap 条目）已移除；原图可点击放大，联系电邮可复制。最新上传说明为 `output/public-website/升级交互-v6-20261009.md`，使用 v6 更新脚本，须由用户上传执行后线上生效。
+
+- 2026-10-09：参考 MotionSites 的 Glow Features、Lumina、Blog Showcase 公开提示词，统一六页流体宽度、首屏比例、图文布局与轻量动效。设计与检查记录见 `docs/public-website-layout-20261009.md`，本次最新上传方式见 `output/public-website/升级布局-20261009.md`；使用 v5 脚本，旧更新包保留。
+
 - 吳曉峰教授头像及姓名改为计算机学系官方简介：https://www.polyu.edu.hk/comp/people/academic-staff/prof-ng-hiu-fung-peter/
 - 五个合作伙伴标志均链接各机构官方介绍页，保留原有排版并添加悬停反馈和键盘焦点提示，按用户要求不显示外链箭头。
 - 合作学者补充「李欣迪」，不加职称。按用户要求，使用内置 imagegen 为 Cindy.jpg 去背景，保留人物并保存透明 PNG `assets/cindy-li-cutout.png`；姓名下分两行显示用户提供的「香港大學」「社會工作及社會行政學系」。合作学者共四人，研究团队共十四人。

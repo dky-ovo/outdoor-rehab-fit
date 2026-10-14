@@ -141,11 +141,12 @@ test("HTTP TCM retrieval keeps the existing safe excerpt guard", async () => fix
 	assert.ok(result.data.reply.includes("並非針對症狀的使用建議"));
 }, (_body, number) => number === 1 ? toolResponse(call("get_facility_guide", { id: "0", fields: ["tcmTip"] })) : answer({ guideReferences: [{ id: "0", field: "tcmTip" }] })));
 
-test("HTTP provider failure or malformed/empty content returns a nonempty error reply", async () => {
+test("HTTP provider failure stays failed while malformed content recovers with a verified-content clarification", async () => {
 	for (const payload of [null, answer(null), answer([]), answer({ reply: "" }), answer({ reply: { invalid: "object" } }), { choices: [{ finish_reason: "length", message: { content: "{}" } }] }]) {
 		await fixture(async ({ ask }) => {
 			const result = await ask("你好");
-			assert.equal(result.status, 502);
+			assert.equal(result.status, payload === null ? 502 : 200);
+			if (payload !== null) assert.equal(result.data.recoveryReason, "providerInvalidResponse");
 			assert.ok(result.data.reply.trim());
 			assert.deepEqual(result.data.recommendations, []);
 		}, () => { if (payload === null) throw new Error("provider failed"); return payload; });
@@ -155,7 +156,10 @@ test("HTTP provider failure or malformed/empty content returns a nonempty error 
 test("HTTP content questions without a verified reference do not return invented provider instructions", async () => fixture(async ({ ask }) => {
 	const result = await ask("那个有圆盘的器材怎么操作");
 	assert.equal(result.status, 200);
-	assert.ok(result.data.reply.includes("器材名稱"));
+	assert.match(result.data.reply, /哪一款器材/);
+	assert.match(result.data.reply, /告訴我名稱/);
+	assert.match(result.data.reply, /描述它的外形/);
+	assert.doesNotMatch(result.data.reply, /照片|相片|拍照/);
 	assert.ok(!result.data.reply.includes("INVENTED_INSTRUCTIONS"));
 	assert.deepEqual(result.data.recommendations, []);
 }, () => answer({ reply: "INVENTED_INSTRUCTIONS", guideReferences: [{ id: "missing", field: "details" }] })));
@@ -187,7 +191,10 @@ for (const variant of ["context-only", "read-without-reference", "invalid-refere
 		});
 		assert.equal(result.status, 200);
 		assert.deepEqual(result.data.recommendations, []);
-		assert.match(result.data.reply, /could not verify/);
+		assert.match(result.data.reply, /Which piece of equipment/);
+		assert.match(result.data.reply, /Tell me its name/);
+		assert.match(result.data.reply, /describe what it looks like/);
+		assert.doesNotMatch(result.data.reply, /photo|picture|upload an? image/i);
 		assert.ok(!result.data.reply.includes("MODEL_UNVERIFIED_INSTRUCTIONS"));
 	}, (_body, number) => {
 		if (number === 1 && ["read-without-reference", "failed-read", "search-only"].includes(variant)) return toolResponse(variant === "search-only"
@@ -209,7 +216,8 @@ test("HTTP consecutive contextual follow-ups without tools or references never r
 	for (const message of ["Tell me more", "Movement steps?", "More details", "Please tell me more", "Continue", "再讲详细点", "可以講詳細啲？", "Tell me more"]) {
 		const result = await ask(message, { locale: "en", history });
 		assert.equal(result.status, 200);
-		assert.match(result.data.reply, /could not verify/);
+		assert.match(result.data.reply, /Which piece of equipment/);
+		assert.match(result.data.reply, /Tell me its name/);
 		assert.ok(!result.data.reply.includes("MODEL_UNVERIFIED_INSTRUCTIONS"));
 		assert.deepEqual(result.data.recommendations, []);
 		history.push({ role: "user", content: message }, { role: "assistant", content: result.data.reply });
@@ -220,7 +228,8 @@ test("HTTP elided follow-up with no available original context still requires ve
 	for (const message of ["Tell me more", "Continue", "More details", "再讲详细点"]) {
 		const result = await ask(message, { locale: "en", history: [] });
 		assert.equal(result.status, 200);
-		assert.match(result.data.reply, /could not verify/);
+		assert.match(result.data.reply, /Which piece of equipment/);
+		assert.match(result.data.reply, /Tell me its name/);
 		assert.ok(!result.data.reply.includes("MODEL_UNVERIFIED_INSTRUCTIONS"));
 		assert.deepEqual(result.data.recommendations, []);
 	}
@@ -308,3 +317,18 @@ test("one shared deadline resolves even when a provider ignores abort", async ()
 	assert.equal(signal.aborted, true);
 	assert.ok(Date.now() - start < 1000);
 });
+
+
+test("HTTP discards an outside answer including its unsupported prose while keeping normal greetings conversational", async () => fixture(async ({ ask }) => {
+	const result = await ask("你好");
+	assert.equal(result.status, 200);
+	assert.match(result.data.reply, /器材/);
+	assert.doesNotMatch(result.data.reply, /NHS|OUTSIDE CLAIM|https?:\/\//);
+}, () => answer({ reply: "According to NHS: OUTSIDE CLAIM https://www.nhs.uk/", recommendations: [] })));
+
+test("HTTP recommendation reason cannot smuggle an outside answer alongside a valid guide ID", async () => fixture(async ({ ask }) => {
+	const result = await ask("我想鍛煉上肢，推薦器材");
+	assert.equal(result.status, 200);
+	assert.doesNotMatch(JSON.stringify(result.data), /OUTSIDE CLAIM|https?:\/\//);
+	assert.ok(result.data.recommendations.every(item => item.reason === ""));
+}, () => answer({ reply: "可以查看相關器材。", recommendations: [{ id: "0", reason: "OUTSIDE CLAIM https://example.com" }] })));

@@ -8,12 +8,11 @@ export default function AdminMediaField({ label, value = "", legacyValue = "", k
 	return <View style={styles.field}>
 		<Text style={styles.label}>{label}</Text>
 		<View style={styles.buttons}>
-			<TouchableOpacity testID={`media-field-upload-${kind}`} style={styles.button} onPress={() => setView("upload")} disabled={disabled}><Text style={styles.buttonText}>从电脑 / 本地导入</Text></TouchableOpacity>
 			<TouchableOpacity testID={`media-field-library-${kind}`} style={styles.button} onPress={() => setView("library")} disabled={disabled}><Text style={styles.buttonText}>从文件存储导入</Text></TouchableOpacity>
 		</View>
 		{!!value && <><Text style={styles.note}>已选择文件；保存本页后应用更改。</Text>{kind !== "video" && <Image source={{ uri: resolveApiAssetUrl(value) }} style={styles.preview} resizeMode="contain" />}<TouchableOpacity style={styles.clear} disabled={disabled} onPress={() => onChange("")}><Text style={styles.clearText}>移除此处选择（不删除文件）</Text></TouchableOpacity></>}
 		{!value && !!legacyValue && <Text style={styles.note}>旧版共用视频尚未按语言分类；请在对应中文或英文通道导入后替换。</Text>}
-		{kind === "video" && <Text style={styles.note}>推荐 MP4（H.264/AAC），最大 250 MB；上传成功后仍需保存本页内容。</Text>}
+		{kind === "video" && <Text style={styles.note}>推荐 MP4（H.264/AAC），最大 250 MB；请先在「文件存储」上传，再选择并保存本页内容。</Text>}
 		{view && <Modal visible transparent animationType="fade" onRequestClose={() => setView(null)}><View style={styles.overlay}><View style={[styles.dialog, Platform.OS === "web" && { maxWidth: 1180 }]}><View style={styles.dialogHeader}><Text style={styles.label}>{label}</Text><TouchableOpacity testID="media-field-close" style={styles.button} onPress={() => setView(null)}><Text style={styles.buttonText}>关闭 / 取消</Text></TouchableOpacity></View><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.dialogBody}><AdminMediaLibrary token={token} permissions={permissions} kind={kind} initialView={view} onSelect={(item) => { onChange(item.url); setView(null); }} /></ScrollView></View></View></Modal>}
 	</View>;
 }

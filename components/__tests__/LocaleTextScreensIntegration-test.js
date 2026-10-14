@@ -17,7 +17,11 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const mockNavigation = { setOptions: jest.fn(), isFocused: () => true, addListener: jest.fn(() => jest.fn()) };
 jest.mock("expo-router", () => ({ router: { dismissTo: jest.fn(), replace: jest.fn() }, useNavigation: () => mockNavigation, useLocalSearchParams: () => ({ id: "session-1" }), useFocusEffect: callback => require("react").useEffect(callback, [callback]) }));
 jest.mock("../../contexts/AuthContext", () => ({ AuthContext: require("react").createContext({}) }));
-jest.mock("../../utils/api", () => ({ getAppTexts: jest.fn(), getCachedEquipmentCatalog: () => null, loadCachedEquipmentCatalog: async () => null, getEquipmentCatalog: jest.fn(), sendAssistantMessage: jest.fn(), resolveApiAssetUrl: value => value }));
+jest.mock("../../utils/api", () => {
+  const sendAssistantMessage = jest.fn();
+  return { getAppTexts: jest.fn(), getCachedEquipmentCatalog: () => null, loadCachedEquipmentCatalog: async () => null, getEquipmentCatalog: jest.fn(), sendAssistantMessage,
+    ...require("../../scripts/test-helpers/assistantJobApi").assistantJobApi(sendAssistantMessage), resolveApiAssetUrl: value => value };
+});
 jest.mock("../../utils/sessions", () => ({ getSessionById: jest.fn(), getSessions: jest.fn(), saveSession: jest.fn() }));
 jest.mock("../../utils/alert", () => ({ showAlert: jest.fn() }));
 jest.mock("../../hooks/useAndroidBackTarget", () => ({ useAndroidBackTarget: jest.fn() }));
@@ -29,7 +33,7 @@ jest.mock("@react-navigation/elements", () => ({ useHeaderHeight: () => 48 }));
 jest.mock("expo-modules-core", () => ({ requireOptionalNativeModule: () => null }));
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null, MaterialCommunityIcons: () => null }));
 jest.mock("react-native-responsive-fontsize", () => ({ RFValue: value => value }));
-jest.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
+jest.mock("react-native-safe-area-context", () => ({ SafeAreaProvider: ({ children }) => children, SafeAreaView: require("react-native").View, useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 jest.mock("expo-localization", () => ({ getLocales: () => [{ languageCode: "zh" }] }));
 jest.mock("@react-native-async-storage/async-storage", () => ({ getItem: jest.fn(), setItem: jest.fn(async () => {}) }));
 

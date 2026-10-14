@@ -19,11 +19,13 @@ import { RFValue } from "react-native-responsive-fontsize";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from "react-native-responsive-screen";
 import { LocaleContext } from "../../../contexts/LocaleContext";
 import { AuthContext } from "../../../contexts/AuthContext";
-import { getSessions, saveSession } from "../../../utils/sessions";
+import { saveSession } from "../../../utils/sessions";
 import { getWeeklyProgress } from "../../../utils/goals";
 import { trackGoalAchieved, trackSessionCompleted } from "../../../utils/usage";
 import { formatDuration, formatDateTime } from "../../../utils/dates";
 import { showAlert } from "../../../utils/alert";
+import { useSessionEquipment } from "../../../hooks/useSessionEquipment";
+import { equipmentUseCount, sortSessionEquipment } from "../../../utils/sessionEquipment";
 import { useActiveSession } from "../../../contexts/ActiveSessionContext";
 
 const EMOTIONS = [
@@ -108,7 +110,7 @@ const SessionSummary = ({ embedded = false, embeddedSummaryId, onExit } = {}) =>
 	const [pickerVisible, setPickerVisible] = useState(false);
 	const [customEquipmentVisible, setCustomEquipmentVisible] = useState(false);
 	const [customEquipmentName, setCustomEquipmentName] = useState("");
-	const [equipmentUsage, setEquipmentUsage] = useState({});
+	const { bookmarks, usage: equipmentUsage } = useSessionEquipment(user?.token);
 	const [saving, setSaving] = useState(false);
 	const savingRef = useRef(false);
 	const allowLeaveRef = useRef(false);
@@ -197,28 +199,10 @@ const SessionSummary = ({ embedded = false, embeddedSummaryId, onExit } = {}) =>
 		return unsubscribe;
 	}, [embedded, hasValidPendingSummary, navigation, showUnsavedLeavePrompt]);
 
-	useEffect(() => {
-		let mounted = true;
-		getSessions(user?.token).then((sessions) => {
-			const counts = {};
-			sessions.forEach((session) => (session.exercises || []).forEach((exercise) => {
-				const keys = [exercise.equipmentId, exercise.name].filter(Boolean).map(String);
-				keys.forEach((key) => { counts[key] = (counts[key] || 0) + 1; });
-			}));
-			if (mounted) setEquipmentUsage(counts);
-		}).catch(() => {});
-		return () => { mounted = false; };
-	}, [user?.token]);
-
 	const sortedEquipmentData = useMemo(() => {
-		const items = Array.isArray(equipmentData) ? [...equipmentData] : [];
-		items.sort((a, b) => {
-			const aCount = equipmentUsage[String(a.id)] || equipmentUsage[String(a.name)] || 0;
-			const bCount = equipmentUsage[String(b.id)] || equipmentUsage[String(b.name)] || 0;
-			return bCount - aCount;
-		});
+		const items = sortSessionEquipment(equipmentData, bookmarks, equipmentUsage);
 		return [...items, { id: "__other__", name: i18n.t("otherEquipment"), isOther: true }];
-	}, [equipmentData, equipmentUsage, i18n, locale, textRevision]);
+	}, [bookmarks, equipmentData, equipmentUsage, i18n, locale, textRevision]);
 
 	// Auto-fill the three type checkboxes from the exercise table (outdoor users);
 	// home users can still toggle them manually.
@@ -383,7 +367,7 @@ const SessionSummary = ({ embedded = false, embeddedSummaryId, onExit } = {}) =>
 						</View>
 						<Text style={[styles.blockLabel, { marginTop: 14 }]}>{i18n.t("totalDuration")}</Text>
 						<View style={styles.manualDurationRow}>
-							<TextInput style={styles.durationInput} value={manualDurationMinutes} onChangeText={(value) => setManualDurationMinutes(value.replace(/[^0-9]/g, "").slice(0, 4))} keyboardType="number-pad" maxLength={4} />
+							<TextInput style={styles.durationInput} value={manualDurationMinutes} placeholder="--" accessibilityLabel={i18n.t("totalDuration")} onChangeText={(value) => setManualDurationMinutes(value.replace(/[^0-9]/g, "").slice(0, 4))} keyboardType="number-pad" maxLength={4} />
 							<Text style={styles.durationUnit}>{i18n.t("minutes")}</Text>
 						</View>
 					</View>
@@ -399,20 +383,6 @@ const SessionSummary = ({ embedded = false, embeddedSummaryId, onExit } = {}) =>
 						</View>
 					</>
 				)}
-
-				<View style={styles.block}>
-					<Text style={styles.blockLabel}>{i18n.t("typeChecklist")}</Text>
-					{[
-						{ key: "aerobic", label: i18n.t("aerobicDone") },
-						{ key: "balance", label: i18n.t("balanceDone") },
-						{ key: "muscle", label: i18n.t("muscleDone") },
-					].map(({ key, label }) => (
-						<TouchableOpacity key={key} style={styles.checkRow} onPress={() => toggleType(key)}>
-							<Ionicons name={types[key] ? "checkbox" : "square-outline"} size={RFValue(24)} color={types[key] ? "#2E8B57" : "#888"} />
-							<Text style={styles.checkLabel}>{label}</Text>
-						</TouchableOpacity>
-					))}
-				</View>
 
 				{mode === "outdoor" ? (
 					<View style={styles.block}>
@@ -443,6 +413,20 @@ const SessionSummary = ({ embedded = false, embeddedSummaryId, onExit } = {}) =>
 						) : null}
 					</View>
 				) : null}
+
+				<View style={styles.block}>
+					<Text style={styles.blockLabel}>{i18n.t("typeChecklist")}</Text>
+					{[
+						{ key: "aerobic", label: i18n.t("aerobicDone") },
+						{ key: "balance", label: i18n.t("balanceDone") },
+						{ key: "muscle", label: i18n.t("muscleDone") },
+					].map(({ key, label }) => (
+						<TouchableOpacity key={key} style={styles.checkRow} onPress={() => toggleType(key)}>
+							<Ionicons name={types[key] ? "checkbox" : "square-outline"} size={RFValue(24)} color={types[key] ? "#2E8B57" : "#888"} />
+							<Text style={styles.checkLabel}>{label}</Text>
+						</TouchableOpacity>
+					))}
+				</View>
 
 				<View style={styles.block}>
 					<Text style={styles.blockLabel}>{i18n.t("emotionScale")}</Text>
@@ -491,7 +475,7 @@ const SessionSummary = ({ embedded = false, embeddedSummaryId, onExit } = {}) =>
 									<Text style={styles.modalItemText} numberOfLines={2}>
 										{item.name}
 									</Text>
-									{!item.isOther && (equipmentUsage[String(item.id)] || equipmentUsage[String(item.name)] || 0) > 0 ? <Text style={styles.frequentLabel}>{i18n.t("frequentlyUsed")}</Text> : null}
+									{!item.isOther && bookmarks[String(item.id)] ? <Ionicons name="heart" size={RFValue(20)} color="#840B1C" accessibilityLabel={i18n.t("favorite")} style={{ marginLeft: 8 }} /> : null}{!item.isOther && equipmentUseCount(item, equipmentUsage) > 0 ? <Text style={styles.frequentLabel}>{i18n.t("frequentlyUsed")}</Text> : null}
 								</TouchableOpacity>
 							)}
 						/>

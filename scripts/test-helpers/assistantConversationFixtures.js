@@ -1,4 +1,5 @@
 const PREFIX = "@outdoor_fit_ai_conversations_v2:";
+const seededConversations = new WeakMap();
 
 export function currentAssistantConversation(messages, { owner = "one", locale = "zh", authSessionId = "test-session" } = {}) {
   return JSON.stringify({
@@ -16,6 +17,7 @@ export function currentAssistantConversation(messages, { owner = "one", locale =
 // so their fixtures keep that scope explicit under the v2 storage contract.
 export function mockCurrentAssistantConversation(storage, messages) {
   const from = storage.setItem.mock.calls.length;
+  seededConversations.set(storage, { from, messages });
   storage.getItem.mockImplementation(async key => {
     const written = storage.setItem.mock.calls.slice(from).reverse().find(([saved]) => saved === key);
     if (written) return written[1];
@@ -29,7 +31,10 @@ export function mockCurrentAssistantConversation(storage, messages) {
 }
 
 export function persistedCurrentAssistantMessages(storage) {
-  const raw = [...storage.setItem.mock.calls].reverse().find(([key]) => key.startsWith(PREFIX))?.[1];
-  if (!raw) return [];
+  const seeded = seededConversations.get(storage);
+  const raw = storage.setItem.mock.calls.slice(seeded?.from || 0).reverse().find(([key]) => key.startsWith(PREFIX))?.[1];
+  // A no-op restore need not rewrite storage. In that case the seeded value
+  // remains persisted, just as getItem above continues to return that value.
+  if (!raw) return seeded?.messages || [];
   return JSON.parse(raw).conversations.find(item => !item.archived && !item.legacy && item.authSessionId === "test-session")?.messages || [];
 }

@@ -19,8 +19,10 @@ import { RFValue } from "react-native-responsive-fontsize";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from "react-native-responsive-screen";
 import { LocaleContext } from "../../../contexts/LocaleContext";
 import { AuthContext } from "../../../contexts/AuthContext";
-import { getSessionById, getSessions, saveSession } from "../../../utils/sessions";
+import { getSessionById, saveSession } from "../../../utils/sessions";
 import { showAlert } from "../../../utils/alert";
+import { useSessionEquipment } from "../../../hooks/useSessionEquipment";
+import { equipmentUseCount, sortSessionEquipment } from "../../../utils/sessionEquipment";
 
 const EMOTIONS = [
 	{ value: 1, emoji: "😞" },
@@ -100,7 +102,7 @@ export default function EditSession() {
 	const [pickerVisible, setPickerVisible] = useState(false);
 	const [customEquipmentVisible, setCustomEquipmentVisible] = useState(false);
 	const [customEquipmentName, setCustomEquipmentName] = useState("");
-	const [equipmentUsage, setEquipmentUsage] = useState({});
+	const { bookmarks, usage: equipmentUsage } = useSessionEquipment(user?.token);
 	const [saving, setSaving] = useState(false);
 	const savingRef = useRef(false);
 	const initialSnapshotRef = useRef("");
@@ -169,21 +171,6 @@ export default function EditSession() {
 		return () => { active = false; };
 	}, [i18n, id, navigation, user?.token]);
 
-	useEffect(() => {
-		let active = true;
-		getSessions(user?.token).then((records) => {
-			if (!active) return;
-			const counts = {};
-			records.forEach((record) => (record.exercises || []).forEach((exercise) => {
-				[exercise.equipmentId, exercise.name].filter((key) => key !== null && key !== undefined && key !== "").map(String).forEach((key) => {
-					counts[key] = (counts[key] || 0) + 1;
-				});
-			}));
-			setEquipmentUsage(counts);
-		}).catch(() => {});
-		return () => { active = false; };
-	}, [user?.token]);
-
 	const currentSnapshot = useMemo(() => editableSnapshot({ completedDate, completedTime, durationMinutes, emotion, rpe, journal, exercises, types }), [completedDate, completedTime, durationMinutes, emotion, exercises, journal, rpe, types]);
 	const isDirty = Boolean(session && initialSnapshotRef.current && currentSnapshot !== initialSnapshotRef.current);
 
@@ -243,14 +230,9 @@ export default function EditSession() {
 	}, [attemptLeave, navigation]));
 
 	const sortedEquipmentData = useMemo(() => {
-		const items = Array.isArray(equipmentData) ? [...equipmentData] : [];
-		items.sort((a, b) => {
-			const aCount = equipmentUsage[String(a.id)] || equipmentUsage[String(a.name)] || 0;
-			const bCount = equipmentUsage[String(b.id)] || equipmentUsage[String(b.name)] || 0;
-			return bCount - aCount;
-		});
+		const items = sortSessionEquipment(equipmentData, bookmarks, equipmentUsage);
 		return [...items, { id: "__other__", name: i18n.t("otherEquipment"), isOther: true }];
-	}, [equipmentData, equipmentUsage, i18n, locale, textRevision]);
+	}, [bookmarks, equipmentData, equipmentUsage, i18n, locale, textRevision]);
 
 	const selectEquipment = (item) => {
 		setPickerVisible(false);
@@ -350,12 +332,8 @@ export default function EditSession() {
 						<View style={styles.timingField}><Text style={styles.fieldCaption}>{i18n.t("manualTime")}</Text><TextInput style={styles.timingInput} value={completedTime} onChangeText={setCompletedTime} placeholder="HH:mm" autoCapitalize="none" maxLength={5} /></View>
 					</View>
 					<Text style={[styles.label, { marginTop: 14 }]}>{i18n.t("totalDuration")}</Text>
-					<View style={styles.durationInputRow}><TextInput style={styles.durationInput} value={durationMinutes} onChangeText={(value) => setDurationMinutes(value.replace(/[^0-9]/g, "").slice(0, 4))} placeholder="30" keyboardType="number-pad" maxLength={4} /><Text style={styles.durationUnit}>{i18n.t("minutes")}</Text></View>
+					<View style={styles.durationInputRow}><TextInput style={styles.durationInput} value={durationMinutes} onChangeText={(value) => setDurationMinutes(value.replace(/[^0-9]/g, "").slice(0, 4))} placeholder="--" keyboardType="number-pad" maxLength={4} /><Text style={styles.durationUnit}>{i18n.t("minutes")}</Text></View>
 				</View>
-
-				<View style={styles.block}><Text style={styles.label}>{i18n.t("typeChecklist")}</Text>{[
-					["aerobic", "aerobicDone"], ["balance", "balanceDone"], ["muscle", "muscleDone"],
-				].map(([key, labelKey]) => <TouchableOpacity key={key} style={styles.checkRow} onPress={() => setTypes((previous) => ({ ...previous, [key]: !previous[key] }))}><Ionicons name={types[key] ? "checkbox" : "square-outline"} size={24} color={types[key] ? "#2E8B57" : "#888"} /><Text style={styles.checkText}>{i18n.t(labelKey)}</Text></TouchableOpacity>)}</View>
 
 				{session.mode === "outdoor" ? <View style={styles.block}>
 					<Text style={styles.label}>{i18n.t("exerciseTypeRecord")}</Text>
@@ -373,6 +351,10 @@ export default function EditSession() {
 					))}
 				</View> : null}
 
+				<View style={styles.block}><Text style={styles.label}>{i18n.t("typeChecklist")}</Text>{[
+					["aerobic", "aerobicDone"], ["balance", "balanceDone"], ["muscle", "muscleDone"],
+				].map(([key, labelKey]) => <TouchableOpacity key={key} style={styles.checkRow} onPress={() => setTypes((previous) => ({ ...previous, [key]: !previous[key] }))}><Ionicons name={types[key] ? "checkbox" : "square-outline"} size={24} color={types[key] ? "#2E8B57" : "#888"} /><Text style={styles.checkText}>{i18n.t(labelKey)}</Text></TouchableOpacity>)}</View>
+
 				<View style={styles.block}><Text style={styles.label}>{i18n.t("emotionScale")}</Text><View style={styles.emotionRow}>{EMOTIONS.map((item) => <TouchableOpacity key={item.value} style={[styles.emotionButton, emotion === item.value && styles.selectedEmotion]} onPress={() => setEmotion(item.value)}><Text style={styles.emoji}>{item.emoji}</Text></TouchableOpacity>)}</View></View>
 
 				<View style={styles.block}><Text style={styles.label}>{i18n.t("rpeScale")}</Text><View style={styles.rpeRow}>{RPE_VALUES.map((value) => <TouchableOpacity key={value} style={[styles.rpeButton, rpe === value && styles.selectedRpe]} onPress={() => setRpe(value)}><Text style={[styles.rpeText, rpe === value && styles.selectedRpeText]}>{value}</Text></TouchableOpacity>)}</View></View>
@@ -382,7 +364,7 @@ export default function EditSession() {
 				<View style={styles.bottomActions}><TouchableOpacity style={styles.cancelButton} onPress={attemptLeave}><Text style={styles.cancelText}>{i18n.t("cancel")}</Text></TouchableOpacity><TouchableOpacity style={[styles.saveButton, saving && styles.disabled]} onPress={saveChanges} disabled={saving}><Text style={styles.saveText}>{i18n.t("saveSessionChanges")}</Text></TouchableOpacity></View>
 			</ScrollView>
 
-			<Modal visible={pickerVisible} animationType="slide" transparent onRequestClose={() => setPickerVisible(false)}><View style={styles.modalOverlay}><View style={styles.modalBox}><Text style={styles.modalTitle}>{i18n.t("chooseEquipment")}</Text><FlatList data={sortedEquipmentData} keyExtractor={(item) => String(item.id)} renderItem={({ item }) => <TouchableOpacity style={styles.modalItem} onPress={() => selectEquipment(item)}>{item.isOther ? <View style={[styles.modalIcon, styles.otherIcon]}><Ionicons name="create-outline" size={28} color="#840B1C" /></View> : <Image source={item.icon} style={styles.modalIcon} />}<Text style={styles.modalItemText} numberOfLines={2}>{item.name}</Text>{!item.isOther && (equipmentUsage[String(item.id)] || equipmentUsage[String(item.name)] || 0) > 0 ? <Text style={styles.frequentLabel}>{i18n.t("frequentlyUsed")}</Text> : null}</TouchableOpacity>} /><TouchableOpacity style={styles.modalClose} onPress={() => setPickerVisible(false)}><Text style={styles.modalCloseText}>{i18n.t("cancel")}</Text></TouchableOpacity></View></View></Modal>
+			<Modal visible={pickerVisible} animationType="slide" transparent onRequestClose={() => setPickerVisible(false)}><View style={styles.modalOverlay}><View style={styles.modalBox}><Text style={styles.modalTitle}>{i18n.t("chooseEquipment")}</Text><FlatList data={sortedEquipmentData} keyExtractor={(item) => String(item.id)} renderItem={({ item }) => <TouchableOpacity style={styles.modalItem} onPress={() => selectEquipment(item)}>{item.isOther ? <View style={[styles.modalIcon, styles.otherIcon]}><Ionicons name="create-outline" size={28} color="#840B1C" /></View> : <Image source={item.icon} style={styles.modalIcon} />}<Text style={styles.modalItemText} numberOfLines={2}>{item.name}</Text>{!item.isOther && bookmarks[String(item.id)] ? <Ionicons name="heart" size={RFValue(20)} color="#840B1C" accessibilityLabel={i18n.t("favorite")} style={{ marginLeft: 8 }} /> : null}{!item.isOther && equipmentUseCount(item, equipmentUsage) > 0 ? <Text style={styles.frequentLabel}>{i18n.t("frequentlyUsed")}</Text> : null}</TouchableOpacity>} /><TouchableOpacity style={styles.modalClose} onPress={() => setPickerVisible(false)}><Text style={styles.modalCloseText}>{i18n.t("cancel")}</Text></TouchableOpacity></View></View></Modal>
 
 			<Modal visible={customEquipmentVisible} animationType="fade" transparent onRequestClose={() => setCustomEquipmentVisible(false)}><View style={styles.centeredOverlay}><View style={styles.customBox}><Text style={styles.modalTitle}>{i18n.t("otherEquipment")}</Text><TextInput style={styles.customInput} value={customEquipmentName} onChangeText={setCustomEquipmentName} placeholder={i18n.t("otherEquipmentPlaceholder")} maxLength={80} autoFocus /><View style={styles.customActions}><TouchableOpacity style={styles.customCancel} onPress={() => setCustomEquipmentVisible(false)}><Text style={styles.customCancelText}>{i18n.t("cancel")}</Text></TouchableOpacity><TouchableOpacity style={[styles.customAdd, !customEquipmentName.trim() && styles.disabled]} onPress={addCustomEquipment} disabled={!customEquipmentName.trim()}><Text style={styles.customAddText}>{i18n.t("add")}</Text></TouchableOpacity></View></View></View></Modal>
 		</KeyboardAvoidingView>

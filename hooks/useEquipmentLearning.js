@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useRef } from "re
 import { AppState, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { getCurrentOwnerKey } from "../utils/userStorage";
-import { learningContentKey, recordLearningCoverage } from "../utils/learning";
+import { learningContentKey, learningVideoKey, learningVideoMetadata, recordLearningCoverage } from "../utils/learning";
 import { createPlaybackCoverage, createReadingCoverage, learningTextSections, visibleLearningRange } from "../utils/learningCoverage";
 
 export const LearningReadContext = createContext(null);
@@ -23,7 +23,7 @@ export default function useEquipmentLearning({ item, locale, enabled, blocked, i
 	const focused = useIsFocused();
 	const owner = getCurrentOwnerKey();
 	const sections = learningTextSections(item);
-	const signature = JSON.stringify([item.id, locale, sections, item.videoUrl || item.youtubeKey, owner, identity]);
+	const signature = JSON.stringify([item.id, locale, sections, item.videoIdentityUrl || item.videoUrl || item.youtubeKey, item.videoIdentityDurationSeconds, owner, identity]);
 	const session = useMemo(() => {
 		const parts = sections.map(({ key, total }) => ({ key, total }));
 		const textKey = `${locale}:text:${learningContentKey(JSON.stringify(sections))}`;
@@ -37,9 +37,9 @@ export default function useEquipmentLearning({ item, locale, enabled, blocked, i
 			if (part) save(field, textKey, parts, partKey, fraction ? start * part.total : start, fraction ? end * part.total : end);
 		};
 		const playback = (field, key) => createPlaybackCoverage((start, end, total) => save(field, `${locale}:${key}:${total}`, [{ key: "media", total }], "media", start, end));
-		const video = playback("watched", learningContentKey(item.videoUrl || item.youtubeKey));
+		const video = playback("watched", learningVideoKey(item));
 		const audio = playback("listened", `audio:${item.id}`);
-		value.video = (state, metadata) => { if (!value.active || !value.allowed) { video("inactive"); return; } video(state, metadata); };
+		value.video = (state, metadata) => { if (!value.active || !value.allowed) { video("inactive"); return; } video(state, learningVideoMetadata(item, metadata)); };
 		value.audio = (state, metadata) => { if (!value.active || !value.allowed) { audio("inactive"); return; } audio(state, metadata); };
 		value.reset = () => { video("inactive"); audio("inactive"); value.readers.forEach((reader) => reader.sample(null)); };
 		return value;

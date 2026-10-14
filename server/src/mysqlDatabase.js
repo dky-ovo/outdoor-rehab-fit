@@ -112,6 +112,16 @@ export function createMysqlDatabase(config = readMysqlConfig(), { poolFactory = 
     let connection;
     try {
       connection = await pool.getConnection();
+    } catch (error) {
+      // mysql2 emits this exact message without a code when its bounded queue
+      // is full. Classify checkout saturation so HTTP callers can return 503;
+      // never copy the driver's original message or other supplied properties.
+      if (error?.message === "Queue limit reached.") {
+        throw driverError({ code: "MYSQL_POOL_QUEUE_LIMIT" }, "connection acquisition");
+      }
+      throw driverError(error, "connection acquisition");
+    }
+    try {
       // Reset comparison rules and UTC on every checkout, including recycled
       // connections. Driver timezone controls JS conversion, not server NOW().
       await initializeMysqlSession(connection);

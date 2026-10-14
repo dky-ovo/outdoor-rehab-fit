@@ -36,10 +36,10 @@ test.each(["zh", "en"])("real %s shoulder recommendations lose provenance copy b
   const visible = format(answer.reply, passages);
   expect(visible).not.toMatch(/APP原文|APP設施教學|APP的中醫|APP excerpt|from the APP|According to the APP|original passages/);
   for (const passage of passages) expect(visible).toContain(passage);
-  expect(visible).toContain(locale === "en" ? "not a diagnosis or confirmation of suitability" : "不是診斷或治療建議");
-  expect(visible).toContain(locale === "en" ? "not advice to use this equipment for your symptoms" : "並非針對症狀的使用建議");
+  expect(visible).toContain(locale === "en" ? "This does not mean it is suitable for your pain" : "有疼痛不代表適合使用");
+  expect(visible).toContain(locale === "en" ? "not treatment advice" : "不能代替診治");
   if (locale === "zh") {
-    expect(visible).toContain("以上說明僅供參考");
+    expect(visible).toContain("這些是中醫的一般說明");
     expect(visible).not.toContain("以上中醫說明");
   }
   expect(format(visible, passages)).toBe(visible);
@@ -87,4 +87,22 @@ test.each([
 ])("a legacy source lead-in does not hide the following caution or equipment reference: %s", (before, after) => {
   expect(format(before)).toBe(after);
   expect(format(before, [before])).toBe(before);
+});
+
+test.each([
+  ["現有 FAQ 列出的成年人活動量為每星期累積 150–300 分鐘。短時間活動也計算在內。", "成年人一般的活動量建議為每星期累積 150–300 分鐘。短時間活動也計算在內。"],
+  ["這些是現有 FAQ 的使用注意，不能確認器材適合您的情況；持續疼痛應先由醫護評估。", "這些注意事項不能確認器材適合您的情況；持續疼痛應先由醫護評估。"],
+  ["These precautions from the reviewed FAQ do not establish suitability; stop if pain worsens.", "These precautions do not establish suitability; stop if pain worsens."],
+  ["這是根據項目 FAQ 的陪同及疼痛注意事項，不是判斷痛楚原因。若同時出現胸痛或明顯呼吸困難，應立即尋求醫護協助。", "這些是陪同時的注意事項，不能判斷痛楚原因。若同時出現胸痛或明顯呼吸困難，應立即尋求醫護協助。"],
+  ["現有 FAQ 亦沒有適用所有人的固定拉繩次數，應按個人能力安排，不要忍痛完成。下方是供核對的教學入口。", "拉繩次數不宜一概而論，應按個人能力安排，不要忍痛完成。下方可查看器材圖片和說明。"],
+])("legacy internal wording becomes natural while keeping the whole safety condition: %s", (before, after) => {
+  expect(format(before)).toBe(after);
+  expect(format(after)).toBe(after);
+  expect(format(before, [before])).toBe(before);
+});
+
+test("literal FAQ questions and clinical evidence limitations are not removed as internal wrappers", () => {
+  for (const sentence of ["FAQ 是什麼意思？", "沒有證據證明這項活動適合所有人。請先由醫護評估。", "The evidence does not establish suitability; stop if pain worsens."]) {
+    expect(format(sentence)).toBe(sentence);
+  }
 });

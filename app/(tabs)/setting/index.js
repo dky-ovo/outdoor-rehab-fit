@@ -8,7 +8,6 @@ import { RFValue } from "react-native-responsive-fontsize";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from "react-native-responsive-screen";
 import { showAlert } from "../../../utils/alert";
 import { useAndroidBackTarget } from "../../../hooks/useAndroidBackTarget";
-import AccountSyncStatus from '../../../components/AccountSyncStatus';
 
 const Setting = () => {
 	useAndroidBackTarget("/(tabs)");
@@ -78,7 +77,6 @@ const Setting = () => {
 				) : null}
 			</View>
 
-			<AccountSyncStatus />
 			{showLogout ? (
 				<>
 				<TouchableOpacity style={styles.profileBar} onPress={() => router.push("/setting/profile")}>

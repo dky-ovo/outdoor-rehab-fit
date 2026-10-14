@@ -60,6 +60,9 @@ export function readMysqlConfig(env = process.env) {
 	}
 	const certificatePath = requiredText(env, "MYSQL_SSL_CA");
 	const connectionLimit = integerSetting(env, "MYSQL_POOL_SIZE", 4, 16);
+	// mysql2 treats zero as an unbounded queue. Keep waiting requests bounded,
+	// while allowing operators to tune bursts alongside measured database capacity.
+	const queueLimit = integerSetting(env, "MYSQL_POOL_QUEUE_LIMIT", 32, 256);
 	const ca = readCertificate(certificatePath);
 	return {
 		host, port, user, password, database,
@@ -76,7 +79,7 @@ export function readMysqlConfig(env = process.env) {
 		jsonStrings: true,
 		waitForConnections: true,
 		connectionLimit,
-		queueLimit: 32,
+		queueLimit,
 		connectTimeout: 10000,
 		enableKeepAlive: true,
 	};

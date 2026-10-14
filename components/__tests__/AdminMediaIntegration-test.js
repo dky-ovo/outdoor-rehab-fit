@@ -4,12 +4,12 @@ import { StyleSheet, Text, TextInput, TouchableOpacity } from "react-native";
 import AdminDashboard from "../../app/admin";
 import AdminMediaField from "../AdminMediaField";
 import AdminMediaLibrary from "../AdminMediaLibrary";
-import { createAdminContent, getAdminContent, getAdminEquipment, getAdminMedia, getAdminMe, loginAccount, updateAdminEquipment } from "../../utils/api";
+import { createAdminContent, getAdminContent, getAdminEquipment, getAdminMedia, getAdminMe, loginAccount, updateAdminContent, updateAdminEquipment, getEquipmentCatalog } from "../../utils/api";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("../../utils/alert", () => ({ showAlert: jest.fn() }));
-jest.mock("../../utils/api", () => ({ getAdminContent: jest.fn(), createAdminContent: jest.fn(), getAdminEquipment: jest.fn(), updateAdminEquipment: jest.fn(), getAdminMedia: jest.fn(), getAdminMe: jest.fn(), loginAccount: jest.fn(), resolveApiAssetUrl: (value) => value }));
+jest.mock("../../utils/api", () => ({ getAdminContent: jest.fn(), createAdminContent: jest.fn(), updateAdminContent: jest.fn(), getEquipmentCatalog: jest.fn(), getAdminEquipment: jest.fn(), updateAdminEquipment: jest.fn(), getAdminMedia: jest.fn(), getAdminMe: jest.fn(), loginAccount: jest.fn(), resolveApiAssetUrl: (value) => value }));
 let tree;
 const label = (children) => Array.isArray(children) ? children.map(label).join("") : typeof children === "string" || typeof children === "number" ? String(children) : "";
 const buttons = (title) => tree.root.findAllByType(TouchableOpacity).filter((node) => node.findAllByType(Text).some((text) => label(text.props.children) === title));
@@ -29,6 +29,8 @@ beforeEach(() => {
 	getAdminContent.mockResolvedValue({ items: [] }); getAdminEquipment.mockResolvedValue({ items: [{ id: "0", youtubeKey: "X2cz6HW3J54", videoUrl: "/api/media/old/old.mp4", videoUrlZh: "", videoUrlEn: "", videoLocalesEnabled: false }] });
 	getAdminMedia.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, categories: [] });
 	createAdminContent.mockResolvedValue({}); updateAdminEquipment.mockResolvedValue({});
+	getEquipmentCatalog.mockResolvedValue({ items: ['0', '4', '6', '10'].map(id => ({ id, nameZh: `公开器材${id}`, isActive: true })) });
+	updateAdminContent.mockResolvedValue({});
 });
 afterEach(async () => { if (tree) await act(async () => tree.unmount()); tree = null; });
 
@@ -58,6 +60,41 @@ test("home video uses upload/library control and saves selected URL through exis
 	await act(async () => field.props.onChange("/api/media/new/demo.mp4"));
 	await press("保存并发布");
 	expect(createAdminContent).toHaveBeenCalledWith("token", expect.objectContaining({ contentType: "video", value: "/api/media/new/demo.mp4" }));
+});
+
+test("Exercise Videos maintenance imports multiple stored videos with filename titles after prior items", async () => {
+ getAdminContent.mockResolvedValue({ items: [{ id: "existing", pageKey: "exercise_videos", title: "Warm-up", value: "/api/media/old/old.mp4", contentType: "video", sortOrder: 7, isActive: true }] });
+ createAdminContent.mockImplementation(async (_token, data) => ({ id: data.clientRequestId }));
+ await login(["app_maintenance.home.manage"]); await press("运动影片"); await press("添加影片（可多选）");
+ const picker = tree.root.findAllByType(AdminMediaLibrary).find(node => node.props.multiple);
+ expect(picker.props.kind).toBe("video");
+ await act(async () => picker.props.onSelect([{ id: 'new', name: '准备运动.mp4', kind: 'video', url: '/api/media/new/new.mp4' },
+   { id: 'next', name: '舒缓动作.mov', kind: 'video', url: '/api/media/next/next.mov' }]));
+ await act(async () => tree.root.findAllByType(TouchableOpacity).find(node => node.props.testID === 'exercise-video-batch-category-outdoor').props.onPress());
+ await press("保存并发布所选影片");
+ expect(createAdminContent).toHaveBeenNthCalledWith(1, "token", expect.objectContaining({ pageKey: "exercise_videos", contentType: "video", title: '准备运动', value: "/api/media/new/new.mp4", sortOrder: 8 }));
+ expect(createAdminContent).toHaveBeenNthCalledWith(2, "token", expect.objectContaining({ title: '舒缓动作', value: "/api/media/next/next.mov", sortOrder: 9 }));
+});
+
+test('exercise filters keep legacy videos separate and home-only operator edits links through public catalog', async () => {
+  const old = { id: 'old', pageKey: 'exercise_videos', title: '坐式低背伸展', value: '/api/media/old/old.mp4', contentType: 'video', sortOrder: 1, isActive: true };
+  getAdminContent.mockResolvedValue({ items: [old, { ...old, id: 'outside', title: '室外片', videoCategory: 'outdoor', equipmentIds: [] }] });
+  await login(['app_maintenance.home.manage']); await press('运动影片');
+  const pressId = async id => act(async () => tree.root.findAllByType(TouchableOpacity).find(node => node.props.testID === id).props.onPress());
+  expect(getAdminEquipment).not.toHaveBeenCalled();
+  expect(getEquipmentCatalog).toHaveBeenCalled();
+  await pressId('admin-exercise-video-filter-uncategorized');
+  expect(tree.root.findAllByProps({ testID: 'exercise-video-summary-outside' })).toHaveLength(0);
+  expect(tree.root.findAllByType(Text).some(node => label(node.props.children) === '未分类')).toBe(true);
+  await pressId('admin-edit-content-old');
+  await press('保存并发布');
+  expect(updateAdminContent).toHaveBeenLastCalledWith('token', 'old', expect.objectContaining({ videoCategory: '', equipmentIds: [] }));
+  await pressId('admin-edit-content-old');
+  await pressId('admin-exercise-video-edit-suggest');
+  await pressId('admin-exercise-video-edit-equipment-0');
+  await press('保存并发布');
+  expect(updateAdminContent).toHaveBeenLastCalledWith('token', 'old', expect.objectContaining({ videoCategory: 'indoor', equipmentIds: ['6', '0'] }));
+  expect(old).not.toHaveProperty('videoCategory');
 });
 test("equipment exposes image, both GIFs and separate Chinese/English videos without cross-language overwrite", async () => {
 	await login(["app_maintenance.equipment.manage"]); await press("编辑");

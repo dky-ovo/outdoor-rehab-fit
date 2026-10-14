@@ -1,0 +1,10 @@
+**
+!server/
+!server/src/
+!server/src/**
+!server/migrations/
+!server/migrations/**
+!schema.sql
+!migrate.mjs
+!migration-checks.mjs
+!Dockerfile

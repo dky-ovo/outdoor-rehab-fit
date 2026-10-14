@@ -47,6 +47,14 @@ test("selection omits historical YouTube and archived assets", async () => {
 	await press("media-select-file1"); expect(onSelect).toHaveBeenCalledWith(item);
 	expect(button("media-edit-file1")).toBeUndefined();
 });
+test("multiple picker retains selection order and waits for confirmation", async () => {
+  const second = { ...item, id: 'file2', name: '第二个.mp4', url: '/api/media/id/two.mp4' };
+  getAdminMedia.mockResolvedValue(page([item, second])); const onSelect = jest.fn();
+  await mount({ onSelect, kind: 'video', multiple: true });
+  await press('media-select-file2'); await press('media-select-file1');
+  expect(onSelect).not.toHaveBeenCalled(); expect(button('media-view-upload')).toBeUndefined();
+  await press('media-use-selected'); expect(onSelect).toHaveBeenCalledWith([second, item]);
+});
 test("upload cancelled in picker performs no network mutation", async () => {
 	pickAdminMedia.mockResolvedValue(null); await mount({ initialView: "upload" }); await press("media-upload-file");
 	expect(uploadAdminMedia).not.toHaveBeenCalled(); expect(button("media-upload-file").props.disabled).toBe(false);
@@ -56,20 +64,20 @@ test("upload validates file kind before sending, including GIF-specific input", 
 	await mount({ initialView: "upload", kind: "gif" }); await press("media-upload-file");
 	expect(uploadAdminMedia).not.toHaveBeenCalled(); expect(text()).toContain("格式");
 });
-test("successful upload chooses media only after server confirmation and suppresses duplicate clicks", async () => {
+test("standalone file storage uploads after confirmation and suppresses duplicate clicks", async () => {
 	let resolveUpload; const onSelect = jest.fn();
 	pickAdminMedia.mockResolvedValue({ name: "demo.mp4", type: "video/mp4", size: 100 });
 	uploadAdminMedia.mockReturnValue(new Promise((resolve) => { resolveUpload = resolve; }));
-	await mount({ initialView: "upload", kind: "video", onSelect }); await press("media-upload-file"); await press("media-upload-file");
+	await mount({ initialView: "upload", kind: "video" }); await press("media-upload-file"); await press("media-upload-file");
 	expect(uploadAdminMedia).toHaveBeenCalledTimes(1); expect(onSelect).not.toHaveBeenCalled();
 	expect(uploadAdminMedia.mock.calls[0][2]).toMatchObject({ categoryId: "videos", mimeType: "video/mp4" });
-	await act(async () => resolveUpload({ item })); expect(onSelect).toHaveBeenCalledWith(item);
+	await act(async () => resolveUpload({ item })); expect(text()).toContain("文件已上传到后台服务器文件库");
 });
 test("closing while upload pending aborts and never applies late result", async () => {
 	let resolveUpload; const onSelect = jest.fn();
 	pickAdminMedia.mockResolvedValue({ name: "demo.mp4", size: 100 });
 	uploadAdminMedia.mockReturnValue(new Promise((resolve) => { resolveUpload = resolve; }));
-	await mount({ initialView: "upload", kind: "video", onSelect }); await press("media-upload-file");
+	await mount({ initialView: "upload", kind: "video" }); await press("media-upload-file");
 	const signal = uploadAdminMedia.mock.calls[0][2].signal;
 	await act(async () => tree.unmount()); tree = null;
 	expect(signal.aborted).toBe(true);
@@ -78,7 +86,7 @@ test("closing while upload pending aborts and never applies late result", async 
 test("management permissions hide metadata tools from equipment-only operator", async () => {
 	await mount({ permissions: ["app_maintenance.equipment.manage"] });
 	expect(button("media-edit-file1")).toBeUndefined(); expect(button("media-category-save")).toBeUndefined();
-	expect(button("media-view-upload")).toBeDefined();
+	expect(button("media-view-upload")).toBeUndefined();
 });
 test("names and categories save without altering original URL", async () => {
 	await mount(); await press("media-edit-file1"); await input("media-edit-name", "新名称"); await press("media-edit-category-other"); await press("media-save");
@@ -116,4 +124,10 @@ test("recycle bin restores through explicit action and hides file selectors and 
 	getAdminMedia.mockResolvedValue(page([{...item,deletedAt:"2026-09-10",selectable:false}]));restoreAdminMediaItem.mockResolvedValue({restored:true});
 	await mount();await press("media-trash");expect(button("media-delete-file1")).toBeUndefined();
 	await press("media-restore-file1");expect(restoreAdminMediaItem).toHaveBeenCalledWith("token",{id:"file1",kind:"file"});
+});
+
+test("business media pickers cannot expose local uploads even with file management permission", async () => {
+  await mount({ onSelect: jest.fn(), initialView: "upload", kind: "video" });
+  expect(button("media-view-upload")).toBeUndefined(); expect(button("media-upload-file")).toBeUndefined();
+  expect(button("media-select-file1")).toBeDefined();
 });

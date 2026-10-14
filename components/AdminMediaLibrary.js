@@ -8,13 +8,13 @@ import { importAdminMediaBatch } from "../utils/adminMediaBatch";
 const FILE_PERMISSION = "app_maintenance.files.manage";
 const TYPE_LABELS = { "": "全部文件", image: "图片", gif: "GIF 动画", video: "视频", file: "其他文件" };
 
-export default function AdminMediaLibrary({ token, permissions = [], kind = "", onSelect, initialView = "library", refreshKey = 0 }) {
+export default function AdminMediaLibrary({ token, permissions = [], kind = "", onSelect, multiple = false, initialView = "library", refreshKey = 0 }) {
 	const canManage = permissions.includes(FILE_PERMISSION);
 	const [query, setQuery] = useState({ page: 1, search: "", categoryId: "", kind, archived: false, folderId: "", deleted: false });
 	const [search, setSearch] = useState("");
 	const [revision, setRevision] = useState(0);
 	const [result, setResult] = useState(null);
-	const [view, setView] = useState(initialView);
+	const [view, setView] = useState(onSelect ? "library" : initialView);
 	const [uploadCategory, setUploadCategory] = useState("");
 	const [editing, setEditing] = useState(null);
 	const [categoryName, setCategoryName] = useState("");
@@ -24,6 +24,7 @@ export default function AdminMediaLibrary({ token, permissions = [], kind = "", 
 	const [message, setMessage] = useState("");
 	const [error, setError] = useState("");
 	const [selected, setSelected] = useState([]);
+	const [picked, setPicked] = useState([]);
 	const [deleteSelection, setDeleteSelection] = useState(null);
 	const [folderName, setFolderName] = useState("");
 	const [batchProgress, setBatchProgress] = useState(null);
@@ -46,6 +47,7 @@ export default function AdminMediaLibrary({ token, permissions = [], kind = "", 
 	}, [requestKey]);
 	useEffect(() => { activeOperation.current?.abort(); setEditing(null); setError(""); setMessage(""); }, [token]);
 	useEffect(() => { setSelected([]); setDeleteSelection(null); }, [requestKey]);
+	useEffect(() => { setPicked([]); }, [token, kind, multiple]);
 	const active = result?.key === requestKey ? result : null;
 	const data = active?.data;
 	const categories = data?.categories || [];
@@ -59,7 +61,7 @@ export default function AdminMediaLibrary({ token, permissions = [], kind = "", 
 	const setFilter = (key, value) => { setEditing(null); setQuery((old) => ({ ...old, [key]: value, page: 1 })); };
 	const validOperation = (operation, operationToken) => mounted.current && activeOperation.current === operation && activeToken.current === operationToken;
 	const upload = async () => {
-		if (activeOperation.current || !token) return;
+		if (activeOperation.current || !token || onSelect || !canManage) return;
 		const operation = new AbortController(); const operationToken = token;
 		activeOperation.current = operation; setBusy(true); setError(""); setMessage(""); setProgress(null);
 		try {
@@ -112,7 +114,7 @@ export default function AdminMediaLibrary({ token, permissions = [], kind = "", 
 		<Text style={styles.note}>连接当前云服务器的持久文件存储。图片、GIF 和视频可用于公开 APP 教学；其他文件仅后台授权下载，不在网页执行。删除进入回收站，可恢复，不立即释放磁盘空间。</Text>
 		<View style={styles.wrap}>
 			{chip("后台现有云端存储", view === "library", () => setView("library"), "media-view-library")}
-			{chip("本地上传", view === "upload", () => setView("upload"), "media-view-upload")}
+			{!onSelect && canManage && chip("本地上传", view === "upload", () => setView("upload"), "media-view-upload")}
 			{chip("刷新文件库", false, refresh, "media-refresh", busy)}
 		</View>
 		{!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
@@ -120,7 +122,7 @@ export default function AdminMediaLibrary({ token, permissions = [], kind = "", 
 		{active?.error && <Text accessibilityRole="alert" style={styles.error}>{mediaErrorMessage(active.error)}</Text>}
 		{loading && <View style={styles.wrap}><ActivityIndicator color="#840B1C" /><Text style={styles.note}>正在读取文件库…</Text></View>}
 		<View style={styles.wrap}>{chip("根目录", !query.folderId, () => {setSearch("");setQuery(old=>({...old,folderId:"",page:1,search:"",categoryId:""}));}, "media-root")}{(data?.trail || []).map(folder=>chip(folder.name,folder.id===query.folderId,()=>{setSearch("");setQuery(old=>({...old,folderId:folder.id,page:1,search:"",categoryId:""}));},`media-folder-crumb-${folder.id}`))}</View>
-		{view === "upload" && <View style={styles.box}>
+		{!onSelect && canManage && view === "upload" && <View style={styles.box}>
 			<Text style={styles.label}>上传后归入分类</Text>
 			{categoryChoices(selectedUploadCategory, setUploadCategory, "media-upload-category")}
 			<Text style={styles.note}>{kind === "gif" ? "请选择 GIF 动画，最大 12 MB。" : "图片/GIF 最大 12 MB；视频及其他任意文件每个最大 250 MB。"} 推荐 MP4（H.264/AAC）。上传文件夹会保留目录层级，不覆盖同名文件，忽略 Mac 的 ._ 和 .DS_Store 系统索引。</Text>
@@ -138,7 +140,7 @@ export default function AdminMediaLibrary({ token, permissions = [], kind = "", 
 			{canManage && !onSelect && <View style={styles.wrap}>{chip(query.deleted ? "返回正常文件" : "回收站",query.deleted,()=>{setSearch("");setQuery(old=>({...old,deleted:!old.deleted,folderId:"",page:1,archived:false,search:"",categoryId:""}));},"media-trash")}{!query.deleted && <>{chip("全选本页",false,()=>setSelected((data?.items || []).filter(item=>!item.isReferenced).map(item=>({id:item.id,kind:item.kind === "folder" ? "folder" : "file"}))),"media-select-all",busy || loading)}{chip("取消全选",false,()=>setSelected([]),"media-deselect-all",busy || !selected.length)}{chip(`删除所选（${selected.length}）`,false,()=>setDeleteSelection(selected),"media-delete-selected",busy || !selected.length)}</>}</View>}
 			{deleteSelection && <View style={styles.box}><Text style={styles.note}>确认将所选 {deleteSelection.length} 项及文件夹内所有内容放入回收站？任何内容仍被 APP 使用时，本次删除全部阻止。可从回收站恢复。</Text><View style={styles.wrap}>{chip("确认删除",true,()=>mutate(()=>deleteAdminMediaItems(token,deleteSelection),"已移到回收站，可恢复。磁盘文件未永久删除。"),"media-delete-confirm")}{chip("取消",false,()=>setDeleteSelection(null),"media-delete-cancel")}</View></View>}
 			{data && <Text style={styles.note}>共 {data.total} 个文件 · 第 {query.page} / {totalPages} 页</Text>}
-			{data?.items?.length === 0 && <Text style={styles.note}>暂无符合条件的文件，可以切换分类或本地上传。</Text>}
+			{data?.items?.length === 0 && <Text style={styles.note}>暂无符合条件的文件。请先在「文件存储」上传，再返回选择。</Text>}
 			{(data?.items || []).map((item) => <View key={item.id} style={styles.file}>
 				<View style={styles.fileTop}>
 					{item.kind === "image" && item.url && item.selectable !== false ? <Image source={{ uri: resolveApiAssetUrl(item.url) }} style={styles.thumbnail} resizeMode="contain" /> : <View style={styles.thumbnail}><Text style={styles.symbol}>{item.kind === "folder" ? "📁" : item.kind === "video" ? "▶" : "▤"}</Text></View>}
@@ -149,7 +151,7 @@ export default function AdminMediaLibrary({ token, permissions = [], kind = "", 
 					{canManage && !onSelect && !query.deleted && <>{chip(selected.some(value=>value.id === item.id) ? "☑ 已选择" : "☐ 选择",selected.some(value=>value.id === item.id),()=>setSelected(old=>old.some(value=>value.id === item.id) ? old.filter(value=>value.id !== item.id) : [...old,{id:item.id,kind:item.kind === "folder" ? "folder" : "file"}]),`media-check-${item.id}`,busy || item.isReferenced)}{chip("删除",false,()=>setDeleteSelection([{id:item.id,kind:item.kind === "folder" ? "folder" : "file"}]),`media-delete-${item.id}`,busy || item.isReferenced)}</>}
 					{canManage && !onSelect && query.deleted && chip("恢复",false,()=>mutate(()=>restoreAdminMediaItem(token,{id:item.id,kind:item.kind === "folder" ? "folder" : "file"}),"已恢复文件或文件夹。"),`media-restore-${item.id}`)}
 					{item.source === "upload" && !query.deleted && chip("下载到电脑",false,()=>downloadAdminMedia(token,item).catch(failure=>setError(mediaErrorMessage(failure))),`media-download-${item.id}`)}
-					{onSelect && mediaCanSelect(item, kind) && <TouchableOpacity testID={`media-select-${item.id}`} style={styles.primary} disabled={busy} onPress={() => onSelect(item)}><Text style={styles.primaryText}>使用此文件</Text></TouchableOpacity>}
+					{onSelect && mediaCanSelect(item, kind) && <TouchableOpacity testID={`media-select-${item.id}`} style={styles.primary} disabled={busy} onPress={() => multiple ? setPicked(values => values.some(value => value.id === item.id) ? values.filter(value => value.id !== item.id) : [...values, item]) : onSelect(item)}><Text style={styles.primaryText}>{multiple ? picked.some(value => value.id === item.id) ? "☑ 已选择" : "☐ 选择" : "使用此文件"}</Text></TouchableOpacity>}
 					{canManage && !onSelect && item.kind !== "folder" && !query.deleted && chip("名称和分类", editing?.id === item.id, () => setEditing({ ...item }), `media-edit-${item.id}`)}
 				</View>
 				{editing?.id === item.id && <View style={styles.box}><Text style={styles.label}>显示名称（不改变文件地址）</Text><TextInput testID="media-edit-name" style={styles.input} value={editing.name} onChangeText={(name) => setEditing((old) => ({ ...old, name }))} maxLength={200} />{categoryChoices(editing.categoryId, (categoryId) => setEditing((old) => ({ ...old, categoryId })), "media-edit-category")}<View style={styles.wrap}>
@@ -160,6 +162,7 @@ export default function AdminMediaLibrary({ token, permissions = [], kind = "", 
 			</View>)}
 			<View style={styles.wrap}>{chip("上一页", false, () => setQuery((old) => ({ ...old, page: old.page - 1 })), "media-previous", busy || loading || query.page <= 1)}{chip("下一页", false, () => setQuery((old) => ({ ...old, page: old.page + 1 })), "media-next", busy || loading || !data || query.page >= totalPages)}</View>
 		</>}
+		{onSelect && multiple && <View style={styles.wrap}><Text style={styles.note}>已选择 {picked.length} 个文件</Text>{chip("使用所选文件", true, () => onSelect(picked), "media-use-selected", busy || loading || !picked.length)}</View>}
 		{canManage && !onSelect && !query.deleted && <View style={styles.box}><Text style={styles.label}>在当前目录新增文件夹</Text><TextInput testID="media-folder-name" style={styles.input} value={folderName} maxLength={200} onChangeText={setFolderName} placeholder="文件夹名称（可以创建空目录）" />{chip("新增文件夹",true,()=>mutate(()=>createAdminMediaFolder(token,folderName.trim(),query.folderId),"文件夹已创建（同名目录保留，不覆盖文件）。"),"media-folder-create",busy || !folderName.trim())}</View>}
 		{canManage && !onSelect && <View style={styles.box}>
 			<Text style={styles.label}>文件分类管理</Text><Text style={styles.note}>分类只整理后台公开文件，不移动或删除原文件，不影响现有 APP 引用。</Text>

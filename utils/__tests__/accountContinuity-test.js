@@ -40,6 +40,24 @@ test('toggling one heart from a stale screen cannot remove another device favori
   await saveBookmarks({}, {changedIds:['9']});
   expect(await getBookmarks()).toEqual({18:true});
 });
+
+test('a committed favorites request with a lost reply is retried before a later toggle',async()=>{
+  await saveBookmarks({9:true});
+  let lost;
+  await expect(sync(async(_token,changes)=>{lost=changes;throw Error('reply lost after commit');})).rejects.toThrow('reply lost');
+  await saveBookmarks({}, {changedIds:['9']});
+  expect(await sync(async(_token,changes)=>{
+    expect(changes).toEqual(lost);
+    return {acknowledged:changes,records:[{id:'9',selected:true,version:1}]};
+  })).toBe(true);
+  expect(await getBookmarks()).toEqual({});
+  expect(await sync(async(_token,changes)=>{
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toMatchObject({id:'9',selected:false,version:1});
+    return {acknowledged:changes,records:[{id:'9',selected:false,version:2}]};
+  })).toBe(false);
+  expect(await getBookmarks()).toEqual({});
+});
 test('AI result is recovered after page exit into its original archived conversation exactly once',async()=>{
   const scope={owner:'alice',locale:'zh',authSessionId:'session-one'};
   const conversation=await loadAssistantConversations(scope);

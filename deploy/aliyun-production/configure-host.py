@@ -150,6 +150,11 @@ def environment_values(release, email):
         "TWILIO_API_KEY_SID": "",
         "TWILIO_API_KEY_SECRET": "",
         "TWILIO_VERIFY_SERVICE_SID": "",
+        # Initial provisioning only: activation and the API key are supplied later.
+        "BAILIAN_FAQ_ENABLED": "false",
+        "BAILIAN_MODEL_ID": "qwen3-14b-1f1a8952705b",
+        "BAILIAN_BASE_URL": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        "DASHSCOPE_API_KEY": "",
     }
 
 

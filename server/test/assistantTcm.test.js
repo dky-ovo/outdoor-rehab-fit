@@ -152,13 +152,16 @@ for (const locale of ["zh", "en"]) test(`HTTP non-symptom model selection is enr
 	assert.deepEqual(calls, { factory: 1, completion: 1 });
 }));
 
-for (const [locale, message] of [["zh", "肩關節伸展如何使用？"], ["en", "How do I use Shoulder stretch?"]]) test(`HTTP ordinary ${locale} named guide keeps its entry and places TCM once in the main reply`, async () => fixture(async ({ ask, calls }) => {
+for (const [locale, message] of [["zh", "肩關節伸展如何使用？"], ["en", "How do I use Shoulder stretch?"]]) test(`HTTP ordinary ${locale} named guide keeps its complete instructions without unrelated TCM`, async () => fixture(async ({ ask, calls }) => {
 	const result = await ask(message, { locale });
 	assert.equal(result.status, 200);
 	assert.equal(result.data.action, "equipment_local");
 	assert.equal(result.data.source, "app_content");
 	assert.deepEqual(result.data.recommendations.map(item => item.id), ["19"]);
-	assertTcmInReply(result.data, "19", GUIDE["19"][locale].tcmTip);
+  assert.equal(result.data.guideContentDirect, true);
+  assert.ok(result.data.reply.includes(GUIDE["19"][locale].details), 'requested maintained instructions remain complete');
+  assert.equal(recommendation(result.data, "19").tcmExcerpt, undefined);
+  assert.ok(!result.data.reply.includes(GUIDE["19"][locale].tcmTip.slice(0, 30)), 'unrequested TCM prose is not appended');
 	assert.notEqual(result.data.tcmInReply, true, "an ordinary usage question must not be reclassified as a direct TCM question");
 	assert.deepEqual(calls, { factory: 0, completion: 0 });
 }, { configured: false }));
@@ -281,22 +284,23 @@ for (const [locale, question] of [
 	["zh", "肩周炎可以用什麼器材？"], ["zh", "五十肩，請推薦器材"],
 	["zh", "冷冻肩，有哪些器材？"], ["zh", "冷凍肩可以用什麼器材？"],
 	["en", "I have frozen shoulder, please recommend equipment."],
-]) test(`HTTP ${question} uses symptom evidence and includes internal ID 19 without a first-choice ranking`, async () => fixture(async ({ ask, calls }) => {
+]) test(`HTTP ${question} uses reviewed frozen-shoulder FAQ and includes internal ID 19 without a first-choice ranking`, async () => fixture(async ({ ask, calls }) => {
 	const result = await ask(question, { locale });
 	assert.equal(result.status, 200);
-	assert.equal(result.data.evidencePolicy, "app-symptom-deepseek-v2");
-	assert.equal(result.data.deepSeekUsed, true);
+	assert.equal(result.data.evidencePolicy, "app-faq-reviewed-v1");
+	assert.equal(result.data.faqId, "frozen-shoulder");
+	assert.equal(result.data.deepSeekUsed, false);
 	const item = recommendation(result.data, "19");
 	assert.ok(item, "Shoulder stretch is internal ID 19, not the Word code 17");
-	assertEvidenceInReply(result.data, item, locale);
-	assertTcmInReply(result.data, "19", GUIDE["19"][locale].tcmTip);
-	assert.deepEqual(item.evidence.targets, ["shoulder"]);
+	assert.match(result.data.reply, locale === "en" ? /assess/i : /評估/);
+	assert.match(result.data.reply, locale === "en" ? /(?:force|forcing)/i : /(?:強拉|強迫|強行)/);
 	assert.doesNotMatch(result.data.reply, /首選器材|首选器材|最佳器材|best equipment|first.choice equipment/i);
-	assert.deepEqual(calls, { factory: 1, completion: 1 });
+	assert.deepEqual(calls, { factory: 0, completion: 0 });
 }));
 
 test("HTTP adding TCM excerpts keeps knee evidence relevant and continues to exclude Foot Massage Path", async () => fixture(async ({ ask, calls }) => {
-	for (const [locale, question] of [["zh", "膝頭哥痛，有咩器材可以幫我？"], ["en", "My knees hurt, please recommend equipment"]]) {
+	// Explicit FAQ help queries now use reviewed answers without model/TCM prose.
+	for (const [locale, question] of [["zh", "膝頭哥痛，請推薦器材"], ["en", "My knees hurt, please recommend equipment"]]) {
 		const result = await ask(question, { locale });
 		assert.equal(result.status, 200);
 		assert.deepEqual(result.data.recommendations.map(item => item.id), ["4", "10", "11"]);

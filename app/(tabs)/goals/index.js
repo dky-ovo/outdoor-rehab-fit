@@ -67,26 +67,32 @@ const GoalSetting = () => {
 	const [targets, setTargets] = useState(() => ({ ...DEFAULT_GOALS }));
 	const targetsRef = useRef(targets);
 	const loadVersionRef = useRef(0);
+	const focusedRef = useRef(false);
 	const [smartCount, setSmartCount] = useState(0);
 	const [expanded, setExpanded] = useState(null);
 
 	const load = useCallback(async () => {
 		const version = ++loadVersionRef.current;
-		const state = await getGoalState();
-		if (version !== loadVersionRef.current) return;
-		targetsRef.current = state.targets;
-		setTargets(state.targets);
-		setSmartCount(getCurrentWeekSmartGoals(state).length);
-	}, []);
+		try {
+			const state = await getGoalState();
+			if (!focusedRef.current || version !== loadVersionRef.current) return;
+			targetsRef.current = state.targets;
+			setTargets(state.targets);
+			setSmartCount(getCurrentWeekSmartGoals(state).length);
+		} catch {
+			if (focusedRef.current && version === loadVersionRef.current) showAlert(i18n.t("warning"), i18n.t("serverError"));
+		}
+	}, [i18n]);
 
 	useFocusEffect(
 		useCallback(() => {
-			load();
+			focusedRef.current = true;
+			void load();
 			const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
 				router.replace("/(tabs)");
 				return true;
 			});
-			return () => subscription.remove();
+			return () => { focusedRef.current = false; loadVersionRef.current += 1; subscription.remove(); };
 		}, [load, accountRevision])
 	);
 
@@ -99,6 +105,7 @@ const GoalSetting = () => {
 		try {
 			await setTarget(type.key, next);
 		} catch {
+			if (!focusedRef.current) return;
 			await load();
 			showAlert(i18n.t("warning"), i18n.t("serverError"));
 		}

@@ -763,10 +763,10 @@
     {
       "key": "copy.autoLogoutNotice",
       "group": "登录、注册与访客",
-      "label": "系統不會因閒置自動登出；安全驗證仍可能要求重新登入。",
+      "label": "連續 90 分鐘沒有操作會自動登出；重新登入後仍可查看帳戶已儲存的資料。",
       "kind": "text",
-      "zh": "系統不會因閒置自動登出；安全驗證仍可能要求重新登入。",
-      "en": "Inactivity does not sign you out. Security checks may still require you to sign in again.",
+      "zh": "連續 90 分鐘沒有操作會自動登出；重新登入後仍可查看帳戶已儲存的資料。",
+      "en": "You will be signed out after 90 minutes without activity. Your saved account data will remain available after signing in again.",
       "sources": [
         "APP 双语文字"
       ]
@@ -1696,6 +1696,17 @@
       ]
     },
     {
+      "key": "copy.dailyUsageBreakdown",
+      "group": "参与者与使用数据",
+      "label": "每日使用詳情及設施教學進度",
+      "kind": "text",
+      "zh": "每日使用詳情及設施教學進度",
+      "en": "Daily usage details and Facility Guide progress",
+      "sources": [
+        "APP 双语文字"
+      ]
+    },
+    {
       "key": "copy.days",
       "group": "通用、主页与导航",
       "label": "天",
@@ -2208,6 +2219,28 @@
       "kind": "text",
       "zh": "請選擇本時段曾經使用的戶外設施，並為每項設施填寫0至10的自覺竭力程度。",
       "en": "Select each outdoor facility used and record its perceived exertion from 0 to 10.",
+      "sources": [
+        "APP 双语文字"
+      ]
+    },
+    {
+      "key": "copy.exerciseVideos",
+      "group": "计时、运动记录与总结",
+      "label": "運動影片",
+      "kind": "text",
+      "zh": "運動影片",
+      "en": "Exercise Videos",
+      "sources": [
+        "APP 双语文字"
+      ]
+    },
+    {
+      "key": "copy.exerciseVideosIntro",
+      "group": "计时、运动记录与总结",
+      "label": "暖身及運動示範影片",
+      "kind": "text",
+      "zh": "暖身及運動示範影片",
+      "en": "Warm-up and exercise demonstration videos",
       "sources": [
         "APP 双语文字"
       ]
@@ -2952,10 +2985,10 @@
     {
       "key": "copy.journalPlaceholder",
       "group": "通用、主页与导航",
-      "label": "請記錄這一節運動期間遇到的問題...",
+      "label": "請記錄這一節運動的感受或遇上的問題...",
       "kind": "text",
-      "zh": "請記錄這一節運動期間遇到的問題...",
-      "en": "Record any problems encountered during this exercise session...",
+      "zh": "請記錄這一節運動的感受或遇上的問題...",
+      "en": "Record your feelings or any problems encountered during this exercise session...",
       "sources": [
         "APP 双语文字"
       ]
@@ -3986,10 +4019,10 @@
     {
       "key": "copy.participantExerciseDatesHint",
       "group": "计时、运动记录与总结",
-      "label": "選擇日期查看當日運動記錄",
+      "label": "選擇星期查看該週運動記錄（週一至週日，香港時間）",
       "kind": "text",
-      "zh": "選擇日期查看當日運動記錄",
-      "en": "Select a date to view exercise records",
+      "zh": "選擇星期查看該週運動記錄（週一至週日，香港時間）",
+      "en": "Select a week to view exercise records (Monday–Sunday, Hong Kong time)",
       "sources": [
         "APP 双语文字"
       ]
@@ -4041,10 +4074,10 @@
     {
       "key": "copy.participantUsageDatesHint",
       "group": "参与者与使用数据",
-      "label": "選擇日期查看當日 APP 使用數據",
+      "label": "選擇星期查看該週 APP 使用數據（週一至週日，香港時間）",
       "kind": "text",
-      "zh": "選擇日期查看當日 APP 使用數據",
-      "en": "Select a date to view app usage data",
+      "zh": "選擇星期查看該週 APP 使用數據（週一至週日，香港時間）",
+      "en": "Select a week to view app usage data (Monday–Sunday, Hong Kong time)",
       "sources": [
         "APP 双语文字"
       ]
@@ -5163,10 +5196,10 @@
     {
       "key": "copy.sessionJournal",
       "group": "计时、运动记录与总结",
-      "label": "記錄運動期間遇到的問題",
+      "label": "記錄感受/遇上的問題",
       "kind": "text",
-      "zh": "記錄運動期間遇到的問題",
-      "en": "Problems encountered during exercise",
+      "zh": "記錄感受/遇上的問題",
+      "en": "Feelings / problems encountered",
       "sources": [
         "APP 双语文字"
       ]
@@ -5502,6 +5535,17 @@
       ]
     },
     {
+      "key": "copy.smsUnavailable",
+      "group": "登录、注册与访客",
+      "label": "短訊重設密碼功能暫未開放。如需協助登入，請聯絡項目人員。",
+      "kind": "text",
+      "zh": "短訊重設密碼功能暫未開放。如需協助登入，請聯絡項目人員。",
+      "en": "Password reset by SMS is currently unavailable. Please contact the project team for help signing in.",
+      "sources": [
+        "APP 双语文字"
+      ]
+    },
+    {
       "key": "copy.smsVerificationFailed",
       "group": "登录、注册与访客",
       "label": "未能驗證代碼，請重試。",
@@ -5771,7 +5815,7 @@
       "label": "給陪同者的提示",
       "kind": "text",
       "zh": "給陪同者的提示",
-      "en": "Companion",
+      "en": "Tips for Exercise Companions",
       "sources": [
         "APP 双语文字"
       ]
@@ -5926,6 +5970,17 @@
       "kind": "text",
       "zh": "文字轉語音播放次數",
       "en": "Text-to-speech played",
+      "sources": [
+        "APP 双语文字"
+      ]
+    },
+    {
+      "key": "copy.usageVideoPlays",
+      "group": "参与者与使用数据",
+      "label": "影片播放次數",
+      "kind": "text",
+      "zh": "影片播放次數",
+      "en": "Video plays",
       "sources": [
         "APP 双语文字"
       ]
@@ -6217,12 +6272,45 @@
       ]
     },
     {
+      "key": "copy.weeklyExerciseData",
+      "group": "计时、运动记录与总结",
+      "label": "每週運動數據",
+      "kind": "text",
+      "zh": "每週運動數據",
+      "en": "Weekly exercise data",
+      "sources": [
+        "APP 双语文字"
+      ]
+    },
+    {
+      "key": "copy.weeklyExerciseRecords",
+      "group": "计时、运动记录与总结",
+      "label": "本週運動記錄",
+      "kind": "text",
+      "zh": "本週運動記錄",
+      "en": "Exercise records this week",
+      "sources": [
+        "APP 双语文字"
+      ]
+    },
+    {
       "key": "copy.weeklyGoalProgress",
       "group": "目标设置与说明",
       "label": "每週目標進度",
       "kind": "text",
       "zh": "每週目標進度",
       "en": "Weekly goal progress",
+      "sources": [
+        "APP 双语文字"
+      ]
+    },
+    {
+      "key": "copy.weeklyUsage",
+      "group": "参与者与使用数据",
+      "label": "每週使用數據",
+      "kind": "text",
+      "zh": "每週使用數據",
+      "en": "Weekly usage data",
       "sources": [
         "APP 双语文字"
       ]
@@ -6476,6 +6564,28 @@
       "kind": "text",
       "zh": "發送問題",
       "en": "Send message",
+      "sources": [
+        "app/(tabs)/chat/index.js"
+      ]
+    },
+    {
+      "key": "inline.assistant.serviceNotReady",
+      "group": "AI 助手",
+      "label": "AI 助手暫未能使用，請聯絡項目人員。",
+      "kind": "text",
+      "zh": "AI 助手暫未能使用，請聯絡項目人員。",
+      "en": "The AI assistant is not ready yet. Please contact programme staff.",
+      "sources": [
+        "app/(tabs)/chat/index.js"
+      ]
+    },
+    {
+      "key": "inline.assistant.serviceTemporarilyUnavailable",
+      "group": "AI 助手",
+      "label": "AI 助手暫時未能回答，您的問題已保留，請檢查網絡或稍後再試。",
+      "kind": "text",
+      "zh": "AI 助手暫時未能回答，您的問題已保留，請檢查網絡或稍後再試。",
+      "en": "The AI assistant could not answer right now. Your question is saved; please check your connection or try again later.",
       "sources": [
         "app/(tabs)/chat/index.js"
       ]
@@ -6789,17 +6899,6 @@
       ]
     },
     {
-      "key": "inline.assistantHistory.clearAllPreviousConversations",
-      "group": "AI 助手",
-      "label": "清空全部歷史對話？",
-      "kind": "text",
-      "zh": "清空全部歷史對話？",
-      "en": "Clear all previous conversations?",
-      "sources": [
-        "components/AssistantConversationHistory.js"
-      ]
-    },
-    {
       "key": "inline.assistantHistory.clearHistory",
       "group": "AI 助手",
       "label": "清空歷史對話",
@@ -6811,12 +6910,23 @@
       ]
     },
     {
-      "key": "inline.assistantHistory.clearWarning",
+      "key": "inline.assistantHistory.clearListedAccountWarning",
       "group": "AI 助手",
-      "label": "這會永久刪除此帳戶目前語言在這部裝置的全部歷史對話。刪除後無法恢復，不會影響目前的對話、其他帳戶或其他語言的歷史。",
+      "label": "這會永久刪除此帳戶在本列表中可刪除的中英文歷史對話，並在連線後同步至其他裝置。刪除後無法恢復；進行中的對話、未列出的歷史對話和其他帳戶不受影響。",
       "kind": "text",
-      "zh": "這會永久刪除此帳戶目前語言在這部裝置的全部歷史對話。刪除後無法恢復，不會影響目前的對話、其他帳戶或其他語言的歷史。",
-      "en": "This permanently deletes all history for this account and the current language on this device. It cannot be undone. Your current conversation, other accounts and other languages are not affected.",
+      "zh": "這會永久刪除此帳戶在本列表中可刪除的中英文歷史對話，並在連線後同步至其他裝置。刪除後無法恢復；進行中的對話、未列出的歷史對話和其他帳戶不受影響。",
+      "en": "This permanently deletes this account's Chinese and English conversations that can be deleted from this history list. The deletion syncs to other devices when online and cannot be undone. Active conversations, history outside this list and other accounts are not affected.",
+      "sources": [
+        "components/AssistantConversationHistory.js"
+      ]
+    },
+    {
+      "key": "inline.assistantHistory.clearListedConversations",
+      "group": "AI 助手",
+      "label": "清空此列表的歷史對話？",
+      "kind": "text",
+      "zh": "清空此列表的歷史對話？",
+      "en": "Clear the conversations in this history list?",
       "sources": [
         "components/AssistantConversationHistory.js"
       ]
@@ -6921,6 +7031,17 @@
       ]
     },
     {
+      "key": "inline.assistantHistory.deleteAccountWarning",
+      "group": "AI 助手",
+      "label": "這會永久刪除此帳戶的所選歷史對話，並在連線後同步至其他裝置。刪除後無法恢復；進行中的對話、其他歷史對話和其他帳戶不受影響。",
+      "kind": "text",
+      "zh": "這會永久刪除此帳戶的所選歷史對話，並在連線後同步至其他裝置。刪除後無法恢復；進行中的對話、其他歷史對話和其他帳戶不受影響。",
+      "en": "This permanently deletes the selected conversation for this account and syncs the deletion to other devices when online. It cannot be undone. Active conversations, other history and other accounts are not affected.",
+      "sources": [
+        "components/AssistantConversationHistory.js"
+      ]
+    },
+    {
       "key": "inline.assistantHistory.deletePermanently",
       "group": "AI 助手",
       "label": "永久刪除",
@@ -6938,17 +7059,6 @@
       "kind": "text",
       "zh": "刪除這段歷史對話？",
       "en": "Delete this conversation?",
-      "sources": [
-        "components/AssistantConversationHistory.js"
-      ]
-    },
-    {
-      "key": "inline.assistantHistory.deleteWarning",
-      "group": "AI 助手",
-      "label": "這會永久刪除此帳戶目前語言在這部裝置的所選歷史對話。刪除後無法恢復，不會影響目前的對話、其他帳戶或其他語言的歷史。",
-      "kind": "text",
-      "zh": "這會永久刪除此帳戶目前語言在這部裝置的所選歷史對話。刪除後無法恢復，不會影響目前的對話、其他帳戶或其他語言的歷史。",
-      "en": "This permanently deletes the selected conversation for this account and the current language on this device. It cannot be undone. Your current conversation, other accounts and other languages are not affected.",
       "sources": [
         "components/AssistantConversationHistory.js"
       ]
@@ -7289,7 +7399,7 @@
       "label": "特殊人群",
       "kind": "text",
       "zh": "特殊人群",
-      "en": "Special Population",
+      "en": "Specific Populations",
       "sources": [
         "app/(tabs)/outdoor/index.js"
       ]
@@ -8069,10 +8179,10 @@
     {
       "key": "inline.participantDay.problemsDuringExercise",
       "group": "计时、运动记录与总结",
-      "label": "運動期間遇到的問題",
+      "label": "感受/遇上的問題",
       "kind": "text",
-      "zh": "運動期間遇到的問題",
-      "en": "Problems during exercise",
+      "zh": "感受/遇上的問題",
+      "en": "Feelings / problems encountered",
       "sources": [
         "app/(tabs)/participant-usage/day.js"
       ]

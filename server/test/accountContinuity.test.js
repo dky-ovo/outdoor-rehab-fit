@@ -5,7 +5,7 @@ import express from 'express';
 import { installAccountContinuity } from '../src/accountContinuity.js';
 import { createAccountDocuments } from '../src/accountDocuments.js';
 
-async function setup(t, answer = async (_req, res) => res.json({ reply: 'done' })) {
+async function setup(t, answer = async (_req, res) => res.json({ reply: 'done' }), options = {}) {
   const sql = new DatabaseSync(':memory:');
   sql.exec(`CREATE TABLE users (id TEXT PRIMARY KEY, deleted_at TEXT);
     INSERT INTO users VALUES ('alice', NULL), ('bob', NULL);
@@ -20,7 +20,7 @@ async function setup(t, answer = async (_req, res) => res.json({ reply: 'done' }
   const app = express(); app.use(express.json());
   const documents = createAccountDocuments(db);
   const worker = installAccountContinuity({ app, database: db, documents, findUser: id => db.get('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', [id]),
-    authenticate: req => db.get('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', [req.headers.authorization || '']), answer });
+    authenticate: req => db.get('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', [req.headers.authorization || '']), answer, ...options });
   await worker.start();
   const server = app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
   const request = async (path, body, user = 'alice') => {
@@ -31,6 +31,104 @@ async function setup(t, answer = async (_req, res) => res.json({ reply: 'done' }
   return { request, db, worker, documents };
 }
 const settle = async (request, id, user = 'alice') => { for (let n=0; n<100; n++) { const result = await request(`assistant/jobs/${id}`, null, user); if (['complete','failed'].includes(result.data.status)) return result.data; await new Promise(r => setTimeout(r, 5)); } throw Error('job did not settle'); };
+test('v2 queued jobs pin runtime through switches and lost-ack retries without invoking the legacy provider', async t => {
+  let active = 'bailian', prepared = 0, release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const calls = [];
+  const env = await setup(t, async (req, res) => {
+    calls.push(req.assistantRuntime);
+    if (calls.length === 1) await gate;
+    res.json({ reply: `answer-${req.assistantRuntime.provider}`, provider: req.assistantRuntime.provider, model: req.assistantRuntime.model, responsePolicy: req.assistantRuntime.responsePolicy });
+  }, { maxConcurrentJobs: 1, prepareRequest: async input => {
+    prepared++;
+    if (input.provider !== active) throw Object.assign(new Error('changed'), { status: 409, code: 'assistantProviderChanged' });
+    return { provider: active, model: active + '-model', revision: 'rev-1', responsePolicy: 'plain', apiKey: 'never-persist' };
+  } });
+  const body = id => ({ id, request: { message: id, provider: 'bailian', runtimeSnapshot: { provider: 'deepseek', apiKey: 'injected' }, conversation: { id, userMessageId: id + '-q', locale: 'zh', provider: 'bailian', createdAt: '2026-10-08T00:00:00Z' } } });
+  try {
+    await env.request('assistant/v2/jobs', body('first'));
+    await env.request('assistant/v2/jobs', body('second'));
+    active = 'deepseek';
+    assert.equal((await env.request('assistant/v2/jobs', body('second'))).data.provider, 'bailian');
+    assert.equal((await env.request('assistant/v2/jobs/second')).data.provider, 'bailian');
+    assert.equal(prepared, 2);
+    assert.equal((await env.request('assistant/jobs', body('third'))).data.error, 'assistantProviderChanged');
+    release();
+    const result = await settle(env.request, 'second');
+    assert.equal(result.result.reply, 'answer-bailian');
+    assert.equal(result.provider, 'bailian');
+    assert.equal(calls[1].provider, 'bailian');
+    assert.equal(calls[1].apiKey, undefined);
+    const row = await env.db.get('SELECT request_json FROM assistant_jobs WHERE id = ?', ['second']);
+    assert.deepEqual(Object.keys(JSON.parse(row.request_json)), ['runtimeSnapshot']);
+    assert.ok(!row.request_json.includes('never-persist') && !row.request_json.includes('injected'));
+    assert.equal((await env.documents.sync('alice', { collection: 'assistant_bailian_zh', cursor: 0, changes: [] })).records.length, 2);
+    assert.equal((await env.documents.sync('alice', { collection: 'assistant_zh', cursor: 0, changes: [] })).records.length, 0);
+    assert.equal((await env.request('assistant/jobs', { ...body('second'), request: { message: 'other', provider: 'deepseek' } })).status, 409);
+  } finally { release(); }
+});
+test('a cross-provider worker answer is rejected and does not contaminate history', async t => {
+  const { request, documents } = await setup(t, async (_req, res) => res.json({ reply: 'wrong provider text', provider: 'deepseek' }), {
+    prepareRequest: async () => ({ provider: 'bailian', model: 'qwen', revision: 'one' }),
+  });
+  await request('assistant/jobs', { id: 'mismatch', request: { message: 'question', provider: 'bailian', conversation: { id: 'c', userMessageId: 'q', locale: 'en', provider: 'bailian', createdAt: '2026-10-08T00:00:00Z' } } });
+  const result = await settle(request, 'mismatch');
+  assert.equal(result.error, 'assistantProviderMismatch'); assert.equal(result.provider, 'bailian');
+  const records = await documents.sync('alice', { collection: 'assistant_bailian_en', cursor: 0, changes: [] });
+  assert.ok(!JSON.stringify(records).includes('wrong provider text'));
+});
+test('startup interruption retains Bailian provider provenance without retaining the request or calling another provider', async t => {
+  const env = await setup(t);
+  await env.worker.stop();
+  const snapshot = { provider: 'bailian', model: 'qwen', revision: 'before-restart', promptMode: 'none', faqEnabled: false };
+  const input = { message: 'private question', runtimeSnapshot: snapshot, conversation: { id: 'restart-c', userMessageId: 'restart-q', locale: 'en', provider: 'bailian', createdAt: '2026-10-08T00:00:00Z' } };
+  await env.db.run('INSERT INTO assistant_jobs (id,user_id,status,request_json,created_at) VALUES (?, ?, ?, ?, ?)', ['restart-b', 'alice', 'running', JSON.stringify(input), Date.now()]);
+  let calls = 0;
+  const recovery = installAccountContinuity({ app: express(), database: env.db, documents: env.documents, authenticate: async () => null, findUser: async () => null, answer: async () => { calls++; } });
+  await recovery.start(); await recovery.stop();
+  const row = await env.db.get('SELECT * FROM assistant_jobs WHERE id = ?', ['restart-b']);
+  assert.equal(row.status, 'failed'); assert.equal(row.error_code, 'assistantInterrupted');
+  assert.deepEqual(JSON.parse(row.request_json), { runtimeSnapshot: snapshot });
+  assert.equal(calls, 0);
+  assert.equal((await env.request('assistant/jobs/restart-b')).data.provider, 'bailian');
+  const records = await env.documents.sync('alice', { collection: 'assistant_bailian_en', cursor: 0, changes: [] });
+  assert.equal(records.records[0].value.messages[1].provider, 'bailian');
+  assert.equal((await env.documents.sync('alice', { collection: 'assistant_en', cursor: 0, changes: [] })).records.length, 0);
+});
+test('a whole-job deadline aborts execution and persists a terminal failure', async t => {
+  let aborted = false;
+  const { request, db } = await setup(t, async (req, res) => {
+    await new Promise(resolve => req.signal.addEventListener('abort', () => { aborted = true; resolve(); }, { once: true }));
+    res.json({ reply: 'late reply must not overwrite the timeout' });
+  }, { jobTimeoutMs: 25, maxConcurrentJobs: 1 });
+  await request('assistant/jobs', { id: 'job-deadline', request: { message: '下背痛可以用什么器械' } });
+  const result = await settle(request, 'job-deadline');
+  assert.equal(result.status, 'failed');
+  assert.equal(result.error, 'assistantTimeout');
+  assert.equal(aborted, true);
+  const row = await db.get('SELECT * FROM assistant_jobs WHERE id = ?', ['job-deadline']);
+  assert.equal(row.request_json, null); assert.equal(row.result_json, null);
+});
+test('a transport that ignores abort retains its slot; late replies cannot overwrite timeout', async t => {
+  let release, calls = 0;
+  const env = await setup(t, async (_req, res) => {
+    calls++;
+    if (calls === 1) await new Promise(resolve => { release = resolve; });
+    res.json({ reply: 'provider answer' });
+  }, { jobTimeoutMs: 25, maxConcurrentJobs: 1 });
+  try {
+    await env.request('assistant/jobs', { id: 'ignores-abort', request: { message: 'first' } });
+    assert.equal((await settle(env.request, 'ignores-abort')).error, 'assistantTimeout');
+    await env.request('assistant/jobs', { id: 'next-job', request: { message: 'second' } });
+    await new Promise(resolve => setTimeout(resolve, 35));
+    assert.equal(calls, 1);
+    assert.equal((await env.request('assistant/jobs/next-job')).data.status, 'queued');
+    release();
+    assert.equal((await settle(env.request, 'next-job')).status, 'complete');
+    assert.equal((await env.request('assistant/jobs/ignores-abort')).data.error, 'assistantTimeout');
+    assert.equal(calls, 2);
+  } finally { release?.(); }
+});
 test('provider continues after submission closes; retries generate only once and other accounts cannot read', async t => {
   let finish, calls=0;
   const env = await setup(t, async (_req, res) => { calls++; await new Promise(r => { finish=r; }); res.json({ reply:'persisted answer' }); });

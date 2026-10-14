@@ -1,3 +1,4 @@
+import AdminAiConfiguration from "../components/AdminAiConfiguration";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
@@ -54,9 +55,13 @@ import { equipmentTranslations } from "../constants/Equipments";
 import { equipmentImageSource, equipmentCategoryLabel, mergeEquipmentCategories } from "../utils/equipmentCatalog";
 import AdminEquipmentCategories from "../components/AdminEquipmentCategories";
 import { showAlert } from "../utils/alert";
+import AdminTestUsers from "../components/AdminTestUsers";
 import AdminGuestProfiles from "../components/AdminGuestProfiles";
 import AdminMediaLibrary from "../components/AdminMediaLibrary";
 import AdminMediaField from "../components/AdminMediaField";
+import AdminExerciseVideoImport from "../components/AdminExerciseVideoImport";
+import AdminExerciseVideoMetadata, { ExerciseVideoCategoryChoices, exerciseVideoEquipmentLabel, useExerciseVideoCatalog } from "../components/AdminExerciseVideoMetadata";
+import { exerciseVideoCategoryLabel, normalizeExerciseVideoMetadata } from "../utils/exerciseVideoCategories";
 import AdminRegistrationCodes from "../components/AdminRegistrationCodes";
 import AdminPaginatedList from "../components/AdminPaginatedList";
 import AdminRemotePaginatedList from "../components/AdminRemotePaginatedList";
@@ -76,19 +81,18 @@ const ROLE_LABELS = { participant: "参与者", staff: "项目人员", volunteer
 const CONTENT_TYPE_LABELS = { video: "视频", text: "文字内容", feature: "功能入口" };
 const PAGE_OPTIONS = [
 	{ key: "home", label: "APP 首页" },
+	{ key: "exercise_videos", label: "运动影片" },
 ];
 const MAINTENANCE_SECTIONS = [
 	{ key: "texts", label: "APP文字与说明", permission: "app_maintenance.text.manage" },
 	{ key: "home", label: "APP首页内容", pageKey: "home", permission: "app_maintenance.home.manage" },
+	{ key: "exercise_videos", label: "运动影片", pageKey: "exercise_videos", permission: "app_maintenance.home.manage" },
 	{ key: "equipment", label: "设施教学", permission: "app_maintenance.equipment.manage" },
 	{ key: "locations", label: "设施位置", permission: "app_maintenance.locations.manage" },
 	{ key: "ai", label: "AI助手配置", permission: "app_maintenance.ai.manage" },
 	{ key: "facilities", label: "设施数据", permission: "facilities.manage" },
 ];
-const DEEPSEEK_MODEL_OPTIONS = [
-	["deepseek-v4-flash", "DeepSeek V4 Flash（速度较快）"],
-	["deepseek-v4-pro", "DeepSeek V4 Pro（回答更强）"],
-];
+
 const ADMIN_LANGUAGE_TEXT = {
 	"zh-CN": { subtitle: "科研管理后台", menu: "功能菜单", backend: "管理后台", refresh: "刷新", logout: "退出", tabs: { overview: "数据概览", users: "用户管理", events: "科研数据", maintenance: "APP维护", messages: "查看使用者数据", personnel: "后台人员", logs: "系统日志" }, maintenance: { home: "APP首页内容", equipment: "设施教学", locations: "设施位置", ai: "AI助手配置", facilities: "设施数据" }, roles: { super_admin: "最高管理员", admin: "管理员", operator: "操作员" } },
 	"zh-HK": { subtitle: "科研管理後台", menu: "功能選單", backend: "管理後台", refresh: "重新整理", logout: "登出", tabs: { overview: "數據概覽", users: "用戶管理", events: "科研數據", maintenance: "APP維護", messages: "查看使用者數據", personnel: "後台人員", logs: "系統日誌" }, maintenance: { home: "APP首頁內容", equipment: "設施教學", locations: "設施位置", ai: "AI助手配置", facilities: "設施數據" }, roles: { super_admin: "最高管理員", admin: "管理員", operator: "操作員" } },
@@ -249,6 +253,7 @@ function adminEquipmentItems(overrides) {
 			imageUrl: override?.imageUrl || "", previewSource: override?.imageUrl ? equipmentImageSource(override.imageUrl) : zhItem.icon,
 			gifLeftUrl: override?.gifLeftUrl || "", gifRightUrl: override?.gifRightUrl || "", youtubeKey: override?.youtubeKey || zhItem.youtubeKey || "", videoUrl: override?.videoUrl || "",
 			videoUrlZh: override?.videoUrlZh || "", videoUrlEn: override?.videoUrlEn || "", videoLocalesEnabled: Boolean(override?.videoLocalesEnabled || override?.videoUrlZh || override?.videoUrlEn),
+			additionalVideos: override?.additionalVideos || [], teachingSections: override?.teachingSections || [],
 			detailsZh: override?.detailsZh || zhItem.details || "", detailsEn: override?.detailsEn || enItem.details || "",
 			kinesiologyZh: override?.kinesiologyZh || zhItem.kinesiologyTip || "", kinesiologyEn: override?.kinesiologyEn || enItem.kinesiologyTip || "",
 			ptTipZh: override?.ptTipZh || zhItem.ptTip || "", ptTipEn: override?.ptTipEn || enItem.ptTip || "", otTipZh: override?.otTipZh || zhItem.otTip || "", otTipEn: override?.otTipEn || enItem.otTip || "",
@@ -296,6 +301,10 @@ export default function AdminDashboard() {
 	const [researchAnalytics, setResearchAnalytics] = useState(null);
 	const [researchFilters, setResearchFilters] = useState(defaultResearchFilters);
 	const [contentItems, setContentItems] = useState([]); const [editingContent, setEditingContent] = useState(null);
+	const [exerciseVideoImportOpen, setExerciseVideoImportOpen] = useState(false);
+	const [exerciseVideoCategoryFilter, setExerciseVideoCategoryFilter] = useState('all');
+	const exerciseVideoCatalog = useExerciseVideoCatalog(Boolean(token && ((activeTab === 'maintenance' && maintenanceSection === 'exercise_videos') || editingContent?.pageKey === 'exercise_videos')));
+	useEffect(() => { setExerciseVideoCategoryFilter('all'); setEditingContent(null); setExerciseVideoImportOpen(false); }, [token]);
 	const [equipmentOverrides, setEquipmentOverrides] = useState([]); const [editingEquipment, setEditingEquipment] = useState(null);
 	const [equipmentCategories, setEquipmentCategories] = useState(() => mergeEquipmentCategories());
 	const [equipmentLocations, setEquipmentLocations] = useState([]); const [editingEquipmentLocation, setEditingEquipmentLocation] = useState(null);
@@ -506,23 +515,23 @@ export default function AdminDashboard() {
 	const handleSaveAiConfiguration = async () => {
 		setSaving(true); setError(""); setAiTestResult("");
 		try {
-			const result = await updateAdminAiConfiguration(token, aiConfiguration);
+			const configuration = aiConfiguration.providerMode === "deepseek_only" ? { ...aiConfiguration, provider: "deepseek" } : aiConfiguration;
+			const result = await updateAdminAiConfiguration(token, configuration);
 			setAiConfiguration({ ...result.configuration, apiKey: "" });
 		} catch (saveError) {
-			setError(saveError.code === "invalidDeepSeekConfiguration" ? "请选择 DeepSeek 模型并填写 API Key。" : "DeepSeek 配置保存失败，请稍后重试。");
+			setError(saveError.code === "assistantProviderDisabled" ? "当前仅使用 DeepSeek，请刷新页面后重试。" : saveError.code === "assistantProviderChanged" ? "配置已被其他操作更新，请刷新页面后重试。" : saveError.code === "bailianNotConfigured" ? "请先在服务器配置百炼密钥及模型。" : saveError.code === "invalidDeepSeekConfiguration" ? "请选择 DeepSeek 模型并填写 API Key。" : "AI 配置保存失败，请稍后重试。");
 		} finally { setSaving(false); }
 	};
 
 	const handleTestAiConfiguration = async () => {
 		setSaving(true); setError(""); setAiTestResult("");
 		try {
-			const saved = await updateAdminAiConfiguration(token, aiConfiguration);
-			setAiConfiguration({ ...saved.configuration, apiKey: "" });
-			const result = await testAdminAiConfiguration(token);
+			const configuration = aiConfiguration.providerMode === "deepseek_only" ? { ...aiConfiguration, provider: "deepseek" } : aiConfiguration;
+			const result = await testAdminAiConfiguration(token, configuration);
 			setAiTestResult(`连接成功：${result.model}${result.preview ? ` · ${result.preview}` : ""}`);
 		} catch (testError) {
 			const code = testError.code;
-			setError(code === "aiConfigurationIncomplete" || code === "invalidDeepSeekConfiguration" ? "请选择 DeepSeek 模型并填写 API Key。" : code === "aiInvalidResponse" ? "DeepSeek 已响应，但返回格式不正确。" : "DeepSeek 连接测试失败，请检查 API Key、模型权限及账户余额。");
+			setError(code === "assistantProviderDisabled" ? "当前仅使用 DeepSeek，请刷新页面后重试。" : code === "aiConfigurationIncomplete" || code === "invalidDeepSeekConfiguration" ? "请选择 DeepSeek 模型并填写 API Key。" : code === "aiInvalidResponse" ? "模型已响应，但返回格式不正确。" : code === "bailianNotConfigured" ? "请先在服务器填写百炼密钥并确认模型配置。" : "模型连接测试失败，请检查对应密钥、模型权限及账户余额。");
 		} finally { setSaving(false); }
 	};
 
@@ -569,6 +578,9 @@ export default function AdminDashboard() {
 
 	const handleSaveContent = async () => {
 		if (saving || !editingContent) return;
+		if (editingContent.pageKey === 'exercise_videos' && editingContent.contentType === 'video' && !editingContent.id && !normalizeExerciseVideoMetadata(editingContent).videoCategory) {
+			setError('请先选择影片分类。'); return;
+		}
 		setSaving(true); setError("");
 		try {
 			const data = {
@@ -578,13 +590,14 @@ export default function AdminDashboard() {
 				value: editingContent.value,
 				sortOrder: Number(editingContent.sortOrder) || 0,
 				isActive: editingContent.isActive,
+				...(editingContent.pageKey === 'exercise_videos' && editingContent.contentType === 'video' ? normalizeExerciseVideoMetadata(editingContent) : {}),
 			};
 			if (editingContent.id) await updateAdminContent(token, editingContent.id, data);
 			else await createAdminContent(token, data);
 			setEditingContent(null);
 			await loadDashboard(token, adminAccess, search);
-		} catch {
-			setError("维护内容保存失败，请检查页面、标题和内容地址。");
+		} catch (saveError) {
+			setError(({ invalidVideoCategory: '请选择有效的影片分类。', invalidVideoEquipmentIds: '关联器材已不可用，请重新选择后保存。', invalidExerciseVideoMetadata: '分类和关联器材只适用于运动影片。' })[saveError?.code] || "维护内容保存失败，请检查页面、标题和内容地址。");
 		} finally { setSaving(false); }
 	};
 	const handleDeleteContent = (item) => {
@@ -765,10 +778,13 @@ export default function AdminDashboard() {
 	const userMenuLabel = (key) => ({ registered: { "zh-CN": "注册用户", "zh-HK": "註冊用戶", en: "Registered users" }, guests: { "zh-CN": "访客资料", "zh-HK": "訪客資料", en: "Guest information" }, registration: { "zh-CN": "用户注册", "zh-HK": "用戶註冊", en: "User registration" } }[key]?.[adminLocale] || key);
 	const tabLabel = (key) => key === "assistant" ? assistantLabel : key === "feedback" ? ({ "zh-CN": "用户反馈", "zh-HK": "用戶回饋", en: "User Feedback" }[adminLocale]) : key === "files" ? ({ "zh-CN": "文件存储", "zh-HK": "檔案儲存", en: "File Storage" }[adminLocale]) : adminLanguage.tabs[key] || TABS.find((tab) => tab.key === key)?.label || key;
 	const permissionLabel = (permission, fallback = PERMISSION_LABELS[permission]) => ({ "feedback.read": { "zh-CN": "查看用户反馈", "zh-HK": "查看用戶回饋", en: "View user feedback" }, "feedback.manage": { "zh-CN": "处理用户反馈", "zh-HK": "處理用戶回饋", en: "Manage user feedback" } }[permission]?.[adminLocale] || fallback);
-	const maintenanceLabel = (key) => key === "texts" ? workbenchCopy.textsLabel : key === "files" ? ({ "zh-CN": "文件存储空间", "zh-HK": "檔案儲存空間", en: "File Storage" }[adminLocale] || "文件存储空间") : adminLanguage.maintenance[key] || MAINTENANCE_SECTIONS.find((item) => item.key === key)?.label || key;
+	const maintenanceLabel = (key) => key === "exercise_videos" ? (adminLocale === "en" ? "Exercise Videos" : adminLocale === "zh-HK" ? "運動影片" : "运动影片") : key === "texts" ? workbenchCopy.textsLabel : key === "files" ? ({ "zh-CN": "文件存储空间", "zh-HK": "檔案儲存空間", en: "File Storage" }[adminLocale] || "文件存储空间") : adminLanguage.maintenance[key] || MAINTENANCE_SECTIONS.find((item) => item.key === key)?.label || key;
 	const filteredEquipment = filterAdminContent(equipmentItems, equipmentFilter, ["id", "code", "nameZh", "nameEn", item => (item.categories || []).map(id => equipmentCategoryLabel(equipmentCategories.find(category => category.id === id), adminLocale) || id).join(" ")]);
 	const pageContent = contentItems.filter(item => item.pageKey === maintenancePage?.pageKey);
-	const filteredContent = filterAdminContent(pageContent, contentFilter, ["id", "title", "value", item => CONTENT_TYPE_LABELS[item.contentType]]);
+	const categoryContent = maintenancePage?.pageKey === 'exercise_videos' && exerciseVideoCategoryFilter !== 'all'
+		? pageContent.filter(item => normalizeExerciseVideoMetadata(item).videoCategory === exerciseVideoCategoryFilter) : pageContent;
+	const filteredContent = filterAdminContent(categoryContent, contentFilter, ["id", "title", "value", item => CONTENT_TYPE_LABELS[item.contentType],
+		item => item.pageKey === 'exercise_videos' ? exerciseVideoCategoryLabel(item.videoCategory, adminLocale) : '']);
 	const filteredLocations = filterAdminContent(equipmentLocations, locationFilter, ["regionZh", "regionEn", "equipmentId", item => equipmentById.get(String(item.equipmentId))?.nameZh, item => equipmentById.get(String(item.equipmentId))?.nameEn]);
 	const currentLoadFailure = (!(activeTab === "users" && userListMode !== "registered") && loadIssues.includes(activeTab === "maintenance" ? maintenanceSection : activeTab)) || (activeTab === "maintenance" && maintenanceSection === "locations" && loadIssues.includes("equipment"));
 	const selectTab = key => { setActiveTab(key); setError(""); setSaveNotice(""); if (key === "maintenance" && !adminAccess?.admin.permissions.includes(maintenancePage?.permission)) setMaintenanceSection(MAINTENANCE_SECTIONS.find(item => adminAccess?.admin.permissions.includes(item.permission))?.key || "home"); };
@@ -875,7 +891,7 @@ export default function AdminDashboard() {
 							{userListMode === "guests" ? <AdminGuestProfiles key={token} token={token} locale={adminLocale} refreshKey={guestRefreshKey} /> : userListMode === "registration" ? <AdminRegistrationCodes key={token} token={token} locale={adminLocale} canEdit={adminAccess.admin.permissions.includes("users.edit")} refreshKey={registrationRefreshKey} /> : <>
 							<View style={styles.sectionHeader}>
 								<Text style={styles.sectionTitle}>用户管理</Text>
-								<View style={{ flexDirection: "row", gap: 8 }}>{adminAccess.admin.permissions.includes("users.edit") && <TouchableOpacity style={styles.primaryButton} onPress={() => setCreatingUser({ name: "", countryCode: "+852", phone: "", email: "", profileRole: "participant", password: "" })}><Text style={styles.primaryButtonText}>新增用户</Text></TouchableOpacity>}{adminAccess.admin.permissions.includes("data.export") && <TouchableOpacity style={styles.exportButton} onPress={handleExportUsers} disabled={saving || loading}><Text style={styles.exportButtonText}>导出 CSV</Text></TouchableOpacity>}</View>
+								<View style={{ flexDirection: "row", gap: 8 }}>{adminAccess.admin.permissions.includes("users.edit") && <TouchableOpacity style={styles.primaryButton} onPress={() => setCreatingUser({ name: "", countryCode: "+852", phone: "", email: "", profileRole: "participant", password: "" })}><Text style={styles.primaryButtonText}>新增用户</Text></TouchableOpacity>}{adminAccess.admin.systemRole === "super_admin" && adminAccess.admin.permissions.includes("users.edit") && <AdminTestUsers key={token} token={token} onChanged={() => loadDashboard(token, adminAccess, search)} />}{adminAccess.admin.permissions.includes("data.export") && <TouchableOpacity style={styles.exportButton} onPress={handleExportUsers} disabled={saving || loading}><Text style={styles.exportButtonText}>导出 CSV</Text></TouchableOpacity>}</View>
 							</View>
 							<View style={styles.searchRow}>
 								<TextInput style={[styles.input, styles.searchInput]} value={search} onChangeText={setSearch} placeholder="搜索姓名、手机号或电邮" onSubmitEditing={handleSearch} />
@@ -949,18 +965,20 @@ export default function AdminDashboard() {
 					{activeTab === "maintenance" && !!maintenancePage?.pageKey && (
 						<>
 							<View style={styles.sectionHeader}>
-								<View><Text style={styles.sectionTitle}>{maintenancePage?.label}</Text><Text style={styles.sectionHint}>新增视频、文字说明或功能入口，并控制排序及上下架。</Text></View>
-								<TouchableOpacity style={styles.primaryButton} onPress={() => setEditingContent({ pageKey: maintenancePage?.pageKey || "home", contentType: "video", title: "", value: "", sortOrder: 0, isActive: true })}><Text style={styles.primaryButtonText}>新增内容</Text></TouchableOpacity>
+								<View><Text style={styles.sectionTitle}>{maintenanceLabel(maintenanceSection)}</Text><Text style={styles.sectionHint}>新增视频、文字说明或功能入口，并控制排序及上下架。</Text></View>
+								<TouchableOpacity style={styles.primaryButton} onPress={() => maintenancePage?.pageKey === "exercise_videos" ? setExerciseVideoImportOpen(true) : setEditingContent({ pageKey: maintenancePage?.pageKey || "home", contentType: "video", title: "", value: "", sortOrder: Math.max(0, ...pageContent.map(item => Number(item.sortOrder) || 0)) + 1, isActive: true })}><Text style={styles.primaryButtonText}>{maintenancePage?.pageKey === "exercise_videos" ? "添加影片（可多选）" : "新增内容"}</Text></TouchableOpacity>
 							</View>
-							<AdminContentToolbar value={contentFilter} onChange={setContentFilter} count={filteredContent.length} total={pageContent.length} placeholder="搜索首页内容标题、类型或文字" locale={adminLocale} testID="admin-home-filter" />
-							{<AdminPaginatedList items={filteredContent} locale={adminLocale} resetKey={`${token}:${maintenanceSection}:${JSON.stringify(contentFilter)}`} testID="admin-content">{(item) => (
+							<AdminContentToolbar value={contentFilter} onChange={setContentFilter} count={filteredContent.length} total={pageContent.length} placeholder="搜索内容标题、类型或文字" locale={adminLocale} testID="admin-home-filter" />
+							{maintenancePage?.pageKey === 'exercise_videos' && <ExerciseVideoCategoryChoices value={exerciseVideoCategoryFilter} onChange={setExerciseVideoCategoryFilter} locale={adminLocale} includeAll allowUncategorized testID="admin-exercise-video-filter" />}
+							{<AdminPaginatedList items={filteredContent} locale={adminLocale} resetKey={`${token}:${maintenanceSection}:${JSON.stringify(contentFilter)}:${exerciseVideoCategoryFilter}`} testID="admin-content">{(item) => (
 								<View key={item.id} style={styles.listCard}>
 									<View style={styles.listMain}>
 										<Text style={styles.listTitle}>{item.title}</Text>
 										<Text style={styles.listDetail}>{PAGE_OPTIONS.find((page) => page.key === item.pageKey)?.label || item.pageKey} · {CONTENT_TYPE_LABELS[item.contentType] || item.contentType} · 排序 {item.sortOrder}</Text>
+										{item.pageKey === 'exercise_videos' && item.contentType === 'video' && <Text testID={`exercise-video-summary-${item.id}`} style={styles.listDetail}>{exerciseVideoCategoryLabel(item.videoCategory, adminLocale)}{normalizeExerciseVideoMetadata(item).equipmentIds.map(id => ` · ${exerciseVideoEquipmentLabel(exerciseVideoCatalog.items.find(equipment => String(equipment.id) === id) || { id: `#${id}` }, adminLocale)}`).join('')}</Text>}
 										<Text style={styles.listMeta} numberOfLines={1}>{item.isActive ? "已上架" : "已下架"} · {item.value}</Text>
 									</View>
-									<TouchableOpacity style={styles.editButton} onPress={() => setEditingContent({ ...item })}><Text style={styles.editButtonText}>编辑</Text></TouchableOpacity>
+									<TouchableOpacity testID={`admin-edit-content-${item.id}`} style={styles.editButton} onPress={() => setEditingContent({ ...item, ...(item.pageKey === 'exercise_videos' && item.contentType === 'video' ? normalizeExerciseVideoMetadata(item) : {}) })}><Text style={styles.editButtonText}>编辑</Text></TouchableOpacity>
 									<TouchableOpacity style={[styles.editButton, { backgroundColor: "#FDECEC" }]} onPress={() => handleDeleteContent(item)}><Text style={{ color: "#B42318", fontWeight: "700" }}>删除</Text></TouchableOpacity>
 								</View>
 							)}</AdminPaginatedList>}
@@ -1011,19 +1029,7 @@ export default function AdminDashboard() {
 					)}
 
 					{activeTab === "maintenance" && maintenanceSection === "ai" && (
-						<>
-							<View style={styles.sectionHeader}><View><Text style={styles.sectionTitle}>DeepSeek AI 助手配置</Text><Text style={styles.sectionHint}>AI 助手只使用 DeepSeek 官方接口。服务器先锁定身体部位和器材类别，再让 DeepSeek 从符合条件的器材中选择，避免腿部问题推荐手部器材。</Text></View></View>
-							<View style={[styles.panel, styles.facilityPanel]}>
-								<Text style={styles.fieldLabel}>选择 DeepSeek 模型</Text>
-								<View style={styles.roleRow}>{DEEPSEEK_MODEL_OPTIONS.map(([model, label]) => <TouchableOpacity key={model} style={[styles.roleButton, aiConfiguration.model === model && styles.roleButtonActive]} onPress={() => setAiConfiguration((item) => ({ ...item, model }))}><Text style={[styles.roleButtonText, aiConfiguration.model === model && styles.roleButtonTextActive]}>{label}</Text></TouchableOpacity>)}</View>
-								<Text style={styles.fieldLabel}>DeepSeek API Key</Text><TextInput style={styles.input} value={aiConfiguration.apiKey || ""} onChangeText={(apiKey) => setAiConfiguration((item) => ({ ...item, apiKey }))} autoCapitalize="none" secureTextEntry placeholder={aiConfiguration.apiKeyConfigured ? "已保存；留空表示不更换" : "输入 DeepSeek API Key"} />
-								<Text style={styles.fieldHint}>接口已固定为 DeepSeek 官方地址。API Key 只保存在服务器，不会出现在移动端、日志或接口返回中。</Text>
-								<TouchableOpacity style={styles.primaryButton} onPress={handleSaveAiConfiguration} disabled={saving}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>保存 DeepSeek 配置</Text>}</TouchableOpacity>
-								<TouchableOpacity style={[styles.exportButton, { marginTop: 10 }]} onPress={handleTestAiConfiguration} disabled={saving}><Text style={styles.exportButtonText}>保存并测试连接</Text></TouchableOpacity>
-								{!!aiTestResult && <Text style={[styles.fieldHint, { color: "#177245", marginTop: 10 }]}>{aiTestResult}</Text>}
-								<Text style={[styles.fieldHint, { marginTop: 12 }]}>分类示例：腿／膝→下肢、活动度；腰背→活动度、肌力；肩臂→上肢、活动度；平衡／跌倒→平衡；心肺→有氧；放松／按摩→肌肉放松。问候等一般对话不会显示器材推荐。</Text>
-							</View>
-						</>
+						<AdminAiConfiguration configuration={aiConfiguration} onChange={value => { setAiConfiguration(value); setAiTestResult(""); }} onSave={handleSaveAiConfiguration} onTest={handleTestAiConfiguration} busy={saving} testResult={aiTestResult} styles={styles} />
 					)}
 
 					{activeTab === "maintenance" && maintenanceSection === "facilities" && facilitySource && (
@@ -1163,16 +1169,19 @@ export default function AdminDashboard() {
 				</View>
 			</Modal>
 
+			<AdminExerciseVideoImport visible={exerciseVideoImportOpen} token={token} permissions={adminAccess?.admin.permissions || []} existing={contentItems} locale={adminLocale}
+				onClose={() => setExerciseVideoImportOpen(false)} onSaved={() => { void loadDashboard(token, adminAccess, search).catch(() => setError("影片已发布，但列表刷新失败，请刷新页面查看。")); }} />
 			<Modal visible={!!editingContent} transparent animationType="fade" onRequestClose={() => setEditingContent(null)}>
 				<View style={styles.modalOverlay}><ScrollView style={styles.personnelModalScroll} contentContainerStyle={styles.modalCard}>
 					<Text style={styles.modalTitle}>{editingContent?.id ? "编辑维护内容" : "新增维护内容"}</Text>
 					{!!error && <Text style={styles.errorText}>{error}</Text>}
 					<Text style={styles.fieldLabel}>显示界面</Text>
-					<View style={styles.roleRow}>{PAGE_OPTIONS.map((page) => <TouchableOpacity key={page.key} style={[styles.roleButton, editingContent?.pageKey === page.key && styles.roleButtonActive]} onPress={() => setEditingContent((value) => ({ ...value, pageKey: page.key }))}><Text style={[styles.roleButtonText, editingContent?.pageKey === page.key && styles.roleButtonTextActive]}>{page.label}</Text></TouchableOpacity>)}</View>
+					<View style={styles.roleRow}>{PAGE_OPTIONS.filter(page => !editingContent?.id || page.key === editingContent.pageKey).map((page) => <TouchableOpacity key={page.key} style={[styles.roleButton, editingContent?.pageKey === page.key && styles.roleButtonActive]} onPress={() => setEditingContent((value) => ({ ...value, pageKey: page.key, ...(page.key === "exercise_videos" ? { contentType: "video", value: "" } : {}) }))}><Text style={[styles.roleButtonText, editingContent?.pageKey === page.key && styles.roleButtonTextActive]}>{page.label}</Text></TouchableOpacity>)}</View>
 					<Text style={styles.fieldLabel}>内容类型</Text>
-					<View style={styles.roleRow}>{Object.entries(CONTENT_TYPE_LABELS).map(([type, label]) => <TouchableOpacity key={type} style={[styles.roleButton, editingContent?.contentType === type && styles.roleButtonActive]} onPress={() => setEditingContent((value) => ({ ...value, contentType: type }))}><Text style={[styles.roleButtonText, editingContent?.contentType === type && styles.roleButtonTextActive]}>{label}</Text></TouchableOpacity>)}</View>
+					<View style={styles.roleRow}>{Object.entries(CONTENT_TYPE_LABELS).filter(([type]) => (!editingContent?.id || type === editingContent.contentType) && (editingContent?.pageKey !== "exercise_videos" || type === "video")).map(([type, label]) => <TouchableOpacity key={type} style={[styles.roleButton, editingContent?.contentType === type && styles.roleButtonActive]} onPress={() => setEditingContent((value) => ({ ...value, contentType: type }))}><Text style={[styles.roleButtonText, editingContent?.contentType === type && styles.roleButtonTextActive]}>{label}</Text></TouchableOpacity>)}</View>
 					<Text style={styles.fieldLabel}>标题</Text><TextInput style={styles.input} value={editingContent?.title || ""} onChangeText={(title) => setEditingContent((value) => ({ ...value, title }))} />
-					{editingContent?.contentType === "video" ? <AdminMediaField key={`home-video-${editingContent?.id || "new"}`} label="首页视频" kind="video" token={token} permissions={adminAccess?.admin.permissions || []} disabled={saving} value={directVideoUri(editingContent?.value) ? editingContent.value : ""} legacyValue={youtubeVideoId(editingContent?.value) ? editingContent.value : ""} onChange={(value) => setEditingContent((current) => current ? ({ ...current, value }) : null)} /> : <><Text style={styles.fieldLabel}>{editingContent?.contentType === "feature" ? "APP 路由或网页地址" : "文字内容"}</Text><TextInput style={[styles.input, { minHeight: 82 }]} multiline value={editingContent?.value || ""} onChangeText={(value) => setEditingContent((current) => ({ ...current, value }))} /></>}
+					{editingContent?.pageKey === 'exercise_videos' && editingContent?.contentType === 'video' && <AdminExerciseVideoMetadata value={editingContent} onChange={setEditingContent} catalog={exerciseVideoCatalog} locale={adminLocale} disabled={saving} allowUncategorized={Boolean(editingContent.id)} testID="admin-exercise-video-edit" />}
+					{editingContent?.contentType === "video" ? <AdminMediaField key={`home-video-${editingContent?.id || "new"}`} label={editingContent?.pageKey === "exercise_videos" ? "运动影片" : "首页视频"} kind="video" token={token} permissions={adminAccess?.admin.permissions || []} disabled={saving} value={directVideoUri(editingContent?.value) ? editingContent.value : ""} legacyValue={youtubeVideoId(editingContent?.value) ? editingContent.value : ""} onChange={(value) => setEditingContent((current) => current ? ({ ...current, value }) : null)} /> : <><Text style={styles.fieldLabel}>{editingContent?.contentType === "feature" ? "APP 路由或网页地址" : "文字内容"}</Text><TextInput style={[styles.input, { minHeight: 82 }]} multiline value={editingContent?.value || ""} onChangeText={(value) => setEditingContent((current) => ({ ...current, value }))} /></>}
 					<Text style={styles.fieldLabel}>显示顺序（数字越小越靠前）</Text><TextInput style={styles.input} keyboardType="numeric" value={String(editingContent?.sortOrder ?? 0)} onChangeText={(sortOrder) => setEditingContent((value) => ({ ...value, sortOrder }))} />
 					<TouchableOpacity style={[styles.statusButton, !editingContent?.isActive && styles.statusButtonInactive]} onPress={() => setEditingContent((value) => ({ ...value, isActive: !value.isActive }))}><Text style={styles.statusButtonText}>{editingContent?.isActive ? "已上架（点击下架）" : "已下架（点击上架）"}</Text></TouchableOpacity>
 					<View style={styles.modalActions}><TouchableOpacity style={styles.cancelButton} onPress={() => setEditingContent(null)}><Text style={styles.cancelButtonText}>取消</Text></TouchableOpacity><TouchableOpacity style={[styles.primaryButton, styles.saveButton]} onPress={handleSaveContent} disabled={saving}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>保存并发布</Text>}</TouchableOpacity></View>

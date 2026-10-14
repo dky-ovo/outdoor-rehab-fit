@@ -6,7 +6,7 @@ const READ_PERMISSIONS = ["app_maintenance.files.manage", "app_maintenance.equip
 export function explorerPermissions(permissions = [], { picker = false, deleted = false, busy = false } = {}) {
 	const read = READ_PERMISSIONS.some(permission => permissions.includes(permission));
 	const manage = permissions.includes(READ_PERMISSIONS[0]);
-	return { read, manage, upload: !busy && !deleted && (manage || (picker && read)), mutate: !busy && !deleted && manage && !picker, restore: !busy && deleted && manage && !picker };
+	return { read, manage, upload: !busy && !deleted && manage && !picker, mutate: !busy && !deleted && manage && !picker, restore: !busy && deleted && manage && !picker };
 }
 
 export function explorerSelection(items, kind = "") {

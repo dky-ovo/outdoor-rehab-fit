@@ -38,6 +38,7 @@ jest.mock("../../components/CustomBackButton", () => () => null);
 jest.mock("../../components/SearchBar", () => () => null);
 jest.mock("../../components/TTSButton", () => () => null);
 jest.mock("../../components/AudioPlayer", () => () => null);
+jest.mock("../../components/EquipmentIndoorVideos", () => () => null);
 jest.mock("../../components/ManagedContent", () => { const { Text } = require("react-native"); return () => <Text testID="facility-last-content">Last uploaded information</Text>; });
 jest.mock("../../components/MediaVideo", () => { const { Text } = require("react-native"); return () => <Text testID="facility-portrait-video">Portrait video</Text>; });
 jest.mock("../../components/ThemedText", () => ({ ThemedText: require("react-native").Text }));

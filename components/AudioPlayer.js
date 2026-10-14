@@ -1,11 +1,11 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { AppState, View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import Slider from "@react-native-community/slider";
 import { MaterialIcons } from "@expo/vector-icons";
-import * as Speech from "expo-speech";
 import { ensurePlaybackAudioMode } from "../utils/audioMode";
+import { claimFacilityAudio } from "../utils/facilityAudioCoordination";
 
 const AudioPlayer = ({ audioFile, onPlayStart, onPlaybackSample }) => {
 	const player = useAudioPlayer(audioFile);
@@ -13,53 +13,103 @@ const AudioPlayer = ({ audioFile, onPlayStart, onPlaybackSample }) => {
 	const focused = useIsFocused();
 	const wasPlaying = useRef(false);
 	const seeking = useRef(false);
+	const claimRef = useRef(null);
+	const lifecycle = useRef({ mounted: true, focused });
+	lifecycle.current.focused = focused;
+	const sourceRef = useRef(audioFile);
+	sourceRef.current = audioFile;
+	const statusSourceRef = useRef(audioFile);
+	const sampleRef = useRef(onPlaybackSample);
+	sampleRef.current = onPlaybackSample;
+	const pausedByRequest = useRef(false);
+	const [interrupted, setInterrupted] = useState(false);
+	// Expo releases a replaced/unmounted shared player before our effect cleanup.
+	const pausePlayer = () => { try { player.pause(); } catch { /* Already released. */ } };
 
-	const isPlaying = status.playing;
+	const isPlaying = status.playing && !interrupted;
 	useEffect(() => {
-		if (!focused || AppState.currentState === "background" || AppState.currentState === "inactive" || seeking.current) { wasPlaying.current = false; onPlaybackSample?.("inactive"); return; }
+		if (status.didJustFinish && !status.playing) claimRef.current?.release();
+		if (statusSourceRef.current !== audioFile || !focused || AppState.currentState === "background" || AppState.currentState === "inactive" || seeking.current || pausedByRequest.current) { wasPlaying.current = false; onPlaybackSample?.("inactive"); return; }
 		const state = status.playing && !status.isBuffering ? (wasPlaying.current ? "progress" : "playing") : status.didJustFinish ? "ended" : "paused";
 		onPlaybackSample?.(state, { positionMs: status.currentTime * 1000, durationMs: status.duration * 1000 });
 		wasPlaying.current = Boolean(status.playing && !status.isBuffering);
-	}, [status.currentTime, status.duration, status.playing, status.isBuffering, status.didJustFinish, focused, onPlaybackSample]);
+	}, [audioFile, status.currentTime, status.duration, status.playing, status.isBuffering, status.didJustFinish, focused, onPlaybackSample]);
 	useEffect(() => {
-		const pause = () => { wasPlaying.current = false; onPlaybackSample?.("inactive"); player.pause(); };
+		lifecycle.current.mounted = true;
+		statusSourceRef.current = audioFile;
+		const sample = sampleRef.current;
+		const pause = () => {
+			try { void claimRef.current?.cancel(); } catch { /* The native player may already have been released. */ }
+			pausedByRequest.current = true;
+			wasPlaying.current = false; sample?.("inactive");
+			pausePlayer();
+		};
 		if (!focused) pause();
 		const listener = AppState.addEventListener("change", (state) => { if (state !== "active") pause(); });
-		return () => { listener.remove(); wasPlaying.current = false; onPlaybackSample?.("inactive"); };
-	}, [focused, player, onPlaybackSample]);
-
-	useEffect(() => {
-		ensurePlaybackAudioMode();
-		if (player) {
-			player.volume = 1;
-		}
-	}, [player]);
+		const visibility = () => { if (document.hidden) pause(); };
+		if (typeof document !== "undefined") document.addEventListener("visibilitychange", visibility);
+		return () => {
+			lifecycle.current.mounted = false;
+			listener.remove();
+			if (typeof document !== "undefined") document.removeEventListener("visibilitychange", visibility);
+			pause();
+		};
+	}, [focused, player, audioFile]);
 
 	async function playSound() {
+		if (!lifecycle.current.mounted || !lifecycle.current.focused || sourceRef.current !== audioFile || AppState.currentState === "background" || AppState.currentState === "inactive" || (typeof document !== "undefined" && document.hidden)) return;
+		// The second tap also cancels while prepare/play is ahead of the native status event.
+		if (claimRef.current?.isCurrent()) {
+			void claimRef.current.cancel();
+			return;
+		}
+		let claim;
 		try {
-			await Speech.stop();
+			claim = claimFacilityAudio("guidance", () => {
+				pausedByRequest.current = true;
+				wasPlaying.current = false;
+				onPlaybackSample?.("inactive");
+				if (lifecycle.current.mounted) setInterrupted(true);
+				pausePlayer(); // Keep currentTime so Play resumes from this position.
+			});
+			claim.pending = true;
+			claimRef.current = claim;
+			const valid = () => claim.isCurrent() && lifecycle.current.mounted && lifecycle.current.focused && sourceRef.current === audioFile && AppState.currentState !== "background" && AppState.currentState !== "inactive" && !(typeof document !== "undefined" && document.hidden);
+			await claim.ready;
+			if (!valid()) return;
 			await ensurePlaybackAudioMode();
-			if (onPlayStart) onPlayStart();
+			if (!valid()) return;
 			if (player) {
 				player.volume = 1;
 			}
 			// Replay from start if the audio has finished
 			if (status.didJustFinish || (status.duration > 0 && status.currentTime >= status.duration - 0.25)) {
 				await player.seekTo(0);
+				if (!valid()) return;
 			}
+			claim.pending = false;
+			pausedByRequest.current = false;
+			setInterrupted(false);
 			player.play();
+			if (onPlayStart) onPlayStart();
 		} catch (error) {
+			try { void claim?.cancel(); } catch { /* Keep a native teardown error from restarting this request. */ }
 			console.warn("Audio play failed", error);
 		}
 	}
 
 	function pauseSound() {
-		player.pause();
+		void claimRef.current?.cancel();
+		pausedByRequest.current = true;
+		wasPlaying.current = false; onPlaybackSample?.("inactive");
+		pausePlayer();
 	}
 
 	function stopSound() {
+		void claimRef.current?.cancel();
+		pausedByRequest.current = true;
 		wasPlaying.current = false; onPlaybackSample?.("seeking");
-		player.pause();
+		pausePlayer();
 		player.seekTo(0);
 	}
 

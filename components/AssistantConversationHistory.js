@@ -2,7 +2,7 @@ import { appText } from "../utils/appText";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ModalSafeAreaView from './ModalSafeAreaView';
 import { RFValue } from "react-native-responsive-fontsize";
 
 const timestamp = value => {
@@ -21,7 +21,6 @@ function displayDate(value, en) {
 // Parent supplies safely formatted historical answers. This reader deliberately
 // has no send, resume, speech, network, or active-chat-context callbacks.
 export default function AssistantConversationHistory({ visible, locale, conversations = [], onClose, loading = false, error = null, onDelete, onClearAll, deleting = false, deleteError = null }) {
-  const insets = useSafeAreaInsets();
   const [selectedId, setSelectedId] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
   const confirming = useRef(false);
@@ -54,7 +53,7 @@ export default function AssistantConversationHistory({ visible, locale, conversa
   const deleteLabel = appText(en ? "en" : "zh", "inline.assistantHistory.delete", {"zh":"刪除","en":"Delete"});
   const clearLabel = appText(en ? "en" : "zh", "inline.assistantHistory.clearHistory", {"zh":"清空歷史對話","en":"Clear history"});
   const canDelete = !deleting && typeof onDelete === "function";
-  const canClear = !deleting && ordered.length > 0 && typeof onClearAll === "function";
+  const canClear = !deleting && ordered.some(item => item.canDelete !== false) && typeof onClearAll === "function";
   const confirmDelete = async () => {
     if (!confirmation || deleting || confirming.current) return;
     const action = confirmation.kind === "all" ? onClearAll : onDelete;
@@ -68,7 +67,7 @@ export default function AssistantConversationHistory({ visible, locale, conversa
     ? (deleting ? close : () => setConfirmation(null))
     : selected && !busy ? () => setSelectedId(null) : close;
   return <Modal testID="assistant-conversation-history-modal" visible animationType="none" presentationStyle="fullScreen" onRequestClose={requestClose}>
-    <View accessibilityViewIsModal style={[styles.page, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <ModalSafeAreaView accessibilityViewIsModal style={styles.page}>
       <View style={styles.header}>
         <View style={styles.toolbar}>
           {selected && !busy && !confirmation ? <TouchableOpacity testID="assistant-history-back" onPress={() => setSelectedId(null)} accessibilityRole="button" accessibilityLabel={backLabel} style={styles.back}>
@@ -86,11 +85,11 @@ export default function AssistantConversationHistory({ visible, locale, conversa
       </View> : error ? <View testID="assistant-history-error" style={styles.state}>
         <Text accessibilityRole="alert" style={styles.stateText}>{appText(en ? "en" : "zh", "inline.assistantHistory.historyCouldNotBeLoadedCloseThisPage", {"zh":"暫時無法載入歷史對話，請關閉後再試。","en":"History could not be loaded. Close this page and try again."})}</Text>
       </View> : confirmation ? <ScrollView key="delete-confirmation" testID="assistant-history-delete-confirmation" style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text accessibilityRole="header" style={styles.conversationTitle}>{confirmation.kind === "all" ? (appText(en ? "en" : "zh", "inline.assistantHistory.clearAllPreviousConversations", {"zh":"清空全部歷史對話？","en":"Clear all previous conversations?"})) : (appText(en ? "en" : "zh", "inline.assistantHistory.deleteThisConversation", {"zh":"刪除這段歷史對話？","en":"Delete this conversation?"}))}</Text>
+        <Text accessibilityRole="header" style={styles.conversationTitle}>{confirmation.kind === "all" ? (appText(en ? "en" : "zh", "inline.assistantHistory.clearListedConversations", {"zh":"清空此列表的歷史對話？","en":"Clear the conversations in this history list?"})) : (appText(en ? "en" : "zh", "inline.assistantHistory.deleteThisConversation", {"zh":"刪除這段歷史對話？","en":"Delete this conversation?"}))}</Text>
         {confirmation.kind === "one" && <Text style={styles.confirmationName}>{confirmation.title}</Text>}
         <Text style={styles.confirmationText}>{confirmation.kind === "all"
-          ? appText(locale, "inline.assistantHistory.clearWarning", { zh: "這會永久刪除此帳戶目前語言在這部裝置的全部歷史對話。刪除後無法恢復，不會影響目前的對話、其他帳戶或其他語言的歷史。", en: "This permanently deletes all history for this account and the current language on this device. It cannot be undone. Your current conversation, other accounts and other languages are not affected." })
-          : appText(locale, "inline.assistantHistory.deleteWarning", { zh: "這會永久刪除此帳戶目前語言在這部裝置的所選歷史對話。刪除後無法恢復，不會影響目前的對話、其他帳戶或其他語言的歷史。", en: "This permanently deletes the selected conversation for this account and the current language on this device. It cannot be undone. Your current conversation, other accounts and other languages are not affected." })}</Text>
+          ? appText(locale, "inline.assistantHistory.clearListedAccountWarning", { zh: "這會永久刪除此帳戶在本列表中可刪除的中英文歷史對話，並在連線後同步至其他裝置。刪除後無法恢復；進行中的對話、未列出的歷史對話和其他帳戶不受影響。", en: "This permanently deletes this account's Chinese and English conversations that can be deleted from this history list. The deletion syncs to other devices when online and cannot be undone. Active conversations, history outside this list and other accounts are not affected." })
+          : appText(locale, "inline.assistantHistory.deleteAccountWarning", { zh: "這會永久刪除此帳戶的所選歷史對話，並在連線後同步至其他裝置。刪除後無法恢復；進行中的對話、其他歷史對話和其他帳戶不受影響。", en: "This permanently deletes the selected conversation for this account and syncs the deletion to other devices when online. It cannot be undone. Active conversations, other history and other accounts are not affected." })}</Text>
         {deleting && <View testID="assistant-history-deleting" style={styles.deleting} accessibilityRole="progressbar" accessibilityLabel={appText(en ? "en" : "zh", "inline.assistantHistory.deletingHistory", {"zh":"正在刪除歷史對話","en":"Deleting history"})}><ActivityIndicator color="#840B1C" /><Text style={styles.buttonText}>{appText(en ? "en" : "zh", "inline.assistantHistory.deleting", {"zh":"正在刪除…","en":"Deleting…"})}</Text></View>}
         <View style={styles.confirmationActions}>
           <TouchableOpacity testID="assistant-history-delete-cancel" accessibilityRole="button" accessibilityLabel={appText(en ? "en" : "zh", "inline.assistantHistory.cancelDeletion", {"zh":"取消刪除","en":"Cancel deletion"})} disabled={deleting} accessibilityState={{ disabled: deleting }} style={[styles.cancelButton, deleting && styles.disabled]} onPress={() => { if (!deleting) setConfirmation(null); }}><Text style={styles.buttonText}>{appText(en ? "en" : "zh", "inline.assistantHistory.cancel", {"zh":"取消","en":"Cancel"})}</Text></TouchableOpacity>
@@ -113,10 +112,10 @@ export default function AssistantConversationHistory({ visible, locale, conversa
             <View style={styles.rowContent}><Text style={styles.conversationTitle}>{conversation.title || (appText(en ? "en" : "zh", "inline.assistantHistory.conversation", {"zh":"對話","en":"Conversation"}))}</Text><Text style={styles.date}>{displayDate(conversation.updatedAt || conversation.createdAt, en)}</Text></View>
             <Ionicons name="chevron-forward" size={24} color="#840B1C" />
           </TouchableOpacity>
-          <TouchableOpacity testID={`assistant-history-delete-${conversation.id}`} accessibilityRole="button" accessibilityLabel={`${deleteLabel} ${conversation.title || (appText(en ? "en" : "zh", "inline.assistantHistory.conversation679821", {"zh":"歷史對話","en":"conversation"}))}`} accessibilityState={{ disabled: !canDelete }} disabled={!canDelete} style={[styles.deleteButton, !canDelete && styles.disabled]} onPress={() => { if (canDelete) setConfirmation({ kind: "one", id: conversation.id, title: conversation.title || (appText(en ? "en" : "zh", "inline.assistantHistory.conversation", {"zh":"對話","en":"Conversation"})) }); }}><Ionicons name="trash-outline" size={22} color="#840B1C" /><Text style={styles.buttonText}>{deleteLabel}</Text></TouchableOpacity>
+          <TouchableOpacity testID={`assistant-history-delete-${conversation.id}`} accessibilityRole="button" accessibilityLabel={`${deleteLabel} ${conversation.title || (appText(en ? "en" : "zh", "inline.assistantHistory.conversation679821", {"zh":"歷史對話","en":"conversation"}))}`} accessibilityState={{ disabled: !canDelete || conversation.canDelete === false }} disabled={!canDelete || conversation.canDelete === false} style={[styles.deleteButton, (!canDelete || conversation.canDelete === false) && styles.disabled]} onPress={() => { if (canDelete && conversation.canDelete !== false) setConfirmation({ kind: "one", id: conversation.id, title: conversation.title || (appText(en ? "en" : "zh", "inline.assistantHistory.conversation", {"zh":"對話","en":"Conversation"})) }); }}><Ionicons name="trash-outline" size={22} color="#840B1C" /><Text style={styles.buttonText}>{deleteLabel}</Text></TouchableOpacity>
         </View>) : <Text testID="assistant-history-empty" style={styles.stateText}>{appText(en ? "en" : "zh", "inline.assistantHistory.noPreviousConversationsYet", {"zh":"暫時未有歷史對話。","en":"No previous conversations yet."})}</Text>}
       </ScrollView>}
-    </View>
+    </ModalSafeAreaView>
   </Modal>;
 }
 

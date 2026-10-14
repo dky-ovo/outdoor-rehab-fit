@@ -97,17 +97,22 @@ export const getSessions = (token, { strict = false } = {}) => {
 		// Pending edits may have the SAME id as an older server record. They must
 		// be retried too, otherwise the next refresh silently undoes the edit.
 		const pendingLocal = local.filter((session) => pendingIds.has(String(session.id)) || (!migrated && !remoteIds.has(String(session.id))));
-		await Promise.all(pendingLocal.map((session) => saveServerSession(token, session)));
+		// One invalid/offline local record must not discard successfully fetched
+		// sessions from another device. Acknowledge only confirmed uploads and
+		// retain failed records for retry while still committing the download.
+		const uploads = await Promise.allSettled(pendingLocal.map((session) => saveServerSession(token, session)));
+		const failedUpload = uploads.find(result => result.status === 'rejected');
 		assertOwner();
-		return withSessionStorage(async (checkOwner) => {
+		const merged = await withSessionStorage(async (checkOwner) => {
 			const current = await readSessionState(checkOwner);
 			// The user may have saved or edited again while the network was busy.
 			// Keep those latest pending values over both server and upload snapshots.
 			const newerLocal = current.local.filter((session) => current.pendingIds.has(String(session.id)) || (!current.migrated && !remoteIds.has(String(session.id))));
 			const mergedMap = new Map([...remote, ...pendingLocal, ...newerLocal].map((session) => [String(session.id), session]));
 			const merged = sortNewest([...mergedMap.values()]);
-			pendingLocal.forEach((uploaded) => {
-				if (sameRecord(current.local.find((item) => String(item.id) === String(uploaded.id)), uploaded)) current.pendingIds.delete(String(uploaded.id));
+			pendingLocal.forEach((uploaded, index) => {
+				if (uploads[index].status === 'rejected') current.pendingIds.add(String(uploaded.id));
+				else if (sameRecord(current.local.find((item) => String(item.id) === String(uploaded.id)), uploaded)) current.pendingIds.delete(String(uploaded.id));
 			});
 			await setUserJson(LEAF, merged);
 			checkOwner();
@@ -117,6 +122,8 @@ export const getSessions = (token, { strict = false } = {}) => {
 			if (!sameRecord(current.local, merged)) notifyAccountData(owner, 'sessions', true);
 			return merged;
 		}, owner);
+		if (failedUpload) throw failedUpload.reason;
+		return merged;
 	}, owner);
 	refreshingSessions.set(refreshKey, refresh);
 	const clear = () => { if (refreshingSessions.get(refreshKey) === refresh) refreshingSessions.delete(refreshKey); };

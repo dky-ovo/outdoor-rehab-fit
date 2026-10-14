@@ -5,6 +5,7 @@ import { readConfig } from "./config.js";
 import { readMysqlConfig } from "./mysqlConfig.js";
 import { createMysqlDatabase } from "./mysqlDatabase.js";
 import { facilitySource, safeSyncFacilities } from "./mysqlFacilities.js";
+import { createBailianFaqSelector } from "./assistantBailian.js";
 
 function productionConfiguration(env) {
   env = { ...env };
@@ -88,9 +89,10 @@ async function shutdown() {
 
 try {
   const { config, mysql } = productionConfiguration(process.env);
+  const faqSelector = createBailianFaqSelector();
   database = createMysqlDatabase(mysql);
   const tables = await database.get("SELECT COUNT(*) AS count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'");
-  if (Number(tables?.count) !== 41 ||
+  if (Number(tables?.count) !== 42 ||
       !await database.get("SELECT id FROM ai_configuration WHERE id = 'default'") ||
       !await database.get("SELECT id FROM media_categories WHERE id = 'other'") ||
       !await database.get("SELECT a.user_id FROM admin_accounts a JOIN users u ON u.id = a.user_id WHERE a.is_active = 1 AND u.deleted_at IS NULL LIMIT 1")) {
@@ -103,9 +105,13 @@ try {
   }
   const app = await createMysqlApp({
     database, jwtSecret: config.jwtSecret, smsMode: config.smsMode,
+    faqSelector,
     testSmsCodeEnabled: false, testSmsCode: config.testSmsCode, twilio: config.twilio,
     equipmentUploadDir: config.equipmentUploadDir, mediaUploadDir: config.mediaUploadDir,
     mediaSeedDir: config.mediaSeedDir,
+    mediaVideoDeliveryRoot: process.env.MEDIA_VIDEO_DELIVERY_ROOT || null,
+    mediaVideoDeliveryManifest: process.env.MEDIA_VIDEO_DELIVERY_MANIFEST || null,
+    mediaVideoCdnOrigin: process.env.MEDIA_VIDEO_CDN_ORIGIN || "",
   });
   imageRetirement = app.locals.imageRetirement;
   accountContinuity = app.locals.accountContinuity;

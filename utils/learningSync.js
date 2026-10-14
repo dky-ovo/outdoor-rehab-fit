@@ -2,12 +2,18 @@ import { acknowledgeLearningRecords, getPendingLearningRecords } from "./learnin
 import { saveLearningProgress } from "./api";
 import { getCurrentOwnerKey } from "./userStorage";
 
+// Root account sync and the dedicated learning component may both flush the
+// same durable outbox. Share only an in-flight operation, never its account
+// data or credentials, across those workers.
+const accountFlights = new Map();
+
 // One captured account/token per worker. Never replay another person's outbox
 // under a freshly logged-in user's authorization.
 export function createLearningSync({ owner, token, isCurrent = () => true, pending = getPendingLearningRecords, acknowledge = acknowledgeLearningRecords, send = saveLearningProgress }) {
 	let disposed = false;
 	let running = null;
 	let cursor = 0;
+	const flightKey = JSON.stringify([owner, token]);
 	const current = () => !disposed && owner && owner !== "guest" && token && isCurrent() && getCurrentOwnerKey() === owner;
 	async function submit(batch) {
 		if (!current()) return false;
@@ -52,7 +58,14 @@ export function createLearningSync({ owner, token, isCurrent = () => true, pendi
 	}
 	return {
 		flush() {
-			if (!running) running = flush().catch(() => {}).finally(() => { running = null; });
+			if (!current()) return Promise.resolve();
+			if (running) return running;
+			if (accountFlights.has(flightKey)) return accountFlights.get(flightKey);
+			running = flush().catch(() => {}).finally(() => {
+				if (accountFlights.get(flightKey) === running) accountFlights.delete(flightKey);
+				running = null;
+			});
+			accountFlights.set(flightKey, running);
 			return running;
 		},
 		dispose() { disposed = true; },

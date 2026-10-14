@@ -10,16 +10,20 @@ const LEGACY_KEY = "goalSettings";
 let mutationQueue = Promise.resolve();
 let goalSequence = 0;
 
+const requireGoalOwner = (owner) => {
+	if (getCurrentOwnerKey() !== owner) throw new Error("Goal account changed");
+};
+
 // Goal buttons share a single read/modify/write record. Preserve every click
 // when changes arrive before AsyncStorage has finished the previous write.
 const updateGoalState = (update) => {
 	const owner = getCurrentOwnerKey();
 	const pending = mutationQueue.then(async () => {
-		if (getCurrentOwnerKey() !== owner) throw new Error("Goal account changed");
-		const state = await readGoalState();
+		requireGoalOwner(owner);
+		const state = await readGoalState(owner);
 		update(state);
-		if (getCurrentOwnerKey() !== owner) throw new Error("Goal account changed");
-		return saveGoalState(state);
+		requireGoalOwner(owner);
+		return saveGoalState(state, owner);
 	});
 	mutationQueue = pending.catch(() => {});
 	return pending;
@@ -91,8 +95,12 @@ const migrateLegacyState = (raw) => {
 	});
 };
 
-const readGoalState = async () => {
+const readGoalState = async (owner = getCurrentOwnerKey()) => {
+	requireGoalOwner(owner);
 	const raw = await getUserJson(LEAF, null, LEGACY_KEY);
+	// Reading old settings can itself write a migration. A delayed read must
+	// never migrate or return another account's goals after login changes.
+	requireGoalOwner(owner);
 	if (!raw) return normalizeCurrentState(DEFAULT_STATE);
 
 	const alreadyMigrated = raw.targetUnitsVersion === TARGET_UNITS_VERSION;
@@ -105,20 +113,24 @@ const readGoalState = async () => {
 
 	if (!alreadyMigrated || raw.minutes) {
 		await setUserJson(LEAF, state);
+		requireGoalOwner(owner);
 	}
 	return state;
 };
 
 export const getGoalState = async () => {
+	const owner = getCurrentOwnerKey();
 	await mutationQueue;
-	return readGoalState();
+	return readGoalState(owner);
 };
 
-export const saveGoalState = async (state) => {
+export const saveGoalState = async (state, owner = getCurrentOwnerKey()) => {
+	requireGoalOwner(owner);
 	const normalized = normalizeCurrentState(state);
 	normalized.cloud = updateJournal(normalized.cloud, goalDocuments(normalized));
 	await setUserJson(LEAF, normalized);
-	notifyAccountData(getCurrentOwnerKey(), 'goals');
+	requireGoalOwner(owner);
+	notifyAccountData(owner, 'goals');
 	return normalized;
 };
 
@@ -240,7 +252,9 @@ export async function synchronizeGoals({ owner, token, send, isCurrent }) {
 	const valid = () => getCurrentOwnerKey() === owner && isCurrent();
 	const outgoing = await queuedGoals(async () => {
 		if (!valid()) return null;
-		const raw = await getUserJson(LEAF, null, LEGACY_KEY), state = await readGoalState();
+		const raw = await getUserJson(LEAF, null, LEGACY_KEY);
+		if (!valid()) return null;
+		const state = await readGoalState(owner);
 		if (!valid()) return null;
 		if (!raw) state.cloudTargetKeys = [];
 		const documents = goalDocuments(state);
@@ -256,7 +270,7 @@ export async function synchronizeGoals({ owner, token, send, isCurrent }) {
 		if (error?.status === 400 && error?.code === 'invalidAccountData') {
 			await queuedGoals(async () => {
 				if (!valid()) return;
-				const state = await readGoalState(); if (!valid()) return;
+				const state = await readGoalState(owner); if (!valid()) return;
 				await setUserJson(LEAF, { ...state, cloud: releaseRejectedJournalBatch(state.cloud, outgoing.changes) });
 			});
 		}
@@ -265,7 +279,7 @@ export async function synchronizeGoals({ owner, token, send, isCurrent }) {
 	let pending = false;
 	await queuedGoals(async () => {
 		if (!valid()) return;
-		const state = await readGoalState(); if (!valid()) return;
+		const state = await readGoalState(owner); if (!valid()) return;
 		const merged = reconcileJournal(state.cloud, result, outgoing.changes, goalDocuments(state));
 		const targets = { ...DEFAULT_GOALS }, smartGoals = [], keys = [];
 		for (const [id, value] of Object.entries(merged.documents)) {

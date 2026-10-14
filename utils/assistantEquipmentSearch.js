@@ -1,5 +1,11 @@
-import { formatEquipmentInstructionSteps } from "./equipmentInstructions";
+import { assistantAppMessage } from "../server/src/assistantContentPolicy";
+import { assistantExerciseQuantityQuestion } from "../server/src/assistantLanguage";
+import { assistantAsksForLocation } from "../server/src/assistant";
+import { BAILIAN_FAQ_POLICY, BAILIAN_FAQ_IDS } from "../server/src/assistantBailianPolicy";
+import { isBailianRawMessage, plainBailianMessage } from "./assistantRuntime";
+import { assistantNamedGuideAnswer, assistantQuickGuideAnswer } from "../server/src/assistantGuideAnswers";
 import { symptomConcern, symptomEvidence, symptomGuideAnswer } from "./assistantSymptomEvidence";
+import { ASSISTANT_FAQ_ENTRIES, ASSISTANT_FAQ_POLICY, retrieveAssistantFaq, renderAssistantFaq, assistantFaqEmergency } from "../server/src/assistantFaqKnowledge";
 import { equipmentTcmExcerpt, withEquipmentTcm, withEquipmentTcmReply } from "./assistantTcm";
 
 const CHARACTER_EQUIVALENTS = {
@@ -52,7 +58,7 @@ export function findLocalEquipment(question, catalog) {
 	const normalizedQuestion = normalizeEquipmentLookup(question);
 	if (!normalizedQuestion) return null;
 	const matches = (Array.isArray(catalog) ? catalog : [])
-		.filter((item) => item && item.id != null && item.isActive !== false && !item.deletedAt)
+		.filter((item) => item && item.id != null && item.isActive !== false && !item.deletedAt && !item.deleted_at)
 		.map((item) => ({ item, alias: equipmentAliases(item).find((candidate) => normalizedQuestion.includes(candidate)) || "" }))
 		.filter((match) => match.alias)
 		.sort((left, right) => right.alias.length - left.alias.length);
@@ -63,7 +69,7 @@ export function findLocalEquipment(question, catalog) {
 // Only render cards that can actually open an active Facility Guide entry.
 export function resolveEquipmentRecommendations(recommendations, catalog, locale = "zh") {
 	const available = new Map((Array.isArray(catalog) ? catalog : [])
-		.filter((item) => item && item.id != null && item.isActive !== false && !item.deletedAt)
+		.filter((item) => item && item.id != null && item.isActive !== false && !item.deletedAt && !item.deleted_at)
 		.map((item) => [String(item.id), item]));
 	const seen = new Set();
 	const resolved = (Array.isArray(recommendations) ? recommendations : []).flatMap((recommendation) => {
@@ -89,40 +95,38 @@ function requestedSection(question) {
 }
 
 export function localEquipmentAnswerForItem(question, equipment, locale = "zh") {
-	if (!equipment || equipment.id == null || equipment.isActive === false || equipment.deletedAt) return null;
+	if (!equipment || equipment.id == null || equipment.isActive === false || equipment.deletedAt || equipment.deleted_at) return null;
 	const normalizedQuestion = normalizeEquipmentLookup(question);
 	const asksForGuidance = /(怎麼|怎么|如何|使用|操作|方法|說明|说明|介紹|介绍|教學|教学|內容|内容|資料|资料|功能|作用|是什麼|是什么|做什麼|做什么|中醫|中医|物理治療|物理治疗|職業治療|职业治疗|運動學|运动学|志願者|志愿者|照顧者|照顾者|howto|howdo|use|instruction|guide|about|whatis|whatdoes|information|physiotherap|occupationaltherap|kinesiology|caregiver|volunteer|traditionalchinesemedicine|tcm)/i.test(normalizedQuestion);
 	const asksForJudgement = symptomConcern(question) || /(適合|适合|推薦|推荐|疼|痛|能不能|可不可以|shouldi|recommend|suitable|pain|diagnos|cure)/i.test(normalizedQuestion);
 	const isOnlyEquipmentName = equipmentAliases(equipment).includes(normalizedQuestion);
 	if (asksForJudgement || (!asksForGuidance && !isOnlyEquipmentName)) return null;
 	const primaryField = requestedSection(question);
-	const primaryContent = primaryField === "tcmTip"
-		? equipmentTcmExcerpt(equipment, locale)?.quote || ""
-		: String(equipment[primaryField] || "").trim();
+	if (primaryField !== "tcmTip") {
+		// Share the complete maintained section and conflict handling with the
+		// server. The old step formatter omitted warning sentences in details.
+		const item = { ...equipment, id: String(equipment.id) };
+		const answer = isOnlyEquipmentName ? assistantNamedGuideAnswer(item, question, locale)
+			: assistantQuickGuideAnswer({ message: question, catalog: [item], locale });
+		return answer ? withEquipmentTcmReply(answer, [equipment], locale) : null;
+	}
+	const primaryContent = equipmentTcmExcerpt(equipment, locale)?.quote || "";
 	// Never substitute another section or model-generated prose for the section
 	// the user requested. A missing APP field stays missing and the Facility
 	// Guide card remains the sole source of further information.
 	const rawContent = primaryContent;
-	const instructionContent = primaryField === "details" ? formatEquipmentInstructionSteps(rawContent, locale) : "";
-	const content = (instructionContent || rawContent).trim().slice(0, 4000);
+	const content = rawContent.trim();
 	const name = equipment.name || equipment.nameZh || equipment.nameEn || "";
-	const reply = primaryField === "tcmTip"
-		? (content
-			? (locale === "en" ? `TCM perspective (APP excerpt) — ${name}:\n\n“${content}”\n\nThis is TCM background from the APP, not advice to use this equipment for your symptoms. Please read the full precautions in the Facility Guide.` : `中醫學角度（APP原文節錄）－${name}：\n\n「${content}」\n\n這是APP的中醫背景資料，並非針對症狀的使用建議。請查看設施教學的完整注意事項。`)
-			: (locale === "en" ? `There is currently no TCM excerpt available for ${name} in this language. You can still open its Facility Guide below.` : `「${name}」目前沒有可顯示的中醫學角度摘錄，您仍可透過下方入口查看設施教學。`))
-		: content
-		? (primaryField === "details"
-			? content
-			: locale === "en" ? `According to the Facility Guide for ${name}:\n\n${content}` : `根據APP內「設施教學－${name}」的資料：\n\n${content}`)
-		: locale === "en"
-			? `I found ${name} in the Facility Guide. Open it below for the available instructions and pictures.`
-			: `已在APP的設施教學中找到「${name}」，請點擊下方入口查看現有說明和圖片。`;
+	const reply = content
+			? (locale === "en" ? `TCM background — ${name}:\n\n“${content}”\n\nThese are general TCM explanations, not treatment advice. If you have pain, ask a healthcare professional before exercising.` : `中醫小知識－${name}：\n\n「${content}」\n\n這些是中醫的一般說明，不能代替診治。有痛楚時，請先找醫護人員評估。`)
+			: (locale === "en" ? `There is currently no TCM information available for ${name} in this language. You can still open its Facility Guide below.` : `「${name}」目前沒有可顯示的中醫說明，您仍可透過下方器材圖片查看教學。`);
 	return withEquipmentTcmReply({
 		reply,
 		action: "equipment_local",
 		focus: "",
 		categories: Array.isArray(equipment.categories) ? equipment.categories : [],
 		tcmInReply: primaryField === "tcmTip" && Boolean(content),
+		guideContentDirect: true,
 		recommendations: withEquipmentTcm([{
 			id: String(equipment.id),
 			name,
@@ -204,6 +208,9 @@ export function assistantMessagesForDisplay(messages, catalog, locale = "zh") {
 	let questionHistory = [];
 	return (Array.isArray(messages) ? messages : []).map((message) => {
 		if (!message || message.id === "welcome") return message;
+		// Raw Bailian replies are a separate conversation policy. Do not rebuild
+		// them from FAQ, urgent rules, guides, old cards, or TCM on restoration.
+		if (isBailianRawMessage(message)) return plainBailianMessage(message);
 		if (message.sender === "user") {
 			question = message.text || message.reply || "";
 			questionHistory = history.slice(-8);
@@ -217,7 +224,56 @@ export function assistantMessagesForDisplay(messages, catalog, locale = "zh") {
 		// Photo identification/confirmation and map actions are separate flows,
 		// not symptom recommendations. Preserve their existing interaction state.
 		const independentAction = message.confirmationRequired || ["image_confirmation", "facility", "auth_error", "error"].includes(message.action);
-		if (message.sender === "ai" && message.evidencePolicy === "app-symptom-deepseek-v2" && !independentAction) {
+		// Older clients sent colloquial rope/count questions to the general
+		// model. Correct that rendered copy only when the current bounded FAQ
+		// resolver confirms this exact topic; saved rows remain unchanged.
+		const quantityEntry = message.sender === "ai" && question && !independentAction && assistantExerciseQuantityQuestion(question)
+			? retrieveAssistantFaq(question, { history: questionHistory }) : null;
+		const ropeQuantityEntry = quantityEntry?.id === "rope-use" ? quantityEntry : null;
+		// Recheck a current affirmative emergency before trusting an older model
+		// policy or an old map classification. This changes only the rendered
+		// copy, never the saved history, user input or authentication/photo flow.
+		const emergency = message.sender === "ai" && question && !message.confirmationRequired &&
+			!["image_confirmation", "auth_error", "error"].includes(message.action)
+			? assistantFaqEmergency(question, locale) || (symptomConcern(question, questionHistory)?.urgent
+				? symptomGuideAnswer(question, catalog, locale, questionHistory) : null)
+			: null;
+		if (emergency) {
+			displayed = { ...message, text: undefined, equipmentReplyVersion: undefined, equipmentReplyBase: undefined,
+				evidencePolicy: undefined, faqReplyBase: undefined, tcmInReply: false, ...emergency };
+		} else if (message.sender === "ai" && message.evidencePolicy === BAILIAN_FAQ_POLICY && !independentAction) {
+			// The server may recognise a navigation paraphrase that the local rules
+			// miss. History retains `focus`, so rebuild only these bounded answers;
+			// neither saved prose nor a model-supplied medical ID is authoritative.
+			const entry = ropeQuantityEntry || (question ? retrieveAssistantFaq(question, { history: questionHistory }) : null);
+			const concern = question ? symptomConcern(question, questionHistory) : null;
+			const quantity = assistantExerciseQuantityQuestion(question);
+			const guide = question && !entry && !concern && !quantity
+				? assistantQuickGuideAnswer({ message: question, history: questionHistory, catalog, locale }) : null;
+			const mayUseFocus = question && !entry && !concern && !quantity && !guide
+				&& !findLocalEquipment(question, catalog) && !assistantAsksForLocation(question);
+			const selected = mayUseFocus && BAILIAN_FAQ_IDS.includes(message.focus)
+				? ASSISTANT_FAQ_ENTRIES.find(item => item.id === message.focus) : null;
+			const selectedAnswer = selected ? renderAssistantFaq(selected, catalog, locale, { message: question }) : null;
+			const answer = entry ? renderAssistantFaq(entry, catalog, locale, { message: question })
+				: concern ? symptomGuideAnswer(question, catalog, locale, questionHistory)
+					: guide || (selectedAnswer ? { ...selectedAnswer, evidencePolicy: BAILIAN_FAQ_POLICY } : null);
+			displayed = { ...message, text: undefined, equipmentReplyVersion: undefined, equipmentReplyBase: undefined,
+				evidencePolicy: answer ? undefined : BAILIAN_FAQ_POLICY, faqReplyBase: undefined, faqId: undefined, tcmInReply: false,
+				...(answer || { recommendations: [], reply: locale === "en"
+					? "This earlier reply is unavailable. Please ask your question again."
+					: "這則舊回覆暫時無法顯示，請重新發送問題。" }) };
+		} else if (message.sender === "ai" && (message.evidencePolicy === ASSISTANT_FAQ_POLICY || ropeQuantityEntry) && !independentAction) {
+			// Rebuild from public reviewed knowledge and the current visible catalog,
+			// not stored/model prose or a supplied list of guide IDs. `focus` is
+			// already retained by the existing bounded conversation format.
+			const entry = ropeQuantityEntry || (question ? retrieveAssistantFaq(question, { history: questionHistory }) : ASSISTANT_FAQ_ENTRIES.find(item => item.id === message.focus));
+			const urgent = symptomConcern(question, questionHistory)?.urgent;
+			const answer = urgent ? symptomGuideAnswer(question, catalog, locale, questionHistory)
+				: assistantFaqEmergency(question, locale) || renderAssistantFaq(entry, catalog, locale, { message: question });
+			displayed = { ...message, text: undefined, equipmentReplyVersion: undefined, equipmentReplyBase: undefined, tcmInReply: false,
+				...(answer || { recommendations: [], reply: locale === "en" ? "This earlier reply is unavailable. Please ask your question again." : "這則舊回覆暫時無法顯示，請重新發送問題。" }) };
+		} else if (message.sender === "ai" && message.evidencePolicy === "app-symptom-deepseek-v2" && !independentAction) {
 			const concern = symptomConcern(question, questionHistory);
 			const supplied = Array.isArray(message.recommendations) ? message.recommendations : [];
 			const recommendations = resolveEquipmentRecommendations(supplied, catalog, locale).filter(item => {
@@ -239,8 +295,8 @@ export function assistantMessagesForDisplay(messages, catalog, locale = "zh") {
 				...message, recommendations: [], text: undefined,
 				equipmentReplyVersion: undefined, equipmentReplyBase: undefined, tcmInReply: false,
 				reply: locale === "en"
-					? "The information supporting this reply has changed or could not be verified. Please send your question again for an updated answer."
-					: "這則回答所依據的設施說明已更新或未能核實，請重新發送問題，以取得最新回答。",
+					? "This earlier reply may no longer be up to date. Please ask again for the latest information."
+					: "這則舊回覆可能已不適用，請重新提問，查看最新說明。",
 			};
 		} else if (message.sender === "ai" && question && !independentAction && symptomConcern(question, questionHistory)) {
 			const answer = symptomGuideAnswer(question, catalog, locale, questionHistory) || localEquipmentAnswer(question, catalog, locale);
@@ -260,17 +316,33 @@ export function assistantMessagesForDisplay(messages, catalog, locale = "zh") {
 				source: "app_content", knowledgeSource: "facility_guide", deepSeekUsed: false,
 			};
 			displayed = { ...message, equipmentReplyVersion: undefined, equipmentReplyBase: undefined, ...answer, text: undefined };
+		} else if (message.sender === "ai" && !independentAction &&
+			(message.guideContentDirect === true || (message.action === "equipment_local" && question))) {
+			// Rebuild direct teaching answers from the current question/context and
+			// visible catalog. A saved display flag is never proof that old prose
+			// or the stored card IDs are still current. Missing context asks again.
+			const answer = question ? assistantQuickGuideAnswer({ message: question, history: questionHistory, catalog, locale }) : null;
+			const legacyBase = message.equipmentReplyVersion === "app-equipment-prose-v1" && typeof message.equipmentReplyBase === "string"
+				? message.equipmentReplyBase : message.text || message.reply || "";
+			displayed = { ...message, text: undefined, equipmentReplyVersion: undefined, equipmentReplyBase: undefined,
+				tcmInReply: false, guideContentDirect: answer ? true : message.guideContentDirect,
+				...(answer || (message.guideContentDirect !== true ? { reply: legacyBase } : { recommendations: [], reply: locale === "en"
+					? "Please tell me which equipment and instructions you would like to see, so I can show the latest information."
+					: "請告訴我想了解哪款器材及哪部分教學，讓我為您查看最新說明。" })) };
 		}
 		const hasArticle = displayed.equipmentReplyVersion === "app-equipment-prose-v1";
 		const hasCards = Array.isArray(displayed.recommendations) && displayed.recommendations.length > 0;
 		const blocksArticle = ["image_confirmation", "facility", "auth_error", "error"].includes(displayed.action)
 			|| displayed.confirmationAnswered === "no" || (displayed.confirmationRequired && displayed.confirmationAnswered !== "yes");
-		if (message.sender === "ai" && (hasArticle || (hasCards && !blocksArticle))) {
+		if (message.sender === "ai" && ![ASSISTANT_FAQ_POLICY, BAILIAN_FAQ_POLICY].includes(displayed.evidencePolicy) &&
+			!(displayed.action === "equipment_local" && displayed.guideContentDirect !== true) &&
+			(hasArticle || (hasCards && !blocksArticle))) {
 			// Build the article from the current APP catalog for fresh replies and
 			// restored history alike. Generated sections carry their separate base,
 			// so later edits/visibility changes replace them instead of duplicating.
 			displayed = withEquipmentTcmReply({ ...displayed, reply: displayed.text || displayed.reply || "", text: undefined }, catalog, locale);
 		}
+		displayed = assistantAppMessage(displayed);
 		history.push({ role: "assistant", content: displayed.text || displayed.reply || "" });
 		return displayed;
 	});

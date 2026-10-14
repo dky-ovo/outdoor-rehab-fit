@@ -1,4 +1,6 @@
+import { TEST_USER_BATCH_SCHEMA } from "./adminTestUsers.js";
 import fs from "node:fs";
+import { initializeExerciseVideoMetadataSqlite } from './exerciseVideoMetadata.js';
 import path from "node:path";
 import Database from "better-sqlite3";
 import { BUILT_IN_EQUIPMENT_CATALOG } from "./equipmentCatalog.js";
@@ -406,6 +408,7 @@ export function createDatabase(databasePath) {
   const database = new Database(databasePath);
   database.pragma("busy_timeout = 5000");
   database.exec(SCHEMA);
+  initializeExerciseVideoMetadataSqlite(database);
   database.exec(REGISTRATION_SCHEMA);
   database.exec(EQUIPMENT_DOCUMENT_IMPORT_SCHEMA);
 	database.prepare(`
@@ -461,6 +464,7 @@ export function createDatabase(databasePath) {
 	database.prepare(`INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)`).run(9, new Date().toISOString());
 	database.prepare(`INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)`).run(10, new Date().toISOString());
 	database.prepare(`INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)`).run(11, new Date().toISOString());
+	database.exec(TEST_USER_BATCH_SCHEMA);
 	const equipmentColumns = database.prepare("PRAGMA table_info(app_equipment_items)").all();
 	if (!equipmentColumns.some((column) => column.name === "deleted_at")) database.exec("ALTER TABLE app_equipment_items ADD COLUMN deleted_at TEXT");
 	if (!equipmentColumns.some((column) => column.name === "tcm_zh")) database.exec("ALTER TABLE app_equipment_items ADD COLUMN tcm_zh TEXT NOT NULL DEFAULT ''");
@@ -501,6 +505,7 @@ export function createDatabase(databasePath) {
 	if (!latestEquipmentColumns.some((column) => column.name === "video_url")) database.exec("ALTER TABLE app_equipment_items ADD COLUMN video_url TEXT NOT NULL DEFAULT ''");
 	if (!latestEquipmentColumns.some((column) => column.name === "video_url_zh")) database.exec("ALTER TABLE app_equipment_items ADD COLUMN video_url_zh TEXT NOT NULL DEFAULT ''");
 	if (!latestEquipmentColumns.some((column) => column.name === "video_url_en")) database.exec("ALTER TABLE app_equipment_items ADD COLUMN video_url_en TEXT NOT NULL DEFAULT ''");
+	for (const column of ["additional_videos_json", "teaching_sections_json"]) if (!latestEquipmentColumns.some(item => item.name === column)) database.exec(`ALTER TABLE app_equipment_items ADD COLUMN ${column} TEXT NOT NULL DEFAULT '[]'`);
 	if (!latestEquipmentColumns.some((column) => column.name === "video_localized")) database.exec("ALTER TABLE app_equipment_items ADD COLUMN video_localized INTEGER NOT NULL DEFAULT 0 CHECK (video_localized IN (0,1))");
 	database.prepare(`INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)`).run(20, new Date().toISOString());
 	const mediaCreatedAt = new Date().toISOString();

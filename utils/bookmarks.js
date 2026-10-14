@@ -10,7 +10,7 @@ let legacyWrites = Promise.resolve();
 const ownerWrites = new Map();
 const listeners = new Set();
 export const subscribeBookmarkChanges = listener => { listeners.add(listener); return () => listeners.delete(listener); };
-const notify = owner => { for (const listener of listeners) listener(owner); };
+const notify = (owner, details) => { for (const listener of listeners) listener(owner, details); };
 const operationId = () => `bookmark-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 function decode(raw) {
 	const value = JSON.parse(raw || '{}');
@@ -133,17 +133,23 @@ export async function synchronizeBookmarks({ owner, token, send, isCurrent = () 
 		if (!state.initialized) {
 			for (const id of Object.keys(state.value)) if (state.value[id] && !state.pending[id]) state.pending[id] = { id, selected: true, operationId: operationId(), version: null };
 			state.initialized = true;
-			await AsyncStorage.setItem(key, JSON.stringify(state));
 		}
-		return Object.values(state.pending).slice(0, 100);
+		// A lost reply is not a rejected write. Replay the exact operation before
+		// rebasing later toggles, otherwise the server treats them as stale edits.
+		const outgoing = state.inFlight?.length ? state.inFlight : Object.values(state.pending).slice(0, 100);
+		state.inFlight = outgoing;
+		await AsyncStorage.setItem(key, JSON.stringify(state));
+		return outgoing;
 	});
 	if (!batch || !current(record) || !isCurrent()) return;
 	const result = await send(token, batch);
 	if (!Array.isArray(result?.records) || !Array.isArray(result?.acknowledged)) throw new Error('BOOKMARK_SYNC_INVALID');
+	let pending = false;
 	await queueOwnerWrite(record, async () => {
 		if (!current(record) || !isCurrent()) return;
 		const state = decode(await AsyncStorage.getItem(key));
 		for (const ack of result.acknowledged) if (state.pending[ack.id]?.operationId === ack.operationId) delete state.pending[ack.id];
+		state.inFlight = (state.inFlight || []).filter(item => !result.acknowledged.some(ack => ack.id === item.id && ack.operationId === item.operationId));
 		const value = {}, versions = {};
 		for (const item of result.records) {
 			if (typeof item.id !== 'string' || !Number.isSafeInteger(item.version)) throw new Error('BOOKMARK_SYNC_INVALID');
@@ -156,7 +162,9 @@ export async function synchronizeBookmarks({ owner, token, send, isCurrent = () 
 			if (pending.selected) value[pending.id] = true; else delete value[pending.id];
 		}
 		await AsyncStorage.setItem(key, JSON.stringify({ ...state, value, versions }));
+		pending = Object.keys(state.pending).length > 0;
 		record.revision += 1;
-		if (current(record) && JSON.stringify(record.value) !== JSON.stringify(value)) { record.value = snapshot(value); notify(owner); }
+		if (current(record) && JSON.stringify(record.value) !== JSON.stringify(value)) { record.value = snapshot(value); notify(owner, { remote: true }); }
 	});
+	return pending;
 }

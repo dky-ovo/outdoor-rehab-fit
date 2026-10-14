@@ -2,18 +2,17 @@ import { appText } from "../utils/appText";
 import React from "react";
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ModalSafeAreaView from './ModalSafeAreaView';
 import { RFValue } from "react-native-responsive-fontsize";
 
 // A separate reader avoids changing the height/anchor of an inverted chat row.
 // A fresh ScrollView on each opening starts at the beginning of that reply.
 export default function AssistantReplyDetails({ detail, locale, onClose }) {
-  const insets = useSafeAreaInsets();
   if (!detail) return null;
   const en = locale === "en";
   const back = appText(en ? "en" : "zh", "inline.assistantDetails.backToChat", {"zh":"返回對話","en":"Back to chat"});
   return <Modal testID="assistant-reply-details-modal" visible animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
-    <View accessibilityViewIsModal style={[styles.page, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <ModalSafeAreaView accessibilityViewIsModal style={styles.page}>
       <View style={styles.header}>
         <TouchableOpacity testID="assistant-reply-details-close" onPress={onClose} accessibilityRole="button" accessibilityLabel={back} style={styles.back}>
           <Ionicons name="chevron-back" size={26} color="#840B1C" /><Text style={styles.backText}>{back}</Text>
@@ -26,7 +25,7 @@ export default function AssistantReplyDetails({ detail, locale, onClose }) {
           <Text style={styles.doneText}>{back}</Text>
         </TouchableOpacity>
       </ScrollView>
-    </View>
+    </ModalSafeAreaView>
   </Modal>;
 }
 

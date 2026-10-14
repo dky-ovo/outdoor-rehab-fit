@@ -1,8 +1,9 @@
 import React from "react";
 import renderer, { act } from "react-test-renderer";
-import { Text, TextInput, TouchableOpacity } from "react-native";
+import { FlatList, Text, TextInput, TouchableOpacity } from "react-native";
 import SessionSummary from "../../app/(tabs)/session/summary";
-import { saveSession } from "../../utils/sessions";
+import { getSessions, saveSession } from "../../utils/sessions";
+import { getBookmarks } from "../../utils/bookmarks";
 import { getWeeklyProgress } from "../../utils/goals";
 import { trackSessionCompleted, trackGoalAchieved } from "../../utils/usage";
 import { showAlert } from "../../utils/alert";
@@ -13,11 +14,13 @@ const mockClear = jest.fn();
 const mockDraft = jest.fn();
 const mockExit = jest.fn();
 let tree;
+let mockEquipment = [];
 jest.mock("expo-router", () => ({ useLocalSearchParams: () => ({ summaryId: "ended-during-lock" }), useNavigation: () => ({}), router: {} }));
-jest.mock("../../contexts/LocaleContext", () => ({ LocaleContext: require("react").createContext({ locale: "en", i18n: { t: (key) => key === "equipmentList" ? [] : key } }) }));
+jest.mock("../../contexts/LocaleContext", () => ({ LocaleContext: require("react").createContext({ locale: "en", i18n: { t: (key) => key === "equipmentList" ? mockEquipment : key } }) }));
 jest.mock("../../contexts/AuthContext", () => ({ AuthContext: require("react").createContext({ user: { id: "participant", token: "token" } }) }));
 jest.mock("../../contexts/ActiveSessionContext", () => ({ useActiveSession: () => ({ pendingSummary: mockSummary, pendingSummaryDraft: null, getPendingSummary: () => mockSummary, clearPendingSummary: mockClear, updatePendingSummaryDraft: mockDraft }) }));
 jest.mock("../../utils/sessions", () => ({ getSessions: jest.fn(async () => []), saveSession: jest.fn() }));
+jest.mock("../../utils/bookmarks", () => ({ getBookmarks: jest.fn(async () => ({})), getCachedBookmarks: () => ({}), subscribeBookmarkChanges: () => jest.fn() }));
 jest.mock("../../utils/goals", () => ({ getWeeklyProgress: jest.fn() }));
 jest.mock("../../utils/usage", () => ({ trackSessionCompleted: jest.fn(), trackGoalAchieved: jest.fn() }));
 jest.mock("../../utils/alert", () => ({ showAlert: jest.fn() }));
@@ -28,6 +31,9 @@ jest.mock("react-native-responsive-screen", () => ({ widthPercentageToDP: () => 
 const saveButton = () => tree.root.findAllByType(TouchableOpacity).find((node) => node.findAllByType(Text).some((text) => text.props.children === "saveAndContinue"));
 beforeEach(async () => {
 	jest.clearAllMocks();
+	mockEquipment = [];
+	getBookmarks.mockResolvedValue({});
+	getSessions.mockResolvedValue([]);
 	mockSummary.durationSec = 60;
 	mockSummary.editableTiming = false;
 	saveSession.mockResolvedValue([mockSummary]);
@@ -85,24 +91,46 @@ test("rapid repeated save taps create one record and one completion event", asyn
 	expect(trackSessionCompleted).toHaveBeenCalledTimes(1);
 });
 
-test("manual duration starts blank without a 30-minute hint and keeps the minutes unit", async () => {
+test("manual duration starts blank with an explicit entry placeholder and keeps the minutes unit", async () => {
 	mockSummary.durationSec = 0;
 	mockSummary.editableTiming = true;
 	await act(async () => tree.update(<SessionSummary key="manual-empty" embedded embeddedSummaryId={mockSummary.id} onExit={mockExit} />));
 	const input = tree.root.findAllByType(TextInput).find(node => node.props.keyboardType === "number-pad" && node.props.maxLength === 4);
 	expect(input.props.value).toBe("");
-	expect(input.props.placeholder).toBeUndefined();
+	expect(input.props.placeholder).toBe("--");
 	expect(tree.root.findAllByType(Text).some(node => node.props.children === "minutes")).toBe(true);
 	await act(async () => input.props.onChangeText("45"));
 	await act(async () => saveButton().props.onPress());
 	expect(saveSession).toHaveBeenCalledWith(expect.objectContaining({ durationSec: 2700 }), "token", { waitForSync: false });
 });
 
-test("removing the duration hint does not remove an actual existing 30-minute value", async () => {
+test("the duration placeholder does not remove an actual existing 30-minute value", async () => {
 	mockSummary.durationSec = 1800;
 	mockSummary.editableTiming = true;
 	await act(async () => tree.update(<SessionSummary key="manual-existing" embedded embeddedSummaryId={mockSummary.id} onExit={mockExit} />));
 	const input = tree.root.findAllByType(TextInput).find(node => node.props.keyboardType === "number-pad" && node.props.maxLength === 4);
 	expect(input.props.value).toBe("30");
-	expect(input.props.placeholder).toBeUndefined();
+	expect(input.props.placeholder).toBe("--");
 });
+
+ test("saved favorites lead the picker and selecting equipment never changes usage order", async () => {
+ mockEquipment = [{ id: 0, name: "Popular", categories: ["aerobic"] }, { id: 1, name: "Favorite", categories: ["muscle"] }, { id: 2, name: "New", categories: [] }];
+ getBookmarks.mockResolvedValue({ 1: true });
+ getSessions.mockResolvedValue([{ exercises: [{ equipmentId: 0 }] }]);
+ await act(async () => tree.update(<SessionSummary key="equipment-order" embedded embeddedSummaryId={mockSummary.id} onExit={mockExit} />));
+ const labels = tree.root.findAllByType(Text).map(node => node.props.children);
+ expect(labels.indexOf("exerciseTypeRecord")).toBeLessThan(labels.indexOf("typeChecklist"));
+ const add = () => tree.root.findAllByType(TouchableOpacity).find(node => node.findAllByType(Text).some(text => text.props.children === "addExercise"));
+ await act(async () => add().props.onPress());
+ let list = tree.root.findByType(FlatList);
+ expect(list.props.data.map(item => item.id)).toEqual([1, 0, 2, "__other__"]);
+ const row = list.props.renderItem({ item: mockEquipment[1] });
+ expect(React.Children.toArray(row.props.children).some(child => child.props?.name === "heart")).toBe(true);
+ await act(async () => list.props.renderItem({ item: mockEquipment[2] }).props.onPress());
+ await act(async () => add().props.onPress());
+ list = tree.root.findByType(FlatList);
+ expect(list.props.data.map(item => item.id)).toEqual([1, 0, 2, "__other__"]);
+ const newRow = list.props.renderItem({ item: mockEquipment[2] });
+ expect(React.Children.toArray(newRow.props.children).some(child => child.props?.children === "frequentlyUsed")).toBe(false);
+ expect(saveSession).not.toHaveBeenCalled();
+ });

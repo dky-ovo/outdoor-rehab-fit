@@ -14,13 +14,14 @@ import { ParticipantLearningEquipment, ParticipantLearningMetrics, ParticipantLe
 export default function ParticipantLearningDetail() {
 	const params = useLocalSearchParams();
 	const participantId = participantLearningParam(params.participantId), date = participantLearningParam(params.date), equipmentId = participantLearningParam(params.equipmentId);
+	const returnWeek = participantLearningParam(params.returnWeek);
 	const view = participantLearningParam(params.view) === "exercise" ? "exercise" : "usage", page = participantLearningPage(params.page);
 	const { user } = useContext(AuthContext); const { i18n, locale } = useContext(LocaleContext); const insets = useSafeAreaInsets();
 	const copy = participantLearningCopy(locale);
 	// Locate by stable equipment ID, not its former list position: new learning
 	// activity can reorder pages while this detail screen is open.
 	const { result, catalog, loading, error, retry } = useParticipantLearningPage({ token: user?.token, participantId, date, page: 1, equipmentId, locale, i18n });
-	const target = useMemo(() => ({ pathname: "/participant-usage/learning", params: { participantId, ...(date ? { date } : {}), view, page: String(page) } }), [participantId, date, view, page]);
+	const target = useMemo(() => ({ pathname: "/participant-usage/learning", params: { participantId, ...(date ? { date } : {}), ...(returnWeek ? { returnWeek } : {}), view, page: String(page) } }), [participantId, date, returnWeek, view, page]);
 	const back = useUsageBack(target, true);
 	const record = result?.items?.find(item => String(item.equipmentId) === equipmentId);
 	const equipment = catalog.find(item => String(item.id) === equipmentId);

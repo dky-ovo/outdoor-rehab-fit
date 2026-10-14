@@ -37,9 +37,11 @@ test("reads the CA and returns bounded pool options with mandatory TLS identity 
 		dateStrings: true, supportBigNumbers: true, bigNumberStrings: false, jsonStrings: true,
 		waitForConnections: true, connectionLimit: 4, queueLimit: 32, connectTimeout: 10000, enableKeepAlive: true,
 	});
-	const custom = readMysqlConfig({ ...env, MYSQL_PORT: "3307", MYSQL_POOL_SIZE: "16" });
+	const custom = readMysqlConfig({ ...env, MYSQL_PORT: "3307", MYSQL_POOL_SIZE: "16", MYSQL_POOL_QUEUE_LIMIT: "256" });
 	assert.equal(custom.port, 3307);
 	assert.equal(custom.connectionLimit, 16);
+	assert.equal(custom.queueLimit, 256);
+	assert.equal(readMysqlConfig({ ...env, MYSQL_POOL_QUEUE_LIMIT: "1" }).queueLimit, 1);
 	assert.equal(readMysqlConfig({ ...env, MYSQL_PASSWORD: "   " }).password, "   ");
 });
 
@@ -84,10 +86,14 @@ test("rejects IP addresses, protocols, ports, whitespace and malformed DNS names
 
 test("bounds decimal integer settings and validates a conservative database identifier", t => {
 	const { env } = fixture(t);
-	for (const name of ["MYSQL_PORT", "MYSQL_POOL_SIZE"]) {
+	for (const [name, maximum] of [["MYSQL_PORT", 65535], ["MYSQL_POOL_SIZE", 16], ["MYSQL_POOL_QUEUE_LIMIT", 256]]) {
 		for (const value of ["", "0", "-1", "1.5", "1e1", "0x10", " 4", "4 ", "NaN", null, 4,
-			name === "MYSQL_PORT" ? "65536" : "17"]) {
-			assert.throws(() => readMysqlConfig({ ...env, [name]: value }), new RegExp(name));
+			String(maximum + 1), "9007199254740992", "private-secret"]) {
+			assert.throws(() => readMysqlConfig({ ...env, [name]: value }), error => {
+				assert.equal(error.message, `${name} must be an integer between 1 and ${maximum}`);
+				assert.ok(!error.message.includes("private-secret"));
+				return true;
+			});
 		}
 	}
 	for (const database of ["outdoor-fit", "db.name", "1database", "db name", "db;private-secret", "x".repeat(65)]) {

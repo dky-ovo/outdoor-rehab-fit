@@ -8,7 +8,7 @@ test.each([
   ["zh", "我有五十肩，有什麼器材可以查閱？"],
   ["zh", "肩周炎可以用什麼器材？"],
   ["zh", "冷冻肩，推荐器材"],
-  ["en", "If I have frozen shoulder, which machine could help me?"],
+  ["en", "I have frozen shoulder, which machine could help me?"],
 ])("%s shoulder synonyms retain original guide evidence and optional TCM: %s", (locale, question) => {
   const result = symptomGuideAnswer(question, catalog(locale), locale);
   expect(result.deepSeekUsed).toBe(false);
@@ -41,14 +41,15 @@ test.each(["zh", "en"])("%s knee article includes the correct TCM without adding
   }
 });
 
-test.each(["zh", "en"])("%s named instructions append TCM to the article without replacing the steps", locale => {
+test.each(["zh", "en"])("%s named instructions retain the whole section without appending unrelated TCM", locale => {
   const query = locale === "en" ? "How do I use Tai Chi Wheel?" : "太極揉推器如何使用？";
   const result = localEquipmentAnswer(query, catalog(locale), locale);
   expect(result.action).toBe("equipment_local");
-  expect(result.reply).toContain(result.recommendations[0].tcmExcerpt.quote);
-  expect(result.reply).toContain(locale === "en" ? "Steps\n\n1\n" : "使用步驟\n\n1\n");
-  expect(result.equipmentReplyBase).not.toContain(result.recommendations[0].tcmExcerpt.quote);
-  expect(result.tcmInReply).toBe(false);
+  expect(result.reply).toContain(catalog(locale)[0].details);
+  expect(result.recommendations[0].tcmExcerpt).toBeUndefined();
+  expect(result.reply).not.toContain(catalog(locale)[0].tcmTip);
+  expect(result.guideContentDirect).toBe(true);
+  expect(result.tcmInReply).not.toBe(true);
 });
 
 test.each(["updated", "disabled", "removed", "renamed"])("stored general recommendation article rebuilds %s TCM from current data", scenario => {
@@ -93,7 +94,7 @@ test("rechecking a stored symptom article cannot restore its old base after the 
   const original = { id: "a", sender: "ai", ...symptomGuideAnswer(question, catalog("zh"), "zh") };
   expect(original.reply).toContain(original.recommendations[0].tcmExcerpt.quote);
   const refreshed = assistantMessagesForDisplay([{ id: "u", sender: "user", text: question }, original], [], "zh")[1];
-  expect(refreshed.reply).toContain("未找到");
+  expect(refreshed.reply).toContain("未能判斷");
   expect(refreshed.reply).not.toContain("以下器材的說明");
   expect(refreshed.reply).not.toContain(original.recommendations[0].tcmExcerpt.quote);
   expect(refreshed.recommendations).toEqual([]);
@@ -126,7 +127,7 @@ test.each([
 
 test("English foot-path TCM stays absent, while ordinary instructions retain their card", () => {
   const answer = localEquipmentAnswer("What is the TCM perspective on Foot Massage Path?", catalog("en"), "en");
-  expect(answer.reply).toMatch(/no TCM excerpt/i);
+  expect(answer.reply).toMatch(/no TCM information/i);
   expect(answer.reply).not.toMatch(/[\u4e00-\u9fff]/);
   expect(answer.tcmInReply).toBe(false);
   expect(answer.recommendations[0].id).toBe("28");

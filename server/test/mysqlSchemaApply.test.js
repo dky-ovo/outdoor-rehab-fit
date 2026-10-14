@@ -167,13 +167,18 @@ test("a nonempty database is refused after acquiring the lock and releases it", 
 	assert.equal(report.lockReleased, true);
 });
 
-test("wrong selected database and caller override cannot reach any DDL", async () => {
+test("wrong selected database and mismatched explicit production target cannot reach any DDL", async () => {
 	const wrongConnection = fakeConnection({ state: { currentDatabase: "outdoor_fit_prod" } });
 	await rejection(wrongConnection, "SCHEMA_DATABASE_REFUSED");
 	assert.equal(wrongConnection.calls.length, 1);
 	const overrideConnection = fakeConnection();
 	await rejection(overrideConnection, "SCHEMA_DATABASE_REFUSED", { expectedDatabase: "outdoor_fit_prod" });
-	assert.equal(overrideConnection.calls.length, 0);
+	assert.equal(overrideConnection.calls.length, 1);
+	assert.match(overrideConnection.calls[0].sql, /^SELECT DATABASE\(\)/);
+	assert.equal(ddlCalls(overrideConnection).length, 0);
+	const unsupportedConnection = fakeConnection();
+	await rejection(unsupportedConnection, "SCHEMA_DATABASE_REFUSED", { expectedDatabase: "unapproved_database" });
+	assert.equal(unsupportedConnection.calls.length, 0);
 });
 
 test("DDL errors report partial progress, do not retry or drop, and release the lock", async () => {
@@ -314,10 +319,11 @@ test("verify-only accepts the existing schema using only SELECT and never reads 
 	assert.equal(report.metadataKind, undefined);
 });
 
-test("verify-only database guard cannot be overridden", async () => {
+test("verify-only target must match the selected database and approved target allowlist", async () => {
 	for (const [connection, options, count] of [
 		[fakeConnection({ state: { currentDatabase: "outdoor_fit_prod" } }), {}, 1],
-		[fakeConnection(), { expectedDatabase: "outdoor_fit_prod" }, 0],
+		[fakeConnection(), { expectedDatabase: "outdoor_fit_prod" }, 1],
+		[fakeConnection(), { expectedDatabase: "unapproved_database" }, 0],
 	]) {
 		await assert.rejects(verifyMysqlSchema(connection, schema, { write() {}, ...options }), error => {
 			assert.equal(error.name, "MysqlSchemaVerifyError");
@@ -326,6 +332,7 @@ test("verify-only database guard cannot be overridden", async () => {
 			return true;
 		});
 		assert.equal(connection.calls.length, count);
+		assert.ok(connection.calls.every(call => /^SELECT DATABASE\(\)/.test(call.sql)));
 	}
 });
 
